@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+dist
+.next
+coverage
+**/openapi.json
+services/ai
+deploy/terraform
+deploy/helm/**/templates
+docs/assets
+*.md

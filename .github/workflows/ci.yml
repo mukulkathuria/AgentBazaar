@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Build, lint, test (@lite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      VITEST_MAX_WORKERS: '4'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - name: Generated contracts are up to date
+        run: pnpm --filter @agentbazaar/contracts exec tsx scripts/generate.ts --check
+      - name: Unit and property tests
+        run: pnpm test
+      - name: Integration tests (real Postgres)
+        run: pnpm test:int
+      - name: End-to-end, contract, negative and regression tests (real Postgres)
+        run: pnpm test:e2e
+      - name: End-to-end on embedded PGlite (the zero-dependency demo path)
+        run: pnpm --filter @agentbazaar/api test:e2e
+        env:
+          TEST_DATABASE_URL: ''

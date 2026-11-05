@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Native/postinstall builds we trust. Everything else is blocked by default.
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@anthropic-ai/sdk@1.5.0'

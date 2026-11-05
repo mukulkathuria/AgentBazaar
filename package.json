@@ -1,0 +1,42 @@
+{
+  "name": "agentbazaar",
+  "version": "0.9.0",
+  "private": true,
+  "description": "AgentBazaar — the full store for the agent era. Open-source commerce where AI agents shop and haggle over MCP and A2A, inside price floors enforced in code.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "eslint . --max-warnings=0 && pnpm run depcruise",
+    "depcruise": "depcruise apps/api/src --config .dependency-cruiser.cjs",
+    "test": "turbo run test",
+    "test:int": "turbo run test:int",
+    "test:e2e": "turbo run test:e2e",
+    "test:all": "turbo run test test:int test:e2e",
+    "demo": "pnpm --filter @agentbazaar/demo start",
+    "dev": "turbo run dev --parallel",
+    "db:migrate": "pnpm --filter @agentbazaar/api cli migrate",
+    "db:seed": "pnpm --filter @agentbazaar/api cli seed",
+    "contracts:generate": "pnpm --filter @agentbazaar/contracts generate",
+    "docs:sync": "node scripts/sync-diagrams.mjs",
+    "docs:check": "node scripts/sync-diagrams.mjs --check",
+    "license:check": "node scripts/license-check.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "dependency-cruiser": "^18.7.2",
+    "eslint": "^10.14.0",
+    "globals": "^17.0.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.11.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1"
+  }
+}
