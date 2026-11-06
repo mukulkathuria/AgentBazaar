@@ -13,7 +13,7 @@ import { redact } from './redact.js';
 /** Probe and scrape endpoints: high volume, no diagnostic value. */
 const UNTRACED_PATHS = new Set(['/healthz', '/readyz', '/metrics']);
 /** URL attributes whose query string can carry checkout and order tokens (`?t=`). */
-const URL_KEY = /^(url\.|http\.(url|target)$)/;
+const isUrlKey = (key: string) => key.startsWith('url.') || key === 'http.url' || key === 'http.target';
 /** The caller's IP on server spans (socket peer or X-Forwarded-For); client spans keep their peer (Postgres, OpenBao). */
 const CLIENT_KEYS = ['client.address', 'network.peer.address', 'http.client_ip', 'net.peer.ip'];
 
@@ -29,7 +29,7 @@ function scrubValue(key: string, value: unknown): unknown {
   if (Array.isArray(value)) return (value as unknown[]).map((v) => (typeof v === 'string' ? redact(v) : v));
   if (typeof value !== 'string') return value;
   if (key === 'url.query') return scrubQuery(value);
-  const q = URL_KEY.test(key) ? value.indexOf('?') : -1;
+  const q = isUrlKey(key) ? value.indexOf('?') : -1;
   return q < 0 ? redact(value) : `${redact(value.slice(0, q))}?${scrubQuery(value.slice(q + 1))}`;
 }
 
