@@ -138,10 +138,18 @@ Where Docker runs inside WSL, also set `DATA_TIER_DOCKER="wsl.exe -d Debian --ex
 
 ## Drill results
 
-| Date | Where | Acknowledged writes | Lost | Failed in flight (committed anyway) | `pg_promote` | Longest write outage | Budget |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-06 | Developer laptop: Docker in WSL2 on Windows 11, fsync on | 627 | **0** | 4 (1) | 1.96 s | 10.06 s | 30 s |
+| Date | Where | Acknowledged writes | Lost | Failed writes (committed anyway) | `pg_promote` | Crash to repointed | Longest write outage | Budget |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-06 | GitHub Actions `ubuntu-latest`, [Data tier run 42198370506](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42198370506) | 13,616 | **0** | 73 (1) | 0.11 s | 1.36 s | **2.23 s** | 30 s |
+| 2026-11-06 | Developer laptop: Docker in WSL2 on Windows 11 | 627 | **0** | 4 (1) | 1.96 s | 14.09 s | 10.06 s | 30 s |
 
-The write outage covers the whole sequence: crash, the one-second detection stand-in, promotion, the PgBouncer edit
-and reload, and reconnection. On the laptop every Docker command crossed into WSL and took several seconds, which
-dominates the figure; the per-step timings are in the drill's output line.
+The write outage is the longest stretch in which no write was acknowledged: the crash, the one-second detection
+stand-in, promotion, the PgBouncer edit and reload, and reconnection. Of the failed writes, 4 were in flight at the
+crash (`server conn crashed?`) and the rest were refused by PgBouncer while it could not log in to a server
+(`server login has been failing ... (server_login_retry)`). One failed write had committed before its
+acknowledgement was lost, which is why failed writes are reported but never counted as lost. On the laptop every
+Docker command crossed into WSL and took several seconds, which dominates its figures.
+
+The same run passed the integration suite (8 files, 38 tests) and the e2e, contract, negative and regression suites
+(17 files, 105 tests) through PgBouncer in transaction pooling, and the read-your-writes suite (3 tests); the whole
+workflow took under two minutes.
