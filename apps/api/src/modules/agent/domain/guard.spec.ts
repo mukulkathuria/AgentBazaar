@@ -42,7 +42,18 @@ describe('number guard', () => {
   });
 
   it.each([
+    ['Take 2 and I can do ₹4,999 each.', [2, 4999]],
+    ['Sure, I can do Rs. 4,999 each.', [4999]],
+    ['मैं ₹4,999 दे सकता हूँ, दो पीस लें तो', [4999]],
+  ])('accepts the template phrase %j: digits after a currency sign are checked as numbers', (text, allowed) => {
+    expect(checkReply(text, allowed)).toEqual({ ok: true, issues: [] });
+  });
+
+  it.each([
     ['I can do it for ₹1,999', 'number'],
+    ['bas do rupaye aur kam', 'spelled_number'],
+    ['teen rs. kam kar do', 'spelled_number'],
+    ['I can do ₹ 999 each', 'number'],
     ['ok 1.9k final', 'number'],
     ['₹১৮০০ only', 'number'],
     ['I can do eighteen hundred', 'spelled_number'],

@@ -47,8 +47,9 @@ const MAGNITUDES = 'hundred|thousand|lakhs?|lacs?|crores?|million|billion|sau|ha
 const CURRENCY = '₹|rs\\.?|inr|rupees?|rupaye|rupay|bucks|रुपये|रुपए|रु';
 const WORDS = `(?:${NUM_WORDS})(?:[\\s-]+(?:and[\\s-]+)?(?:${NUM_WORDS}))*`;
 // "eighteen hundred", "do hazaar", "two thousand rupees", "rs twenty": amounts spelled out to dodge the digit check.
+// A word before a currency sign that digits follow is not an amount ("I can do ₹4,999"): the digits are checked.
 const SPELLED = new RegExp(
-  `${before}(?:(?:a|an|${WORDS})[\\s-]+(?:${MAGNITUDES})|${WORDS}[\\s-]+(?:${CURRENCY}))${after}|(?:${CURRENCY})\\s*(?:${NUM_WORDS})${after}`,
+  `${before}(?:(?:a|an|${WORDS})[\\s-]+(?:${MAGNITUDES})|${WORDS}[\\s-]+(?:${CURRENCY})(?![.\\s]*\\p{Nd}))${after}|(?:${CURRENCY})\\s*(?:${NUM_WORDS})${after}`,
   'u',
 );
 
