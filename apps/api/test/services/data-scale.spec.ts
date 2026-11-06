@@ -102,6 +102,13 @@ interface PlanNode {
 
 const family = (name: string) => name.replace(/_p\d{6}|_default/g, '');
 
+/** `table:access` for a scan node, or null for a sequential scan that read nothing (an empty partition). */
+function accessOf(n: PlanNode, rel: string): string | null {
+  const type = n['Node Type'];
+  if (type !== 'Seq Scan') return `${family(rel)}:${type.startsWith('Tid') ? 'tid' : 'index'}`;
+  return (n['Actual Rows'] ?? 0) + (n['Rows Removed by Filter'] ?? 0) > 0 ? `${family(rel)}:seq` : null;
+}
+
 /**
  * What a plan touches, independent of how many partitions or rows: `table:access` and `index:name` entries.
  * A sequential scan that read no rows (an empty future, default or archived-period partition) costs nothing and
@@ -116,10 +123,8 @@ function shapeOf(plan: PlanNode): { shape: string[]; scanned: Record<string, num
     const ran = (n['Actual Loops'] ?? 1) > 0;
     const rel = n['Relation Name'];
     if (rel && ran) {
-      const type = n['Node Type'];
-      const read = (n['Actual Rows'] ?? 0) + (n['Rows Removed by Filter'] ?? 0);
-      const access = type === 'Seq Scan' ? 'seq' : type.startsWith('Tid') ? 'tid' : 'index';
-      if (access !== 'seq' || read > 0) shape.add(`${family(rel)}:${access}`);
+      const access = accessOf(n, rel);
+      if (access) shape.add(access);
       (scanned[family(rel)] ??= new Set()).add(rel);
     }
     if (n['Index Name'] && ran) shape.add(`index:${family(n['Index Name'])}`);
@@ -164,6 +169,7 @@ const PROBES = (oldest: string): Probe[] => [
       return [tok, `customer:${tok}`];
     },
     shape: ['index:orders_customer_idx', 'index:orders_subject_idx', 'index:payments_order_idx', 'orders:index', 'payments:index'],
+    maxBuffers: 100,
     budgetMs: 100,
   },
   {
@@ -174,6 +180,7 @@ const PROBES = (oldest: string): Probe[] => [
     params: () => [customerOrders(pick(CUSTOMERS) - 1)],
     shape: ['index:order_events_order_id_idx', 'index:orders_pkey', 'order_events:index', 'orders:index'],
     maxScanned: { order_events: MONTH_PARTS },
+    maxBuffers: 800, // one index descent per order per scanned month
     budgetMs: 100,
   },
   {
@@ -184,6 +191,7 @@ const PROBES = (oldest: string): Probe[] => [
     params: () => [[orderId(ORDERS - pick(Math.max(1, Math.floor(ORDERS / 100))) + 1)]],
     shape: ['index:order_events_order_id_idx', 'index:orders_pkey', 'order_events:index', 'orders:index'],
     maxScanned: { order_events: RECENT + 1 },
+    maxBuffers: 100,
     budgetMs: 50,
   },
   {
@@ -192,6 +200,7 @@ const PROBES = (oldest: string): Probe[] => [
     params: () => [['search', 'view', 'crawler_hit'][pick(3) - 1]],
     shape: ['analytics_events:index', 'index:analytics_events_kind_at_idx'],
     maxScanned: { analytics_events: RECENT },
+    maxBuffers: 200,
     budgetMs: 50,
   },
   {
@@ -203,6 +212,7 @@ const PROBES = (oldest: string): Probe[] => [
           RETURNING id, topic, aggregate_id, payload, created_at, created_at::text AS created_key, attempts`,
     params: () => [],
     shape: ['index:outbox_events_next_attempt_at_created_at_idx', 'index:outbox_events_pkey', 'outbox_events:index'],
+    maxBuffers: 3000, // claims and rewrites a batch of 100 rows, whatever the table size
     budgetMs: 100,
     write: true,
   },
@@ -236,6 +246,7 @@ const PROBES = (oldest: string): Probe[] => [
     sql: `SELECT row_to_json(t)::text AS line FROM "${oldest}" t WHERE ctid >= $1::tid AND ctid < $2::tid`,
     params: () => ['(0,0)', '(1024,0)'],
     shape: ['order_events:tid'],
+    maxBuffers: 1100, // the 1024-block range and nothing else
     budgetMs: 2000,
   },
 ];
@@ -267,7 +278,8 @@ describe.skipIf(!usingRealPostgres())(`@scale data scale: plans stay stable at $
 
   beforeAll(async () => {
     t = await createTestDb();
-    db = createPostgresDatabase({ url: t.url!, poolMax: PARALLEL + 1, statementTimeoutMs: 0 });
+    // Bulk statements run for minutes at 100M: a 6-hour statement timeout (the client backstop follows it).
+    db = createPostgresDatabase({ url: t.url!, poolMax: PARALLEL + 1, statementTimeoutMs: 6 * 3600_000 });
     const q = (sql: string, params?: unknown[]) => db.query(sql, params);
     const t0 = performance.now();
     for (const table of BULK.filter((b) => b !== 'orders' && b !== 'payments')) {
@@ -326,7 +338,7 @@ describe.skipIf(!usingRealPostgres())(`@scale data scale: plans stay stable at $
       tables: sizes,
       probes: {},
     });
-    console.log(JSON.stringify(report));
+    process.stdout.write(`${JSON.stringify(report)}\n`);
   }, 60_000 + Math.ceil(N / 1_000_000) * 120_000);
 
   afterAll(async () => {
@@ -362,6 +374,6 @@ describe.skipIf(!usingRealPostgres())(`@scale data scale: plans stay stable at $
       for (const [table, max] of Object.entries(probe.maxScanned ?? {})) expect(plan.scanned[table] ?? 0).toBeLessThanOrEqual(max);
       if (probe.maxBuffers) expect(plan.buffers).toBeLessThanOrEqual(probe.maxBuffers);
       expect(p95).toBeLessThanOrEqual(probe.budgetMs);
-    }, 120_000);
+    }, 120_000 + Math.ceil(N / 1_000_000) * 5_000);
   }
 });
