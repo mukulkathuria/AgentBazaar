@@ -131,11 +131,17 @@ describe('@scale ClickHouse analytics (outbox consumer, dashboards, migrations)'
     expect(await app.drain()).toBe(delivered.length);
     expect(await count(false)).toBe(before.raw); // insert deduplication skipped every repeat
 
-    // Older than the deduplication window: the rows land, then ReplacingMergeTree collapses them.
-    for (const e of delivered.slice(0, 5)) await ch.insert('analytics_events', [toRow(e)], `${e.id}-late`);
-    expect(await count(false)).toBe(before.raw + 5);
-    expect(await viaClickHouse.dashboardGeo()).toEqual(before.geo);
-    expect(await viaClickHouse.searchStats()).toEqual(before.search);
+    // Older than the deduplication window: the rows land, then ReplacingMergeTree collapses them. Background
+    // merges are paused while the copies are counted, or a merge may already have collapsed some of them.
+    await ch.exec('SYSTEM STOP MERGES analytics_events');
+    try {
+      for (const e of delivered.slice(0, 5)) await ch.insert('analytics_events', [toRow(e)], `${e.id}-late`);
+      expect(await count(false)).toBe(before.raw + 5);
+      expect(await viaClickHouse.dashboardGeo()).toEqual(before.geo);
+      expect(await viaClickHouse.searchStats()).toEqual(before.search);
+    } finally {
+      await ch.exec('SYSTEM START MERGES analytics_events');
+    }
     await ch.exec('OPTIMIZE TABLE analytics_events FINAL');
     expect(await count(false)).toBe(before.raw);
   });
