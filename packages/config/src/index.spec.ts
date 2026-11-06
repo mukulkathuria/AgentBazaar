@@ -96,6 +96,21 @@ describe('@lite config profile loader', () => {
     expect(problemsOf({ ...base, LLM_ADAPTER: 'anthropic' })[0]).toContain('ANTHROPIC_API_KEY');
   });
 
+  it('keeps the AI efficiency features off by default and checks their settings', () => {
+    expect(loadConfig(base).env).toMatchObject({ SEMANTIC_CACHE: 'off', LLM_FALLBACK_ADAPTER: 'none', LLM_TIER3_MAX_TOKENS: 350 });
+    const anthropic = { ...base, LLM_ADAPTER: 'anthropic', ANTHROPIC_API_KEY: 'test-key' };
+    expect(problemsOf({ ...anthropic, LLM_FALLBACK_ADAPTER: 'openai-compatible' })).toEqual([
+      expect.stringContaining('LLM_FALLBACK_SMALL_MODEL, LLM_FALLBACK_LARGE_MODEL, OPENAI_COMPAT_BASE_URL'),
+    ]);
+    expect(problemsOf({ ...anthropic, LLM_FALLBACK_ADAPTER: 'anthropic', LLM_FALLBACK_SMALL_MODEL: 'a', LLM_FALLBACK_LARGE_MODEL: 'b' })).toEqual([
+      expect.stringContaining('needs a different model adapter'),
+    ]);
+    expect(problemsOf({ ...base, SEMANTIC_CACHE: 'valkey' })).toEqual([expect.stringContaining('SEMANTIC_CACHE=valkey')]);
+    expect(loadConfig({ ...base, SEMANTIC_CACHE: 'valkey', VALKEY_URL: 'redis://v:6379' }).env.SEMANTIC_CACHE).toBe('valkey');
+    expect(problemsOf({ ...base, SEMANTIC_CACHE_THRESHOLD: '0.2' })[0]).toContain('SEMANTIC_CACHE_THRESHOLD');
+    expect(problemsOf({ ...base, LANGFUSE_HOST: 'http://langfuse:3000' })).toEqual([expect.stringContaining('LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY')]);
+  });
+
   it('demo mode only runs with the mock payment adapter', () => {
     const env = {
       ...base,

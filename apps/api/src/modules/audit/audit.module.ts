@@ -10,6 +10,8 @@ export interface LlmTrace {
   channel: string;
   tier: number;
   shadowTier: number | null;
+  /** A phrasing call (the default), the observer's judge call, or a reply reused from the semantic cache. */
+  kind?: 'compose' | 'judge' | 'cache';
   model: string;
   intent: string;
   input: string;
@@ -35,9 +37,9 @@ export class AuditService {
 
   async trace(t: LlmTrace): Promise<void> {
     await this.db.execute(
-      sql`INSERT INTO llm_traces (session_id, channel, tier, shadow_tier, model, intent, input_redacted, output_redacted,
+      sql`INSERT INTO llm_traces (session_id, channel, tier, shadow_tier, kind, model, intent, input_redacted, output_redacted,
             tokens_in, tokens_out, cost_micro_inr, latency_ms, guard_fallback, sampled_for_audit)
-          VALUES (${t.sessionId}, ${t.channel}, ${t.tier}, ${t.shadowTier}, ${t.model}, ${t.intent}, ${redact(t.input).slice(0, 4000)},
+          VALUES (${t.sessionId}, ${t.channel}, ${t.tier}, ${t.shadowTier}, ${t.kind ?? 'compose'}, ${t.model}, ${t.intent}, ${redact(t.input).slice(0, 4000)},
             ${redact(t.output).slice(0, 4000)}, ${t.tokensIn}, ${t.tokensOut}, ${t.costMicroInr}, ${t.latencyMs}, ${t.guardFallback},
             ${t.sampledForAudit})`,
     );

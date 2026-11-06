@@ -1,5 +1,4 @@
 import type { Intent } from '@agentbazaar/contracts';
-import { BOTTOM, combine, HIGH_CART_PAISE, LOW_CONFIDENCE, propose, type Route } from './router.js';
 
 /** Output tokens a reply may use, per intent: short answers stay short and cheap. */
 export const MAX_TOKENS: Record<Intent, number> = {
@@ -14,6 +13,9 @@ export interface ModelPrice {
   outPer1k: number;
 }
 export type PriceTable = Readonly<Record<string, ModelPrice>>;
+
+/** The exchange rate DEFAULT_PRICES assume; traces sent to tools that count in dollars convert with it. */
+export const INR_PER_USD = 88;
 
 /** Anthropic list prices at ₹88/USD. Self-hosted models cost nothing per token. Override via LLM_PRICES. */
 export const DEFAULT_PRICES: PriceTable = {
@@ -45,32 +47,6 @@ export const fits = (spent: Spend, budget: Spend, estimate: number): boolean =>
 export const estimateTokens = (promptChars: number, maxTokens: number): number => Math.ceil(promptChars / 4) + maxTokens;
 
 export const tokensRemaining = (spent: Spend, budget: Spend): number => Math.max(0, budget.tokens - spent.tokens);
-
-export interface ObserverSignals {
-  /** Sending a negotiated price, or handling a warranty or return claim. */
-  commitment: boolean;
-  confidence: number;
-  negotiationRound: number;
-  cartValuePaise: number;
-  toolFailed: boolean;
-  /** The buyer has complained in this conversation. */
-  upset: boolean;
-}
-
-export const observerTriggered = (s: ObserverSignals): boolean =>
-  s.commitment || s.confidence < LOW_CONFIDENCE || s.negotiationRound >= 3 || s.cartValuePaise > HIGH_CART_PAISE || s.toolFailed || s.upset;
-
-/**
- * Lite observer: rules, no model. The caller re-checks the outgoing reply with the guard and swaps
- * in the template if it fails; the observer then escalates. Like router stages it only adds caution.
- */
-export function observe(s: ObserverSignals, replyPassedGuard: boolean): Route {
-  let r = BOTTOM;
-  if (!replyPassedGuard) r = combine(r, propose(3, 'observer_guard'));
-  if (s.toolFailed) r = combine(r, propose(3, 'tool_failure'));
-  if (s.upset && s.commitment) r = combine(r, propose(4, 'upset_at_commitment'));
-  return r;
-}
 
 /** Deterministic sample of conversations for human audit (FNV-1a of the session id). */
 export function sampledForAudit(sessionId: string, rate = 0.05): boolean {

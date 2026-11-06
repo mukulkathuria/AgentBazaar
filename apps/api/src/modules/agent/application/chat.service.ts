@@ -22,11 +22,12 @@ import { AppError, notFound } from '../../../shared/kernel/errors.js';
 import { CACHE, CONFIG, LOGGER, METRICS } from '../../../shared/kernel/tokens.js';
 import type { Metrics } from '../../../shared/observability/metrics.js';
 import { redact } from '../../../shared/observability/redact.js';
-import { exhausted, observe, observerTriggered, sampledForAudit, SESSION_COST_BUDGET_MICRO_INR, type Spend, tokensRemaining } from '../domain/budget.js';
-import { checkReply, extractNumbers } from '../domain/guard.js';
+import { exhausted, sampledForAudit, SESSION_COST_BUDGET_MICRO_INR, type Spend, tokensRemaining } from '../domain/budget.js';
+import { extractNumbers } from '../domain/guard.js';
+import { type ObserverSignals, riskProbes } from '../domain/observer.js';
 import { CLASSIFIER, type ClassifierPort } from '../domain/ports.js';
 import * as replies from '../domain/replies.js';
-import { combine, isAbusive, type Route, route, type RouteSignals, shadow } from '../domain/router.js';
+import { isAbusive, type Route, route, type RouteSignals, shadow } from '../domain/router.js';
 import { findUuid, matchFaq, questionKey, searchTerms, skuCandidates } from '../domain/text.js';
 import { type ChatSession, type ChatState, ChatStore } from './chat-store.js';
 import { Commerce } from './commerce.js';
@@ -75,8 +76,8 @@ const ANSWER_TTL_S = 600;
 const A2A_CHAT_TTL_S = 86_400;
 const inr = (paise: number) => paise / 100;
 const cartValue = (s: ChatState) => (s.cart ? s.cart.unitPaise * s.cart.quantity : 0);
-// shortcut: the "semantic" answer cache keys on the normalised question, so only exact repeats hit; upgrade to
-// embedding similarity (the search module's EMBEDDINGS port) if paraphrased product questions are common.
+// Tier-0 answer cache: exact repeats of a product question skip the handler. Paraphrases go on to the
+// phrasing step, where the semantic cache (SEMANTIC_CACHE, ADR 0012) can reuse guarded model wording.
 const answerKey = (sku: string, text: string) => `chat:answer:${sku}:${sha256Hex(questionKey(text)).slice(0, 32)}`;
 
 function negotiated(o: NegotiationOutcome): Answer {
@@ -231,48 +232,47 @@ export class ChatService {
 
   private async respond(t: Turn, r: Route, ctx: TurnContext, rulesAnswer: string | null): Promise<Outcome> {
     const lang = t.state.language;
-    const plain = (message: string, handoff = false): Outcome => ({ message, tier: r.tier, products: [], negotiation: null, link: null, handoff });
-    if (r.tier === 4) {
-      await this.store.openHandoff(t.session.id, [...r.reasons].join(','));
-      return plain(canned.handoff(lang), true);
-    }
-    if (r.deny) return plain(r.reasons.has('budget_exhausted') ? canned.budgetExhausted(lang) : canned.refuseInstructions(lang));
-    if (rulesAnswer !== null && r.tier === 0) return plain(rulesAnswer);
-
-    const a = await this.answer(t);
-    const phrased = await this.phraser.phrase(ctx, {
-      intent: t.c.intent,
-      language: lang,
-      facts: a.facts ?? {},
-      allowedNumbers: a.allowed ?? [],
-      fallback: a.fallback,
-      userText: redact(t.text),
-    });
-    const { message, final } = this.review(t, a, phrased, r);
-    let handoff = false;
-    let text = message;
-    if (final.tier === 4) {
-      await this.store.openHandoff(t.session.id, [...final.reasons].join(','));
-      text = `${message} ${canned.handoff(lang)}`;
-      handoff = true;
-    }
+    const early = this.earlyAnswer(r, lang, rulesAnswer);
+    const a = early ?? (await this.answer(t));
+    const phrased = early
+      ? early.fallback
+      : await this.phraser.phrase(ctx, {
+          intent: t.c.intent,
+          language: lang,
+          facts: a.facts ?? {},
+          allowedNumbers: a.allowed ?? [],
+          fallback: a.fallback,
+          userText: redact(t.text),
+        });
+    const out = { intent: t.c.intent, language: lang, message: phrased, fallback: a.fallback, allowed: a.allowed ?? [] };
+    const { message, final } = await this.phraser.review(ctx, this.observerSignals(t, a, r), out, r);
+    const handoff = final.tier === 4;
+    if (handoff) await this.store.openHandoff(t.session.id, [...final.reasons].join(','));
+    const text = handoff && r.tier !== 4 ? `${message} ${canned.handoff(lang)}` : message;
     if (a.cacheKey && !a.toolFailed) await this.cache.set(a.cacheKey, text, ANSWER_TTL_S);
     return { message: text, tier: final.tier, products: a.products ?? [], negotiation: a.negotiation ?? null, link: a.link ?? null, handoff };
   }
 
-  /** Observer: at commitment points and on risk triggers, re-check the outgoing reply and maybe escalate. */
-  private review(t: Turn, a: Answer, message: string, r: Route): { message: string; final: Route } {
-    const signals = {
+  /** Replies that need no handler: a person takes over, the router refused, or rules already answered. */
+  private earlyAnswer(r: Route, lang: Language, rulesAnswer: string | null): Answer | null {
+    if (r.tier === 4) return { fallback: canned.handoff(lang) };
+    if (r.deny) return { fallback: r.reasons.has('budget_exhausted') ? canned.budgetExhausted(lang) : canned.refuseInstructions(lang) };
+    return rulesAnswer !== null && r.tier === 0 ? { fallback: rulesAnswer } : null;
+  }
+
+  private observerSignals(t: Turn, a: Answer, r: Route): ObserverSignals {
+    return {
       commitment: a.commitment ?? false,
       confidence: t.c.confidence,
       negotiationRound: a.negotiation?.round ?? 0,
       cartValuePaise: cartValue(t.state),
       toolFailed: a.toolFailed ?? false,
       upset: (t.state.complaints ?? 0) > 0,
+      risk: t.c.risk,
+      denied: r.deny,
+      handoff: r.tier === 4,
+      probes: riskProbes(t.text),
     };
-    if (!observerTriggered(signals)) return { message, final: r };
-    const verdict = checkReply(message, [...(a.allowed ?? []), ...extractNumbers(a.fallback)]);
-    return { message: verdict.ok ? message : a.fallback, final: combine(r, observe(signals, verdict.ok)) };
   }
 
   private async answer(t: Turn): Promise<Answer> {

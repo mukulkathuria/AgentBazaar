@@ -67,6 +67,19 @@ export const EnvSchema = z.object({
   AI_SERVICE_TOKEN: optionalString,
   ROUTER_SHADOW_MODE: bool.default(false),
   SESSION_TOKEN_BUDGET: z.coerce.number().int().min(500).max(1_000_000).default(20_000),
+  /** Second model provider, used when the first fails or its circuit breaker is open. */
+  LLM_FALLBACK_ADAPTER: z.enum(['none', 'anthropic', 'openai-compatible']).default('none'),
+  LLM_FALLBACK_SMALL_MODEL: optionalString,
+  LLM_FALLBACK_LARGE_MODEL: optionalString,
+  /** Output-token cap per model call for router tier 2 (small model) and tier 3 (large model). */
+  LLM_TIER2_MAX_TOKENS: z.coerce.number().int().min(32).max(4096).default(350),
+  LLM_TIER3_MAX_TOKENS: z.coerce.number().int().min(32).max(4096).default(350),
+  /** Reuse of guarded model wording for near-identical requests; numbers are always re-filled from policy. */
+  SEMANTIC_CACHE: z.enum(['off', 'memory', 'valkey']).default('off'),
+  SEMANTIC_CACHE_THRESHOLD: z.coerce.number().min(0.5).max(1).default(0.9),
+  LANGFUSE_HOST: z.url().optional(),
+  LANGFUSE_PUBLIC_KEY: optionalString,
+  LANGFUSE_SECRET_KEY: optionalString,
 
   PAYMENT_ADAPTER: z.enum(['mock', 'razorpay', 'youpi-pg']).default('mock'),
   PAYMENT_ALLOW_SINGLE_SLOT: bool.default(false),
@@ -212,6 +225,23 @@ function checkServices(env: Env, profile: Profile, adapters: AppConfig['adapters
   for (const [selected, reason, keys] of needs) if (selected) requireVars(env, problems, reason, keys);
 }
 
+/** Model fallback, semantic cache and Langfuse settings that only work together. */
+function checkAi(env: Env, adapters: AppConfig['adapters'], problems: string[]): void {
+  const fallback = env.LLM_FALLBACK_ADAPTER;
+  if (fallback !== 'none') {
+    if (fallback === env.LLM_ADAPTER || env.LLM_ADAPTER === 'template') {
+      problems.push(`LLM_FALLBACK_ADAPTER=${fallback} needs a different model adapter in LLM_ADAPTER`);
+    }
+    const credentials = fallback === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_COMPAT_BASE_URL';
+    requireVars(env, problems, `LLM_FALLBACK_ADAPTER=${fallback}`, ['LLM_FALLBACK_SMALL_MODEL', 'LLM_FALLBACK_LARGE_MODEL', credentials]);
+  }
+  if (env.SEMANTIC_CACHE === 'valkey' && adapters.cache !== 'valkey') {
+    problems.push('SEMANTIC_CACHE=valkey needs the valkey cache adapter (set VALKEY_URL)');
+  }
+  const langfuse: (keyof Env)[] = ['LANGFUSE_HOST', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_SECRET_KEY'];
+  if (langfuse.some((k) => env[k] !== undefined)) requireVars(env, problems, 'Langfuse tracing', langfuse);
+}
+
 /** Parses and validates the environment. Throws ConfigError listing every problem at once. */
 export function loadConfig(raw: Record<string, string | undefined> = process.env): AppConfig {
   const parsed = EnvSchema.safeParse(stripEmpty(raw));
@@ -238,6 +268,7 @@ export function loadConfig(raw: Record<string, string | undefined> = process.env
   const warnings: string[] = [];
   checkDatabase(env, profile, problems);
   checkServices(env, profile, adapters, problems);
+  checkAi(env, adapters, problems);
   checkPayments(env, profile, problems, warnings);
   if (env.DEMO_MODE) warnings.push('DEMO_MODE=true: anonymous agents get every scope. Never use with real payments.');
   checkSecrets(env, problems, warnings);

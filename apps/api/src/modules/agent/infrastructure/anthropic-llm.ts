@@ -1,6 +1,15 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { type ComposeRequest, type ComposeResult, type LlmPort, templateResult } from '../domain/ports.js';
-import { systemPrompt, userPrompt } from '../domain/prompt.js';
+import {
+  type ComposeRequest,
+  type ComposeResult,
+  FALLBACK_MODEL,
+  judgeFailed,
+  type JudgeRequest,
+  type JudgeResult,
+  type LlmPort,
+  templateResult,
+} from '../domain/ports.js';
+import { JUDGE_MAX_TOKENS, JUDGE_SYSTEM_PROMPT, judgePassed, judgePrompt, systemPrompt, userPrompt } from '../domain/prompt.js';
 import type { RemoteGuard } from './resilient.js';
 
 /** The slice of the SDK client this adapter uses, so tests can pass a fake. */
@@ -44,6 +53,7 @@ const inputTokens = (u: Anthropic.Usage): number => u.input_tokens + (u.cache_cr
  */
 export class AnthropicLlm implements LlmPort {
   private readonly system: Anthropic.TextBlockParam[];
+  private readonly judgeSystem: Anthropic.TextBlockParam[] = [{ type: 'text', text: JUDGE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }];
 
   constructor(
     private readonly messages: AnthropicMessagesApi,
@@ -54,6 +64,24 @@ export class AnthropicLlm implements LlmPort {
   ) {
     // Tools render before the system prompt, so this one breakpoint caches both.
     this.system = [{ type: 'text', text: systemPrompt(seller, true), cache_control: { type: 'ephemeral' } }];
+  }
+
+  /** The large model reviews a reply; any failure counts as a FAIL. */
+  async judge(req: JudgeRequest): Promise<JudgeResult> {
+    const model = this.models.large;
+    try {
+      return await this.guard.run(async (signal) => {
+        const res = await this.messages.create(
+          { model, max_tokens: JUDGE_MAX_TOKENS, system: this.judgeSystem, messages: [{ role: 'user', content: judgePrompt(req) }] },
+          { signal },
+        );
+        const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+        return { ok: judgePassed(text), model, tokensIn: inputTokens(res.usage), tokensOut: res.usage.output_tokens };
+      });
+    } catch (err) {
+      this.onError(err);
+      return judgeFailed();
+    }
   }
 
   async compose(req: ComposeRequest): Promise<ComposeResult> {
@@ -76,7 +104,7 @@ export class AnthropicLlm implements LlmPort {
       });
     } catch (err) {
       this.onError(err);
-      return templateResult(req, 'template-fallback');
+      return templateResult(req, FALLBACK_MODEL);
     }
   }
 }

@@ -1,8 +1,9 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it, vi } from 'vitest';
-import type { ComposeRequest } from '../domain/ports.js';
+import type { ComposeRequest, JudgeRequest } from '../domain/ports.js';
 import { AnthropicLlm, type AnthropicMessagesApi } from './anthropic-llm.js';
 import { AiServiceClassifier, RulesClassifier } from './classifiers.js';
+import { FallbackLlm } from './fallback-llm.js';
 import { OpenAiCompatibleLlm } from './openai-compatible-llm.js';
 import { RemoteGuard } from './resilient.js';
 import { TemplateLlm } from './template-llm.js';
@@ -123,6 +124,87 @@ describe('OpenAiCompatibleLlm', () => {
   ])('falls back to the template on %s', async (_why, response) => {
     const out = await new OpenAiCompatibleLlm(opts, new RemoteGuard('t', { timeoutMs: 1000 }), async () => response).compose(req);
     expect(out).toEqual(fallback);
+  });
+});
+
+const verdictReq: JudgeRequest = { intent: 'make_offer', language: 'en', template: 'I can do: ₹5,199 each.', reply: 'Sure! I can do ₹5,199 each.' };
+const completion = (content: string) => json({ choices: [{ message: { content }, finish_reason: 'stop' }], usage: { prompt_tokens: 40, completion_tokens: 2 } });
+const failed = { ok: false, model: 'template-fallback', tokensIn: 0, tokensOut: 0 };
+
+describe('observer judge', () => {
+  it('asks the large Claude model with a cached judge prompt and passes on PASS', async () => {
+    const usage = { input_tokens: 90, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 300 };
+    const { api, create } = fakeClaude(async () => claudeMessage({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'PASS' }], usage }));
+    const out = await new AnthropicLlm(api, models, 'S', new RemoteGuard('t', { timeoutMs: 1000 })).judge(verdictReq);
+    expect(out).toEqual({ ok: true, model: 'claude-sonnet-5-5', tokensIn: 390, tokensOut: 1 });
+    const [body] = create.mock.calls[0]!;
+    expect(body).toMatchObject({ model: 'claude-sonnet-5-5', max_tokens: 8, system: [{ type: 'text', cache_control: { type: 'ephemeral' } }] });
+    expect(JSON.parse(body.messages[0]!.content as string)).toEqual({ ...verdictReq });
+  });
+
+  it.each(['FAIL', 'I think it is a pass', ''])('fails closed on the answer %j', async (text) => {
+    const { api } = fakeClaude(async () => claudeMessage({ stop_reason: 'end_turn', content: [{ type: 'text', text }] }));
+    expect((await new AnthropicLlm(api, models, 'S', new RemoteGuard('t', { timeoutMs: 1000 })).judge(verdictReq)).ok).toBe(false);
+  });
+
+  it('fails closed when the model cannot be reached', async () => {
+    const { api } = fakeClaude(async () => {
+      throw new Error('overloaded');
+    });
+    expect(await new AnthropicLlm(api, models, 'S', new RemoteGuard('t', { timeoutMs: 1000 })).judge(verdictReq)).toEqual(failed);
+  });
+
+  it('judges with the large self-hosted model and fails closed on errors', async () => {
+    const opts = { baseUrl: 'http://vllm:8000/v1', models: { small: 'llama-small', large: 'llama-large' }, seller: 'S' };
+    const pass = vi.fn(async () => completion('PASS.'));
+    expect(await new OpenAiCompatibleLlm(opts, new RemoteGuard('t', { timeoutMs: 1000 }), pass).judge(verdictReq)).toEqual({
+      ok: true,
+      model: 'llama-large',
+      tokensIn: 40,
+      tokensOut: 2,
+    });
+    const body = JSON.parse((pass.mock.calls[0] as unknown as [string, RequestInit])[1].body as string) as { model: string; max_tokens: number };
+    expect(body).toMatchObject({ model: 'llama-large', max_tokens: 8 });
+    const down = new OpenAiCompatibleLlm(opts, new RemoteGuard('t', { timeoutMs: 1000 }), async () => json({}, 500));
+    expect(await down.judge(verdictReq)).toEqual(failed);
+  });
+
+  it('has nothing to judge for template wording', async () => {
+    expect((await new TemplateLlm().judge()).ok).toBe(true);
+  });
+});
+
+describe('FallbackLlm', () => {
+  const opts = (prefix: string) => ({ baseUrl: `http://${prefix}:8000/v1`, models: { small: `${prefix}-small`, large: `${prefix}-large` }, seller: 'S' });
+
+  it('answers from the second provider while the first is down and stops calling the first once its breaker opens', async () => {
+    const down = vi.fn(async () => json({ error: 'down' }, 503));
+    const guard = new RemoteGuard('primary', { timeoutMs: 1000, failureThreshold: 2, resetMs: 60_000 });
+    const primary = new OpenAiCompatibleLlm(opts('primary'), guard, down);
+    const backup = new OpenAiCompatibleLlm(opts('backup'), new RemoteGuard('backup', { timeoutMs: 1000 }), async () => completion('PASS'));
+    const llm = new FallbackLlm([primary, backup]);
+    for (let i = 0; i < 4; i++) expect(await llm.compose(req)).toMatchObject({ model: 'backup-small', tokensIn: 40 });
+    expect(down).toHaveBeenCalledTimes(2);
+    expect(guard.state).toBe('open');
+    expect(await llm.judge(verdictReq)).toMatchObject({ ok: true, model: 'backup-large' });
+  });
+
+  it('uses the first provider while it works and sends the template when every provider fails', async () => {
+    const up = vi.fn(async () => completion('Hi! ₹5,499.'));
+    const backupFetch = vi.fn(async () => completion('unused'));
+    const working = new FallbackLlm([
+      new OpenAiCompatibleLlm(opts('primary'), new RemoteGuard('p', { timeoutMs: 1000 }), up),
+      new OpenAiCompatibleLlm(opts('backup'), new RemoteGuard('b', { timeoutMs: 1000 }), backupFetch),
+    ]);
+    expect((await working.compose({ ...req, tier: 3 })).model).toBe('primary-large');
+    expect(backupFetch).not.toHaveBeenCalled();
+    const broken = async () => json({}, 500);
+    const dead = new FallbackLlm([
+      new OpenAiCompatibleLlm(opts('primary'), new RemoteGuard('p', { timeoutMs: 1000 }), broken),
+      new OpenAiCompatibleLlm(opts('backup'), new RemoteGuard('b', { timeoutMs: 1000 }), broken),
+    ]);
+    expect(await dead.compose(req)).toEqual(fallback);
+    expect(await dead.judge(verdictReq)).toEqual(failed);
   });
 });
 

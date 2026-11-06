@@ -1,20 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import {
-  costMicroInr,
-  DEFAULT_PRICES,
-  estimateTokens,
-  exhausted,
-  fits,
-  observe,
-  observerTriggered,
-  type ObserverSignals,
-  sampledForAudit,
-  tokensRemaining,
-} from './budget.js';
+import { costMicroInr, DEFAULT_PRICES, estimateTokens, exhausted, fits, sampledForAudit, tokensRemaining } from './budget.js';
 
 const budget = { tokens: 1000, costMicroInr: 50_000 };
-const calm: ObserverSignals = { commitment: false, confidence: 0.9, negotiationRound: 0, cartValuePaise: 0, toolFailed: false, upset: false };
 
 describe('session budgets', () => {
   it('lets a call through only while the estimate fits the token and cost caps', () => {
@@ -39,24 +27,7 @@ describe('session budgets', () => {
   });
 });
 
-describe('observer', () => {
-  it('runs at commitment points and on risk triggers only', () => {
-    expect(observerTriggered(calm)).toBe(false);
-    expect(observerTriggered({ ...calm, commitment: true })).toBe(true);
-    expect(observerTriggered({ ...calm, confidence: 0.4 })).toBe(true);
-    expect(observerTriggered({ ...calm, negotiationRound: 3 })).toBe(true);
-    expect(observerTriggered({ ...calm, cartValuePaise: 5_000_100 })).toBe(true);
-    expect(observerTriggered({ ...calm, toolFailed: true })).toBe(true);
-    expect(observerTriggered({ ...calm, upset: true })).toBe(true);
-  });
-
-  it('escalates on a failed re-check, tool failure, or an upset buyer making a claim', () => {
-    expect(observe(calm, true).tier).toBe(0);
-    expect(observe(calm, false).reasons.has('observer_guard')).toBe(true);
-    expect(observe({ ...calm, toolFailed: true }, true).tier).toBe(3);
-    expect(observe({ ...calm, upset: true, commitment: true }, true).tier).toBe(4);
-  });
-
+describe('audit sampling', () => {
   it('samples about 5% of conversations for audit, deterministically', () => {
     const ids = Array.from({ length: 20_000 }, () => randomUUID());
     const rate = ids.filter((id) => sampledForAudit(id)).length / ids.length;

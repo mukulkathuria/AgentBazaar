@@ -23,10 +23,33 @@ export interface ComposeResult {
   tokensOut: number;
 }
 
+/** The observer's check of a model-written reply against the template it rephrases. */
+export interface JudgeRequest {
+  intent: Intent;
+  language: Language;
+  template: string;
+  reply: string;
+}
+
+export interface JudgeResult {
+  /** False on a FAIL verdict and whenever no verdict could be had: the judge fails closed. */
+  ok: boolean;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+}
+
 /** Phrasing model. Adapters never throw: on any failure they return the template wording. */
 export interface LlmPort {
   compose(req: ComposeRequest): Promise<ComposeResult>;
+  /** Large-model review of a reply before it is sent. Like compose, it never throws. */
+  judge(req: JudgeRequest): Promise<JudgeResult>;
 }
+
+/** The model an adapter reports when no model answered (error, timeout, open breaker). */
+export const FALLBACK_MODEL = 'template-fallback';
+
+export const judgeFailed = (model = FALLBACK_MODEL): JudgeResult => ({ ok: false, model, tokensIn: 0, tokensOut: 0 });
 
 export interface ClassifierPort {
   classify(text: string, languageHint?: Language): Promise<ClassifyResponse>;

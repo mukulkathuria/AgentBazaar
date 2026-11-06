@@ -25,6 +25,18 @@ export function createMetrics() {
       labelNames: ['tier', 'direction'] as const,
       registers: [registry],
     }),
+    semanticCache: new Counter({
+      name: 'agentbazaar_semantic_cache_total',
+      help: 'Semantic cache lookups (hit, miss, rejected by the guard) and writes (stored, skipped as unsafe to share)',
+      labelNames: ['outcome'] as const,
+      registers: [registry],
+    }),
+    observerTurns: new Counter({
+      name: 'agentbazaar_observer_turns_total',
+      help: 'Chat turns the observer reviewed or skipped, and replies it replaced',
+      labelNames: ['decision'] as const,
+      registers: [registry],
+    }),
     routerTier: new Counter({
       name: 'agentbazaar_router_tier_total',
       help: 'Router decisions per tier',
