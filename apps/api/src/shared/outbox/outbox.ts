@@ -94,6 +94,7 @@ interface Row {
   payload: Record<string, unknown>;
   created_at: Date;
   attempts: number;
+  seq: number;
 }
 
 export interface RelayOptions {
@@ -110,6 +111,10 @@ export interface RelayOptions {
  * consumers can open their own transactions and several instances can relay in parallel. A relay
  * that dies mid-batch simply lets the lease lapse and another instance retries; consumers are
  * idempotent, so a repeat is harmless. Failed events back off exponentially.
+ *
+ * Per-aggregate order: only an aggregate's earliest unpublished event (by insert sequence, which
+ * for one aggregate is commit order) is ever claimed, so its later events wait while it is leased by
+ * another relay or backing off after a failure. Events of different aggregates are not held back.
  */
 export class OutboxRelay {
   private timer: NodeJS.Timeout | undefined;
@@ -130,11 +135,13 @@ export class OutboxRelay {
       this.db,
       sql`UPDATE outbox_events SET next_attempt_at = now() + interval '30 seconds'
           WHERE id IN (
-            SELECT id FROM outbox_events WHERE published_at IS NULL AND next_attempt_at <= now()
-            ORDER BY created_at, id LIMIT ${batch} FOR UPDATE SKIP LOCKED)
-          RETURNING id, topic, aggregate_id, payload, created_at, attempts`,
+            SELECT e.id FROM outbox_events e WHERE e.published_at IS NULL AND e.next_attempt_at <= now()
+              AND NOT EXISTS (SELECT 1 FROM outbox_events p
+                              WHERE p.aggregate_id = e.aggregate_id AND p.published_at IS NULL AND p.seq < e.seq)
+            ORDER BY e.seq LIMIT ${batch} FOR UPDATE SKIP LOCKED)
+          RETURNING id, topic, aggregate_id, payload, created_at, attempts, seq`,
     );
-    claimed.sort((a, b) => a.created_at.getTime() - b.created_at.getTime() || a.id.localeCompare(b.id));
+    claimed.sort((a, b) => a.seq - b.seq);
     for (const r of claimed) {
       const event: OutboxEvent = { id: r.id, topic: r.topic, aggregateId: r.aggregate_id, payload: r.payload, createdAt: r.created_at };
       try {
