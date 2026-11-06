@@ -6,5 +6,12 @@ packages:
 allowBuilds:
   esbuild: true
 
+# Supply-chain guards. pnpm also re-checks every lockfile entry against them on install.
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+# pnpm's default floor (one day), kept explicit: a week here would fail every install while a reviewed
+# update is under a week old. Renovate waits seven days before it proposes updates (renovate.json).
+minimumReleaseAge: 1440 # nosemgrep: package_managers.pnpm.pnpm-missing-minimum-release-age.pnpm-minimum-release-age
+
 minimumReleaseAgeExclude:
   - '@anthropic-ai/sdk@1.5.0'

@@ -4,7 +4,7 @@
   "timezone": "Asia/Kolkata",
   "schedule": ["before 6am on monday"],
   "labels": ["dependencies"],
-  "minimumReleaseAge": "3 days",
+  "minimumReleaseAge": "7 days",
   "prConcurrentLimit": 10,
   "postUpdateOptions": ["pnpmDedupe"],
   "lockFileMaintenance": {
@@ -25,29 +25,35 @@
     {
       "description": "TypeScript 7 (the native compiler) breaks typescript-eslint today; stay on 6 (ADR 0006).",
       "matchPackageNames": ["typescript"],
-      "allowedVersions": "<7"
+      "allowedVersions": "<7",
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Agent protocol SDKs change quickly: one reviewed pull request, never automerged; contract tests must pass.",
       "matchPackageNames": ["@modelcontextprotocol/sdk", "@a2a-js/sdk"],
       "groupName": "agent protocol SDKs",
-      "automerge": false
+      "automerge": false,
+      "minimumReleaseAge": "7 days"
     },
     {
       "matchPackageNames": ["@nestjs/**"],
-      "groupName": "NestJS"
+      "groupName": "NestJS",
+      "minimumReleaseAge": "7 days"
     },
     {
       "matchPackageNames": ["fastify", "@fastify/**"],
-      "groupName": "Fastify"
+      "groupName": "Fastify",
+      "minimumReleaseAge": "7 days"
     },
     {
       "matchPackageNames": ["next", "react", "react-dom", "@types/react", "@types/react-dom"],
-      "groupName": "Next.js and React"
+      "groupName": "Next.js and React",
+      "minimumReleaseAge": "7 days"
     },
     {
       "matchPackageNames": ["drizzle-orm", "pg", "@types/pg", "@electric-sql/**"],
-      "groupName": "database drivers"
+      "groupName": "database drivers",
+      "minimumReleaseAge": "7 days"
     },
     {
       "matchPackageNames": [
@@ -59,13 +65,15 @@
         "@testing-library/**",
         "jsdom"
       ],
-      "groupName": "test tooling"
+      "groupName": "test tooling",
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Low-risk tooling updates merge themselves once CI is green.",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["minor", "patch"],
-      "automerge": true
+      "automerge": true,
+      "minimumReleaseAge": "7 days"
     },
     {
       "matchManagers": ["github-actions"],
