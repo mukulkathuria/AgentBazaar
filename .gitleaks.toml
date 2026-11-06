@@ -1,0 +1,10 @@
+# gitleaks' default rules, plus an allowlist for the exact fake values API tests send
+# (apps/api/test/integration/analytics.int.spec.ts and apps/api/test/e2e/identity.e2e.spec.ts).
+# Values only, no paths: gitleaks-action pins gitleaks 8.24.3, whose global [allowlist] ORs paths with
+# regexes (`condition` is ignored), so a path entry would hide any secret added to those files.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials used by API tests"
+regexes = ['''^ingest-key-for-tests-0123456789$''', '''^Other-pass-2026$''']
