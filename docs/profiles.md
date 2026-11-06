@@ -75,8 +75,10 @@ On AWS, the OpenTofu/Terraform root modules in [`deploy/terraform`](../deploy/te
    pnpm --filter @agentbazaar/api cli reindex
    ```
 
-   New changes keep flowing through the outbox, so the index stays current after the backfill.
-6. **Verify:** `/readyz` reports a draining outbox; the golden search queries return what they did on lite; place a test order end to end.
+   It writes the catalog in pages of 500 products and prints progress after each page. Meilisearch applies the
+   pages as background tasks, so the last products become searchable shortly after the command returns. New
+   changes keep flowing through the outbox, so the index stays current after the backfill.
+6. **Verify:** `/readyz` reports a draining outbox; the golden search queries score at least what they did on lite ([search benchmark](benchmarks/search.md)); place a test order end to end.
 7. **Roll back** by setting `SEARCH_ADAPTER=postgres` and `EVENT_BUS=inprocess`, redeploying, and running `cli reindex` again: the PostgreSQL search read model is not updated while another engine is active.
 
 ## Upgrading from growth to scale

@@ -194,13 +194,9 @@ For every run, record the k6 version, where the load generator ran, and whether 
 
 ## Growth and scale (pending)
 
-Growth (`v0.95`) and scale (`v1.0`) benchmarks are not run yet. They need real multi-node infrastructure, and
-cloud spend for load tests is a human approval step. Targets from the plan:
-
-- Growth search (Meilisearch): recall on the golden query set at least equal to lite, and search p95 under
-  50 ms at 100,000 products.
-- Scale search (OpenSearch plus Qdrant): relevance parity with growth on the golden set at 100,000 products
-  and all their variants.
+Search on the growth and scale engines (golden-set recall against lite, p95 at 100,000 products) has its own
+page: [search.md](search.md). The growth and scale load benchmarks below are not run yet. They need real
+multi-node infrastructure, and cloud spend for load tests is a human approval step.
 
 | Profile | Concurrent sessions | Mixed requests per second | Checkout peak | Pass criteria |
 | --- | --- | --- | --- | --- |
