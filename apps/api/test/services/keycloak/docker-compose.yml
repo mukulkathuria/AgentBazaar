@@ -1,0 +1,27 @@
+# Keycloak for apps/api/test/services/keycloak.spec.ts (not part of tests/infra: it is heavy, so only the
+# Keycloak workflow and people working on OIDC start it). Throwaway test values, not secrets.
+#   docker compose -f apps/api/test/services/keycloak/docker-compose.yml up -d --wait
+#   KEYCLOAK_URL=http://localhost:8080 pnpm --filter @agentbazaar/api test:services -- keycloak
+#   docker compose -f apps/api/test/services/keycloak/docker-compose.yml down -v
+name: ab-t6
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ['start-dev', '--import-realm']
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ci-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ci-only-keycloak-admin
+      KC_HEALTH_ENABLED: 'true'
+    volumes: ['./t6-agentbazaar-realm.json:/opt/keycloak/data/import/t6-agentbazaar-realm.json:ro']
+    ports: ['8080:8080']
+    healthcheck:
+      # The image has no curl or wget: ask the management port's readiness probe over bash's /dev/tcp.
+      test:
+        [
+          'CMD-SHELL',
+          "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 60

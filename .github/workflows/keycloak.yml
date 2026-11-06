@@ -1,0 +1,61 @@
+name: Keycloak
+
+# The OIDC suite against a real Keycloak (apps/api/test/services/keycloak.spec.ts). Keycloak is too heavy
+# for the shared services stack, so it runs here, on identity changes and on demand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/identity/**'
+      - 'apps/api/src/shared/http/auth.ts'
+      - 'apps/api/test/services/keycloak*'
+      - 'apps/api/test/services/keycloak/**'
+      - 'packages/config/src/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/keycloak.yml'
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/identity/**'
+      - 'apps/api/src/shared/http/auth.ts'
+      - 'apps/api/test/services/keycloak*'
+      - 'apps/api/test/services/keycloak/**'
+      - 'packages/config/src/**'
+      - '.github/workflows/keycloak.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keycloak-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  oidc:
+    name: OIDC tokens from Keycloak (@growth)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Start Keycloak and Postgres
+        run: |
+          docker compose -f apps/api/test/services/keycloak/docker-compose.yml up -d --wait --wait-timeout 300 --quiet-pull
+          docker compose -f tests/infra/docker-compose.yml up -d --wait --wait-timeout 120 --quiet-pull postgres
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@agentbazaar/api^...
+      - name: OIDC suite
+        run: pnpm --filter @agentbazaar/api test:services -- keycloak
+        env:
+          KEYCLOAK_URL: http://localhost:8080
+      - name: Keycloak logs
+        if: failure()
+        run: docker compose -f apps/api/test/services/keycloak/docker-compose.yml logs --tail=200
+      - if: always()
+        run: |
+          docker compose -f apps/api/test/services/keycloak/docker-compose.yml down -v
+          docker compose -f tests/infra/docker-compose.yml down -v

@@ -1,0 +1,138 @@
+{
+  "id": "t6-agentbazaar",
+  "realm": "t6-agentbazaar",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "Store administrator" },
+      { "name": "agent", "description": "Buyer agent using client credentials" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "t6-storefront",
+      "description": "Public client for people (password grant only in this test realm)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "agentbazaar-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "agentbazaar-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "t6-buyer-agent",
+      "description": "Agent with catalog:read and quote:create (scopes are attached by the test)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ci-only-buyer-agent-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "agentbazaar-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "agentbazaar-api", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    },
+    {
+      "clientId": "t6-reader-agent",
+      "description": "Agent with catalog:read only",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ci-only-reader-agent-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "agentbazaar-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "agentbazaar-api", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    },
+    {
+      "clientId": "t6-short-lived",
+      "description": "Agent whose access tokens expire after two seconds",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ci-only-short-lived-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "attributes": { "access.token.lifespan": "2" },
+      "protocolMappers": [
+        {
+          "name": "agentbazaar-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "agentbazaar-api", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    },
+    {
+      "clientId": "t6-other-app",
+      "description": "Tokens for a different API: the wrong audience for AgentBazaar",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ci-only-other-app-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "other audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "some-other-api", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "t6-buyer",
+      "enabled": true,
+      "email": "t6-buyer@example.com",
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "Buyer",
+      "credentials": [{ "type": "password", "value": "ci-only-buyer-password", "temporary": false }]
+    },
+    {
+      "username": "t6-admin",
+      "enabled": true,
+      "email": "t6-admin@example.com",
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "Admin",
+      "realmRoles": ["admin"],
+      "credentials": [{ "type": "password", "value": "ci-only-admin-password", "temporary": false }]
+    },
+    { "username": "service-account-t6-buyer-agent", "enabled": true, "serviceAccountClientId": "t6-buyer-agent", "realmRoles": ["agent"] },
+    { "username": "service-account-t6-reader-agent", "enabled": true, "serviceAccountClientId": "t6-reader-agent", "realmRoles": ["agent"] },
+    { "username": "service-account-t6-short-lived", "enabled": true, "serviceAccountClientId": "t6-short-lived", "realmRoles": ["agent"] },
+    { "username": "service-account-t6-other-app", "enabled": true, "serviceAccountClientId": "t6-other-app", "realmRoles": ["agent"] }
+  ]
+}
