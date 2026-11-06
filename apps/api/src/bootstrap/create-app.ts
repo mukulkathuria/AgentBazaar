@@ -70,6 +70,12 @@ export async function createApp(config: AppConfig, opts: CreateAppOptions = {}):
   fastify.addHook('onSend', async (req, reply) => {
     void reply.header('x-request-id', req.id);
   });
+  const replicas = infra.replicas;
+  if (replicas) {
+    // Routed reads see the request they serve; a request's writes pin its principal's later reads (ADR 0009).
+    fastify.addHook('preHandler', (req, _reply, done) => replicas.scope.run(req, done));
+    fastify.addHook('onSend', async (req) => replicas.recordWrites(req));
+  }
   fastify.addHook('onResponse', async (req, reply) => {
     // Route patterns only: raw URLs can carry checkout and order tokens in the query string.
     const route = req.routeOptions.url ?? 'unmatched';
@@ -81,6 +87,7 @@ export async function createApp(config: AppConfig, opts: CreateAppOptions = {}):
   if (opts.background !== false) {
     infra.relay.start();
     infra.scheduler.start();
+    replicas?.start();
   }
   let closed = false;
   return {
@@ -93,6 +100,7 @@ export async function createApp(config: AppConfig, opts: CreateAppOptions = {}):
       await infra.relay.stop();
       await app.close();
       await infra.bus.close();
+      await replicas?.close();
       await infra.cache.close();
       await infra.database.close();
     },

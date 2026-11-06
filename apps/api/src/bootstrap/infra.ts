@@ -7,6 +7,7 @@ import { MemoryCache, type Cache } from '../shared/cache/cache.js';
 import { loadKeyRing, type KeyRing } from '../shared/crypto/keyring.js';
 import { createPgliteDatabase, createPostgresDatabase, type Database, type Executor } from '../shared/db/database.js';
 import { loadMigrations, migrate } from '../shared/db/migrator.js';
+import { createReplicaRouter, type ReplicaRouter } from '../shared/db/replicas.js';
 import { Scheduler } from '../shared/jobs/scheduler.js';
 import { systemClock, type Clock } from '../shared/kernel/clock.js';
 import { createLogger } from '../shared/observability/logger.js';
@@ -19,6 +20,9 @@ export interface Infra {
   readonly config: AppConfig;
   readonly database: Database;
   readonly db: Executor;
+  /** `db` itself unless DATABASE_REPLICA_URLS is set; then reads routed by `replicas`. */
+  readonly readDb: Executor;
+  readonly replicas: ReplicaRouter | undefined;
   readonly clock: Clock;
   readonly keys: KeyRing;
   readonly logger: Logger;
@@ -68,16 +72,30 @@ export async function createInfra(config: AppConfig, overrides: InfraOverrides =
   }
   const db = database.db;
   const cache = overrides.cache ?? (await createCache(config));
+  const metrics = createMetrics();
+  const replicaUrls = config.env.DATABASE_REPLICA_URLS ?? [];
+  const replicas =
+    database.driver === 'postgres' && replicaUrls.length
+      ? createReplicaRouter(database, replicaUrls, {
+          cache,
+          maxLagMs: config.env.DATABASE_REPLICA_MAX_LAG_MS,
+          registry: metrics.registry,
+          logger,
+          poolMax: config.env.DATABASE_POOL_MAX,
+        })
+      : undefined;
   const bus = await createBus(config, db, logger);
   const relay = new OutboxRelay(db, bus, { onError: (err) => logger.warn({ err }, 'outbox delivery failed; will retry') });
   return {
     config,
     database,
     db,
+    readDb: replicas?.reads ?? db,
+    replicas,
     clock: overrides.clock ?? systemClock,
     keys,
     logger,
-    metrics: createMetrics(),
+    metrics,
     cache,
     bus,
     relay,

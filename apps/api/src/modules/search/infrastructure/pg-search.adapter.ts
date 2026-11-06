@@ -52,6 +52,8 @@ export class PgSearchAdapter implements SearchPort {
   constructor(
     private readonly db: Executor,
     private readonly embeddings: EmbeddingsPort,
+    /** Queries only (the index itself is written on `db`): a replica in growth. */
+    private readonly reads: Executor = db,
   ) {}
 
   async upsert(docs: readonly SearchDocument[], embeddings: readonly (readonly number[])[], ex: Executor = this.db): Promise<void> {
@@ -87,11 +89,11 @@ export class PgSearchAdapter implements SearchPort {
     let row: ResultRow | undefined;
     if (!q) {
       // Browse: everything matching the filters, most popular first.
-      row = await one<ResultRow>(this.db, resultSql(sql`SELECT ${HIT_COLUMNS}, 0::float8 AS score FROM search_documents d WHERE ${where}`, query));
+      row = await one<ResultRow>(this.reads, resultSql(sql`SELECT ${HIT_COLUMNS}, 0::float8 AS score FROM search_documents d WHERE ${where}`, query));
     } else {
       const [vector] = await this.embeddings.embed([q]);
       const statement = resultSql(hybridHits(q, where, vector ?? []), query);
-      row = await inTransaction(this.db, async (tx) => {
+      row = await inTransaction(this.reads, async (tx) => {
         // Transaction-local, so pooled connections keep the server default.
         await tx.execute(sql`SELECT set_config('pg_trgm.word_similarity_threshold', ${String(WORD_SIMILARITY)}, true)`);
         return one<ResultRow>(tx, statement);

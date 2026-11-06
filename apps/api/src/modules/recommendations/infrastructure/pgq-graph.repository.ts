@@ -60,9 +60,10 @@ export async function installPropertyGraph(db: Executor): Promise<boolean> {
   }
 }
 
-export async function createGraphRepository(db: Executor): Promise<GraphRepository> {
+/** The graph is (re)created on `db`; lookups run on `reads` (a replica in growth). */
+export async function createGraphRepository(db: Executor, reads: Executor = db): Promise<GraphRepository> {
   if (await installPropertyGraph(db)) {
-    const pgq = new PgqGraphRepository(db);
+    const pgq = new PgqGraphRepository(reads);
     // Probe the exact query once: a PGQ dialect surprise then degrades to joins instead of failing requests.
     const works = await pgq.related('00000000-0000-0000-0000-000000000000', ['compatible_with'], 1).then(
       () => true,
@@ -70,5 +71,5 @@ export async function createGraphRepository(db: Executor): Promise<GraphReposito
     );
     if (works) return pgq;
   }
-  return new SqlGraphRepository(db);
+  return new SqlGraphRepository(reads);
 }

@@ -1,7 +1,7 @@
 import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import type { Logger } from 'pino';
 import type { Executor } from '../../shared/db/database.js';
-import { DB, EVENT_BUS, LOGGER } from '../../shared/kernel/tokens.js';
+import { DB, EVENT_BUS, LOGGER, READ_DB } from '../../shared/kernel/tokens.js';
 import type { EventBus } from '../../shared/outbox/outbox.js';
 import { CatalogModule } from '../catalog/index.js';
 import { GRAPH_REPOSITORY } from './application/graph-repository.js';
@@ -15,9 +15,9 @@ import { RecommendationsController } from './interfaces/recommendations.controll
   providers: [
     {
       provide: GRAPH_REPOSITORY,
-      inject: [DB, LOGGER],
-      useFactory: async (db: Executor, logger: Logger) => {
-        const repo = await createGraphRepository(db);
+      inject: [DB, LOGGER, READ_DB],
+      useFactory: async (db: Executor, logger: Logger, reads: Executor) => {
+        const repo = await createGraphRepository(db, reads);
         logger.info({ engine: repo.engine }, 'product graph ready');
         return repo;
       },

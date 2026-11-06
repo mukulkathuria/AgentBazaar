@@ -2,7 +2,7 @@ import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import type { AppConfig } from '@agentbazaar/config';
 import type { Logger } from 'pino';
 import type { Executor } from '../../shared/db/database.js';
-import { CONFIG, DB, EVENT_BUS, LOGGER } from '../../shared/kernel/tokens.js';
+import { CONFIG, DB, EVENT_BUS, LOGGER, READ_DB } from '../../shared/kernel/tokens.js';
 import type { EventBus } from '../../shared/outbox/outbox.js';
 import { AnalyticsModule } from '../analytics/index.js';
 import { CatalogModule } from '../catalog/index.js';
@@ -26,7 +26,7 @@ function createEmbeddings(config: AppConfig, logger: Logger): EmbeddingsPort {
 }
 
 /** loadConfig has already checked that the selected engine's URLs are set. */
-function createSearchPort(config: AppConfig, db: Executor, embeddings: EmbeddingsPort): SearchPort {
+function createSearchPort(config: AppConfig, db: Executor, embeddings: EmbeddingsPort, reads: Executor): SearchPort {
   const env = config.env;
   switch (config.adapters.search) {
     case 'meilisearch':
@@ -34,7 +34,7 @@ function createSearchPort(config: AppConfig, db: Executor, embeddings: Embedding
     case 'opensearch':
       return new OpenSearchAdapter({ url: env.OPENSEARCH_URL!, qdrantUrl: env.QDRANT_URL! }, embeddings);
     default:
-      return new PgSearchAdapter(db, embeddings);
+      return new PgSearchAdapter(db, embeddings, reads);
   }
 }
 
@@ -43,7 +43,7 @@ function createSearchPort(config: AppConfig, db: Executor, embeddings: Embedding
   controllers: [SearchController],
   providers: [
     { provide: EMBEDDINGS, inject: [CONFIG, LOGGER], useFactory: createEmbeddings },
-    { provide: SEARCH_PORT, inject: [CONFIG, DB, EMBEDDINGS], useFactory: createSearchPort },
+    { provide: SEARCH_PORT, inject: [CONFIG, DB, EMBEDDINGS, READ_DB], useFactory: createSearchPort },
     SearchService,
     SearchIndexer,
   ],

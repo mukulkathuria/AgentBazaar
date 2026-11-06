@@ -2,6 +2,8 @@
 export const CONFIG = Symbol('CONFIG');
 export const DATABASE = Symbol('DATABASE');
 export const DB = Symbol('DB');
+/** Executor for explicitly chosen safe reads; a replica when one is configured and fresh enough (ADR 0009). */
+export const READ_DB = Symbol('READ_DB');
 export const CLOCK = Symbol('CLOCK');
 export const KEYS = Symbol('KEYS');
 export const LOGGER = Symbol('LOGGER');

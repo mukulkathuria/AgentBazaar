@@ -13,7 +13,7 @@ import { sql } from 'drizzle-orm';
 import { inTransaction, one, rows, type Executor } from '../../../shared/db/database.js';
 import { json, pgArray } from '../../../shared/db/sql-helpers.js';
 import { AppError, notFound } from '../../../shared/kernel/errors.js';
-import { DB } from '../../../shared/kernel/tokens.js';
+import { DB, READ_DB } from '../../../shared/kernel/tokens.js';
 import { appendEvent } from '../../../shared/outbox/outbox.js';
 import { displayQty, InventoryService } from '../../inventory/index.js';
 import { floorPaise, productBand, type LandedCost } from '../domain/commercial.js';
@@ -107,6 +107,8 @@ export class CatalogService {
   constructor(
     @Inject(DB) private readonly db: Executor,
     @Inject(InventoryService) private readonly inventory: InventoryService,
+    /** Storefront reads only (product pages, categories, feed, summaries): a replica in growth. */
+    @Inject(READ_DB) private readonly reads: Executor = db,
   ) {}
 
   private async variantsOf(productIds: readonly string[], ex: Executor = this.db): Promise<VariantRow[]> {
@@ -120,14 +122,18 @@ export class CatalogService {
 
   private async breadcrumbs(path: string): Promise<CategoryRef[]> {
     const crumbs = await rows<{ path: string; name: string }>(
-      this.db,
+      this.reads,
       sql`SELECT path::text AS path, name FROM categories WHERE path @> ${path}::ltree ORDER BY nlevel(path)`,
     );
     return crumbs.map((c) => toCategoryRef(c.path, c.name));
   }
 
   private async toPublic(p: ProductRow, variants: VariantRow[]): Promise<PublicProduct> {
-    const avail = await this.inventory.availability(variants.map((v) => v.id));
+    // Display only: reservations and checkout re-check stock on the primary.
+    const avail = await this.inventory.availability(
+      variants.map((v) => v.id),
+      this.reads,
+    );
     return {
       id: p.id,
       slug: p.slug,
@@ -160,20 +166,20 @@ export class CatalogService {
   }
 
   async getProduct(slug: string): Promise<PublicProduct> {
-    const p = await one<ProductRow>(this.db, sql`${PRODUCT_SELECT} WHERE p.slug = ${slug} AND p.status = 'active'`);
+    const p = await one<ProductRow>(this.reads, sql`${PRODUCT_SELECT} WHERE p.slug = ${slug} AND p.status = 'active'`);
     if (!p) throw notFound('Product');
-    return this.toPublic(p, await this.variantsOf([p.id]));
+    return this.toPublic(p, await this.variantsOf([p.id], this.reads));
   }
 
   async getProductById(id: string): Promise<PublicProduct | null> {
-    const p = await one<ProductRow>(this.db, sql`${PRODUCT_SELECT} WHERE p.id = ${id} AND p.status = 'active'`);
-    return p ? this.toPublic(p, await this.variantsOf([p.id])) : null;
+    const p = await one<ProductRow>(this.reads, sql`${PRODUCT_SELECT} WHERE p.id = ${id} AND p.status = 'active'`);
+    return p ? this.toPublic(p, await this.variantsOf([p.id], this.reads)) : null;
   }
 
   /** Resolves a product slug or a variant SKU (agents use either). */
   async resolve(slugOrSku: string): Promise<PublicProduct> {
     const bySku = await one<{ slug: string }>(
-      this.db,
+      this.reads,
       sql`SELECT p.slug FROM variants v JOIN products p ON p.id = v.product_id WHERE v.sku = ${slugOrSku.trim().toUpperCase()}`,
     );
     return this.getProduct(bySku?.slug ?? slugOrSku.trim().toLowerCase());
@@ -250,7 +256,7 @@ export class CatalogService {
 
   async listCategories(): Promise<CategoryNode[]> {
     const r = await rows<{ path: string; name: string; depth: number; product_count: number }>(
-      this.db,
+      this.reads,
       sql`SELECT c.path::text AS path, c.name, nlevel(c.path) AS depth,
                  (SELECT count(*)::int FROM products p JOIN categories c2 ON c2.id = p.category_id
                   WHERE c2.path <@ c.path AND p.status = 'active') AS product_count
@@ -324,7 +330,7 @@ export class CatalogService {
   async productIdsBySlugs(slugs: readonly string[]): Promise<Map<string, string>> {
     if (!slugs.length) return new Map();
     const r = await rows<{ id: string; slug: string }>(
-      this.db,
+      this.reads,
       sql`SELECT id, slug FROM products WHERE slug = ANY(${pgArray(slugs, 'text')})`,
     );
     return new Map(r.map((x) => [x.slug, x.id]));
@@ -332,16 +338,19 @@ export class CatalogService {
 
   async feed(limit: number, offset: number): Promise<PublicProduct[]> {
     const ps = await rows<ProductRow>(
-      this.db,
+      this.reads,
       sql`${PRODUCT_SELECT} WHERE p.status = 'active' ORDER BY p.slug LIMIT ${limit} OFFSET ${offset}`,
     );
-    const variants = await this.variantsOf(ps.map((p) => p.id));
+    const variants = await this.variantsOf(
+      ps.map((p) => p.id),
+      this.reads,
+    );
     return Promise.all(ps.map((p) => this.toPublic(p, variants.filter((v) => v.product_id === p.id))));
   }
 
   /** Lightweight summaries for listings, search hits and recommendations, in the order given. */
   async summaries(productIds: readonly string[]): Promise<ProductSummary[]> {
-    const sources = await Promise.all(productIds.map((id) => this.searchSource(id)));
+    const sources = await Promise.all(productIds.map((id) => this.searchSource(id, this.reads)));
     return sources.filter((s): s is SearchSource => s !== null).map(toSummary);
   }
 

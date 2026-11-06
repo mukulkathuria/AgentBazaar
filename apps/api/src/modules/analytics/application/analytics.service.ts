@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { one, rows, type Executor } from '../../../shared/db/database.js';
 import { json } from '../../../shared/db/sql-helpers.js';
-import { DB } from '../../../shared/kernel/tokens.js';
+import { DB, READ_DB } from '../../../shared/kernel/tokens.js';
 import { redact } from '../../../shared/observability/redact.js';
 import type { Subscription } from '../../../shared/outbox/outbox.js';
 import { cleanPath, sanitizeEventData } from '../domain/sanitize.js';
@@ -27,7 +27,11 @@ const WINDOW = sql`now() - interval '30 days'`;
 
 @Injectable()
 export class AnalyticsService {
-  constructor(@Inject(DB) private readonly db: Executor) {}
+  constructor(
+    @Inject(DB) private readonly db: Executor,
+    /** Dashboard aggregates only: a replica in growth. */
+    @Inject(READ_DB) private readonly reads: Executor = db,
+  ) {}
 
   /** Records one event. Never pass personal data; strings are redacted and truncated regardless. */
   async track(ex: Executor, kind: string, ref: string | null, data: Readonly<Record<string, unknown>> = {}): Promise<void> {
@@ -45,7 +49,7 @@ export class AnalyticsService {
   /** Last 30 days. */
   async dashboardGeo(): Promise<GeoStats> {
     const r = await rows<{ kind: string; agent: string; n: number }>(
-      this.db,
+      this.reads,
       sql`SELECT kind, coalesce(data->>'agent', 'unknown') AS agent, count(*)::int AS n FROM analytics_events
           WHERE kind IN ('crawler_hit', 'ai_referral') AND at > ${WINDOW} GROUP BY 1, 2`,
     );
@@ -57,12 +61,12 @@ export class AnalyticsService {
   /** Last 30 days: how often search came back empty, and for which queries. */
   async searchStats(): Promise<SearchStats> {
     const totals = await one<{ searches: number; zero: number }>(
-      this.db,
+      this.reads,
       sql`SELECT count(*) FILTER (WHERE kind = 'search')::int AS searches, count(*) FILTER (WHERE kind = 'zero_result_search')::int AS zero
           FROM analytics_events WHERE kind IN ('search', 'zero_result_search') AND at > ${WINDOW}`,
     );
     const top = await rows<{ query: string; count: number }>(
-      this.db,
+      this.reads,
       sql`SELECT lower(data->>'q') AS query, count(*)::int AS count FROM analytics_events
           WHERE kind = 'zero_result_search' AND at > ${WINDOW} AND data->>'q' IS NOT NULL
           GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 10`,

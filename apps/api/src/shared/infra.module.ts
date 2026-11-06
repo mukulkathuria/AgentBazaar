@@ -11,6 +11,7 @@ import {
   LOGGER,
   METRICS,
   OUTBOX_RELAY,
+  READ_DB,
   SCHEDULER,
 } from './kernel/tokens.js';
 import type { Infra } from '../bootstrap/infra.js';
@@ -25,6 +26,7 @@ export class InfraModule {
       { provide: CONFIG, useValue: infra.config },
       { provide: DATABASE, useValue: infra.database },
       { provide: DB, useValue: infra.db },
+      { provide: READ_DB, useValue: infra.readDb },
       { provide: CLOCK, useValue: infra.clock },
       { provide: KEYS, useValue: infra.keys },
       { provide: LOGGER, useValue: infra.logger },
