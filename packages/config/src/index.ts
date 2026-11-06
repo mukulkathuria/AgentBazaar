@@ -110,6 +110,10 @@ export const EnvSchema = z.object({
   MAILER: z.enum(['log', 'smtp']).default('log'),
   SMTP_URL: optionalString,
   ANALYTICS_INGEST_KEY: optionalString,
+  /** Where analytics events land and dashboards read: Postgres (every profile's default) or ClickHouse via the outbox. */
+  ANALYTICS_ADAPTER: z.enum(['postgres', 'clickhouse']).default('postgres'),
+  /** HTTP interface with credentials and database, e.g. http://user:password@clickhouse:8123/agentbazaar. */
+  CLICKHOUSE_URL: z.url().optional(),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
 });
 export type Env = z.infer<typeof EnvSchema>;
@@ -147,6 +151,7 @@ export interface AppConfig {
     readonly embeddings: Env['EMBEDDINGS_ADAPTER'];
     readonly payment: Env['PAYMENT_ADAPTER'];
     readonly database: Env['DATABASE_DRIVER'];
+    readonly analytics: Env['ANALYTICS_ADAPTER'];
   };
   readonly corsOrigins: readonly string[];
   readonly warnings: readonly string[];
@@ -224,6 +229,7 @@ function checkServices(env: Env, profile: Profile, adapters: AppConfig['adapters
     [adapters.secrets === 'openbao', `${p} with secrets "openbao"`, ['OPENBAO_ADDR', 'OPENBAO_TOKEN']],
     [adapters.identity === 'oidc', 'IDENTITY_PROVIDER=oidc', ['OIDC_ISSUER_URL']],
     [env.WORKFLOW_ENGINE === 'temporal', 'WORKFLOW_ENGINE=temporal', ['TEMPORAL_ADDRESS']],
+    [adapters.analytics === 'clickhouse', 'ANALYTICS_ADAPTER=clickhouse', ['CLICKHOUSE_URL']],
     [adapters.llm === 'anthropic', 'LLM_ADAPTER=anthropic', ['ANTHROPIC_API_KEY']],
     [adapters.llm === 'openai-compatible', 'LLM_ADAPTER=openai-compatible', ['OPENAI_COMPAT_BASE_URL']],
     [
@@ -272,6 +278,7 @@ export function loadConfig(raw: Record<string, string | undefined> = process.env
     embeddings: env.EMBEDDINGS_ADAPTER,
     payment: env.PAYMENT_ADAPTER,
     database: env.DATABASE_DRIVER,
+    analytics: env.ANALYTICS_ADAPTER,
   } as const;
 
   const problems: string[] = [];

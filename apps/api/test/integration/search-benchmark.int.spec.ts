@@ -1,6 +1,6 @@
 import { generateCatalog } from '@agentbazaar/testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AnalyticsService } from '../../src/modules/analytics/index.js';
+import { AnalyticsService, PgAnalyticsStore } from '../../src/modules/analytics/index.js';
 import { CatalogService } from '../../src/modules/catalog/index.js';
 import { InventoryService } from '../../src/modules/inventory/index.js';
 import { SearchIndexer } from '../../src/modules/search/application/search-indexer.js';
@@ -28,7 +28,7 @@ describe.skipIf(!usingRealPostgres())('@lite search latency with 10,000 products
     expect(await new SearchIndexer(adapter, embeddings, catalog).reindexAll()).toBe(10_000);
     // Steady state, as in production: hint bits set, visibility map and statistics current.
     await t.database.query('VACUUM ANALYZE search_documents');
-    service = new SearchService(adapter, new AnalyticsService(db), db, createLogger('silent'));
+    service = new SearchService(adapter, new AnalyticsService(db, new PgAnalyticsStore(db)), db, createLogger('silent'));
   }, 600_000);
   afterAll(async () => t.cleanup());
 

@@ -20,6 +20,14 @@ describe('@lite config profile loader', () => {
     expect(cfg.adapters).toMatchObject({ search: 'postgres', eventBus: 'inprocess', cache: 'memory', payment: 'mock' });
   });
 
+  it('keeps analytics in Postgres unless ClickHouse is chosen, which then needs CLICKHOUSE_URL', () => {
+    expect(loadConfig({ ...base, PROFILE: 'lite' }).adapters.analytics).toBe('postgres');
+    expect(problemsOf({ ...base, ANALYTICS_ADAPTER: 'clickhouse' })).toEqual(['ANALYTICS_ADAPTER=clickhouse requires CLICKHOUSE_URL']);
+    const url = 'http://agentbazaar:x@clickhouse:8123/agentbazaar';
+    expect(loadConfig({ ...base, ANALYTICS_ADAPTER: 'clickhouse', CLICKHOUSE_URL: url }).adapters.analytics).toBe('clickhouse');
+    expect(problemsOf({ ...base, ANALYTICS_ADAPTER: 'druid' })).toEqual([expect.stringContaining('ANALYTICS_ADAPTER')]);
+  });
+
   it('switches cache to valkey when VALKEY_URL is present in lite', () => {
     expect(loadConfig({ ...base, VALKEY_URL: 'redis://localhost:6379' }).adapters.cache).toBe('valkey');
   });

@@ -37,6 +37,7 @@ configuration setting for it is planned.
 | LLM traces | `llm_traces` | Kept; append-only; redacted | Planned archival job |
 | Audit trail | `audit_log` | Kept; append-only | Counsel: security and accountability needs |
 | Analytics events | `analytics_events` | Kept; dashboards read the last 30 days | Planned job; operator decision |
+| Analytics events in ClickHouse (`ANALYTICS_ADAPTER=clickhouse`) | ClickHouse `analytics_events` | Deleted by table TTL 13 months after the event (`apps/api/migrations/clickhouse/0065_analytics_events.sql`); the outbox rows that fed them follow the outbox row above | Operator decision: change the TTL with a new ClickHouse migration |
 | Payments, refunds | `payments`, `refunds` | Kept | CA: same as orders |
 | Webhook deliveries | `webhook_events` | Kept; needed to reject replays | Planned: purge after the gateways' retry windows |
 | Idempotency keys | `idempotency_keys` | Kept; indexed by `created_at` for a purge job | Planned job |

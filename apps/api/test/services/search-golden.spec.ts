@@ -1,7 +1,7 @@
 import { SearchQuery } from '@agentbazaar/contracts';
 import { generateCatalog, type SeedCatalog } from '@agentbazaar/testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AnalyticsService } from '../../src/modules/analytics/index.js';
+import { AnalyticsService, PgAnalyticsStore } from '../../src/modules/analytics/index.js';
 import { CatalogService } from '../../src/modules/catalog/index.js';
 import { InventoryService } from '../../src/modules/inventory/index.js';
 import type { SearchPort } from '../../src/modules/search/application/ports.js';
@@ -95,7 +95,7 @@ describe(`@growth @scale golden search queries and latency at ${PRODUCTS} produc
     const budget = name === 'postgres' ? Infinity : 50;
     it(`${name} answers 100 mixed queries through SearchService${budget < Infinity ? ' with p95 under 50 ms' : ''}`, { retry: 2, timeout: 600_000 }, async () => {
       const db = t.database.db;
-      const { p50, p95, max, slowest } = await measureLatency(new SearchService(ports[name], new AnalyticsService(db), db, createLogger('silent')));
+      const { p50, p95, max, slowest } = await measureLatency(new SearchService(ports[name], new AnalyticsService(db, new PgAnalyticsStore(db)), db, createLogger('silent')));
       console.warn(`${name} search latency over 100 queries, ${PRODUCTS} products: p50=${p50.toFixed(1)}ms p95=${p95.toFixed(1)}ms max=${max.toFixed(1)}ms`);
       console.warn(`${name} slowest: ${slowest}`);
       expect(p95).toBeLessThan(budget);
