@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# MCP tool calls (JSON-RPC tools/call over Streamable HTTP) against a running API in demo mode, where
+# anonymous agents hold every scope (docs/testing/evals.md).
+#   API_URL=http://localhost:4113 npx promptfoo@0.125.1 eval -c evals/promptfoo/mcp.yaml -j 1 --no-cache
+description: AgentBazaar MCP tools
+prompts:
+  - '{"name": "{{tool}}", "arguments": {{ args | dump }}}'
+providers:
+  - id: https
+    label: mcp
+    config:
+      url: '{{apiUrl}}/mcp'
+      method: POST
+      headers:
+        content-type: application/json
+        accept: application/json, text/event-stream
+      body: '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {{prompt}}}'
+      transformResponse: JSON.stringify(json)
+extensions:
+  - file://hooks.mjs:extensionHook
+evaluateOptions:
+  maxConcurrency: 1
+tests: file://mcp-tests.mjs

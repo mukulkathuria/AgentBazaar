@@ -1,0 +1,26 @@
+{
+  "rest": {
+    "RestGenerator": {
+      "name": "AgentBazaar chat over A2A message/send",
+      "uri": "http://127.0.0.1:4113/a2a",
+      "method": "post",
+      "headers": { "Content-Type": "application/json" },
+      "req_template_json_object": {
+        "jsonrpc": "2.0",
+        "id": "garak",
+        "method": "message/send",
+        "params": {
+          "message": {
+            "kind": "message",
+            "messageId": "garak-probe",
+            "role": "user",
+            "parts": [{ "kind": "text", "text": "$INPUT" }]
+          }
+        }
+      },
+      "response_json": true,
+      "response_json_field": "$.result.parts[1].text",
+      "request_timeout": 30
+    }
+  }
+}

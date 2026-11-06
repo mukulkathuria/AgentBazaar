@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# Golden chat conversations against a running API (docs/testing/evals.md). Deterministic: run the API with
+# LLM_ADAPTER=template, so every reply is the policy engine's own wording and no LLM key is needed.
+#   API_URL=http://localhost:4113 npx promptfoo@0.125.1 eval -c evals/promptfoo/chat.yaml -j 1 --no-cache
+description: AgentBazaar chat golden conversations
+prompts:
+  - '{{message}}'
+providers:
+  - id: https
+    label: chat
+    config:
+      url: '{{apiUrl}}/api/v1/chat/sessions/{{sessionId}}/messages'
+      method: POST
+      headers:
+        content-type: application/json
+      body:
+        text: '{{prompt}}'
+      transformResponse: JSON.stringify(json)
+extensions:
+  - file://hooks.mjs:extensionHook
+defaultTest:
+  assert:
+    - type: javascript
+      value: file://policy.mjs:safeReply
+evaluateOptions:
+  maxConcurrency: 1
+tests: file://chat-tests.mjs

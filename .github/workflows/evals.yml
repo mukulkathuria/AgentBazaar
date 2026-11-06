@@ -1,0 +1,79 @@
+name: Evals
+
+# LLM and agent evals (docs/testing/evals.md) against the API booted in demo mode with template replies, so
+# no model key is needed and every run is deterministic. Push and pull request: the promptfoo core set
+# (golden chat conversations in English, Hindi and Hinglish, MCP tools, a sample of attacks). Nightly and
+# on demand: the full set (every testkit attack prompt) plus garak injection probes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  API_URL: http://127.0.0.1:4113
+  EVAL_SET: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'full' || 'core' }}
+  PROMPTFOO_VERSION: 0.125.1
+  PROMPTFOO_DISABLE_TELEMETRY: '1'
+  PROMPTFOO_DISABLE_UPDATE: '1'
+
+jobs:
+  evals:
+    name: promptfoo and garak evals
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@agentbazaar/api...
+      - name: Self-test of the eval assertions
+        run: node --test evals/promptfoo/policy.test.mjs
+      - name: Boot the API in demo mode (PGlite, mock payments, template replies)
+        run: |
+          mkdir -p evals/results
+          PORT=4113 HOST=127.0.0.1 DEMO_MODE=true SEED_ON_BOOT=true DATABASE_DRIVER=pglite LLM_ADAPTER=template \
+            RATE_LIMIT_PER_MINUTE=100000 LOG_LEVEL=warn nohup node apps/api/dist/main.js > evals/results/api.log 2>&1 &
+          for i in $(seq 1 90); do curl -fs "$API_URL/readyz" && exit 0; sleep 2; done
+          cat evals/results/api.log
+          exit 1
+      - name: promptfoo chat (${{ env.EVAL_SET }} set)
+        run: npx --yes "promptfoo@$PROMPTFOO_VERSION" eval -c evals/promptfoo/chat.yaml -j 1 --no-cache -o evals/results/chat.json
+      - name: promptfoo MCP tools (${{ env.EVAL_SET }} set)
+        if: ${{ !cancelled() }}
+        run: npx --yes "promptfoo@$PROMPTFOO_VERSION" eval -c evals/promptfoo/mcp.yaml -j 1 --no-cache -o evals/results/mcp.json
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        if: ${{ env.EVAL_SET == 'full' && !cancelled() }}
+      - name: garak injection probes (full set)
+        if: ${{ env.EVAL_SET == 'full' && !cancelled() }}
+        env:
+          XDG_DATA_HOME: ${{ github.workspace }}/evals/results/xdg
+        run: |
+          python3 -m unittest discover -s evals/garak -p 'test_*.py'
+          uv venv --python 3.12 .garak
+          # CPU-only torch first, so garak's torch requirement does not pull the CUDA build.
+          uv pip install --python .garak --index-url https://download.pytorch.org/whl/cpu torch==2.15.0
+          uv pip install --python .garak garak==0.17.1
+          .garak/bin/python -m garak --target_type rest --generator_option_file evals/garak/a2a-rest.json \
+            --generations 1 --report_prefix agentbazaar \
+            --probes promptinject,dan.Dan_11_0,encoding.InjectBase64,encoding.InjectHex,web_injection.MarkdownImageExfil
+          python3 evals/garak/gate.py "$(find evals/results/xdg -name 'agentbazaar*.report.jsonl' | head -n 1)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ !cancelled() }}
+        with:
+          name: evals-${{ env.EVAL_SET }}
+          path: evals/results/
+          if-no-files-found: warn
