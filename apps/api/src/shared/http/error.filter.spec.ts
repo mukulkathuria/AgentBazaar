@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { AppError } from '../kernel/errors.js';
-import { toErrorResponse } from './error.filter.js';
+import { type ArgumentsHost, HttpException, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
+import type { Logger } from 'pino';
+import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { AppError, forbidden, notFound } from '../kernel/errors.js';
+import { ErrorFilter, toErrorResponse } from './error.filter.js';
 
 const withCode = (message: string, code: string) => Object.assign(new Error(message), { code });
 
@@ -52,5 +55,101 @@ describe('toErrorResponse for unreachable dependencies', () => {
       body: { error: { code: 'out_of_stock', message: 'Only 2 left' } },
       internal: false,
     });
+  });
+});
+
+describe('@lite error envelope', () => {
+  it('passes AppErrors through with their status, details and the request id', () => {
+    expect(toErrorResponse(new AppError('out_of_stock', 'Gone', { sku: 'X' }), 'req-1')).toEqual({
+      status: 409,
+      body: { error: { code: 'out_of_stock', message: 'Gone', details: { sku: 'X' }, requestId: 'req-1' } },
+      internal: false,
+    });
+    // No details and no request id: neither key appears.
+    expect(toErrorResponse(notFound('Order')).body).toEqual({ error: { code: 'not_found', message: 'Order not found' } });
+    expect(toErrorResponse(forbidden()).body.error).toEqual({ code: 'forbidden', message: 'Not allowed' });
+    expect(toErrorResponse(forbidden('Admins only')).status).toBe(403);
+  });
+
+  it('turns schema failures into a 400 listing each issue path', () => {
+    const r = z.object({ qty: z.number(), sku: z.string() }).safeParse({ qty: 'x' });
+    expect(r.success).toBe(false);
+    const res = toErrorResponse(r.error);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation_failed');
+    expect(res.body.error.message).toBe('Invalid request');
+    expect((res.body.error.details as { path: string }[]).map((d) => d.path)).toEqual(['qty', 'sku']);
+  });
+
+  it('maps framework HTTP exceptions by status, hiding unknown routes behind one message', () => {
+    expect(toErrorResponse(new NotFoundException('Cannot GET /secret')).body.error).toEqual({ code: 'not_found', message: 'Route not found' });
+    expect(toErrorResponse(new HttpException('Method not allowed', 405)).body.error).toEqual({ code: 'not_found', message: 'Method not allowed' });
+    expect(toErrorResponse(new PayloadTooLargeException('Too big')).body.error.code).toBe('validation_failed');
+    expect(toErrorResponse(new HttpException('Teapot', 418))).toMatchObject({ status: 418, body: { error: { code: 'validation_failed' } }, internal: false });
+    expect(toErrorResponse(new HttpException('Bad gateway', 502))).toMatchObject({ status: 502, body: { error: { code: 'internal' } } });
+    expect(toErrorResponse(new HttpException('Busy', 503)).body.error.code).toBe('unavailable');
+  });
+
+  it("keeps Fastify's own 4xx errors (bad JSON, rate limit) and their message", () => {
+    const fastifyError = (statusCode: number, message: string) => Object.assign(new Error(message), { statusCode });
+    expect(toErrorResponse(fastifyError(429, 'Rate limit exceeded'))).toEqual({
+      status: 429,
+      body: { error: { code: 'rate_limited', message: 'Rate limit exceeded' } },
+      internal: false,
+    });
+    expect(toErrorResponse(fastifyError(415, 'Unsupported Media Type')).body.error.code).toBe('validation_failed');
+    expect(toErrorResponse(fastifyError(422, 'Unprocessable')).body.error.code).toBe('validation_failed');
+    expect(toErrorResponse(fastifyError(400, 'Body is not valid JSON')).status).toBe(400);
+  });
+
+  it('never leaks internals: anything else is a generic 500 flagged for logging', () => {
+    const generic = { status: 500, body: { error: { code: 'internal', message: 'Something went wrong. Please try again.' } }, internal: true };
+    expect(toErrorResponse(new Error('bad password for user admin'))).toEqual(generic);
+    expect(toErrorResponse(Object.assign(new Error('5xx from upstream'), { statusCode: 500 }))).toEqual(generic);
+    expect(toErrorResponse(Object.assign(new Error('odd'), { statusCode: 399 }))).toEqual(generic);
+    expect(toErrorResponse(Object.assign(new Error('odd'), { statusCode: '404' }))).toEqual(generic);
+    expect(toErrorResponse('a string')).toEqual(generic);
+    expect(toErrorResponse(null)).toEqual(generic);
+    expect(toErrorResponse(undefined, 'req-9').body.error.requestId).toBe('req-9');
+  });
+});
+
+describe('@lite error filter', () => {
+  function host(sent = false) {
+    const reply = { sent, status: vi.fn(), header: vi.fn(), send: vi.fn() };
+    reply.status.mockReturnValue(reply);
+    reply.header.mockReturnValue(reply);
+    const req = { id: 'req-7', url: '/api/v1/orders' };
+    const h = { switchToHttp: () => ({ getRequest: () => req, getResponse: () => reply }) } as unknown as ArgumentsHost;
+    return { h, reply };
+  }
+  const logger = () => ({ error: vi.fn() }) as unknown as Logger & { error: ReturnType<typeof vi.fn> };
+
+  it('sends the envelope uncached and does not log expected errors', () => {
+    const log = logger();
+    const { h, reply } = host();
+    new ErrorFilter(log).catch(new AppError('conflict', 'Busy'), h);
+    expect(reply.status).toHaveBeenCalledWith(409);
+    expect(reply.header).toHaveBeenCalledWith('cache-control', 'no-store');
+    expect(reply.send).toHaveBeenCalledWith({ error: { code: 'conflict', message: 'Busy', requestId: 'req-7' } });
+    expect(log.error).not.toHaveBeenCalled();
+  });
+
+  it('logs unexpected errors with the request context', () => {
+    const log = logger();
+    const { h, reply } = host();
+    const boom = new Error('boom');
+    new ErrorFilter(log).catch(boom, h);
+    expect(log.error).toHaveBeenCalledWith({ err: boom, reqId: 'req-7', route: '/api/v1/orders' }, 'unhandled error');
+    expect(reply.status).toHaveBeenCalledWith(500);
+  });
+
+  it('does not write to a reply that was already sent', () => {
+    const log = logger();
+    const { h, reply } = host(true);
+    new ErrorFilter(log).catch(new Error('late'), h);
+    expect(log.error).toHaveBeenCalledTimes(1);
+    expect(reply.status).not.toHaveBeenCalled();
+    expect(reply.send).not.toHaveBeenCalled();
   });
 });
