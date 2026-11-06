@@ -23,6 +23,38 @@ const luhnValid = (digits: string): boolean => {
   return sum % 10 === 0;
 };
 
+// Verhoeff check digit (UIDAI's Aadhaar checksum), so random 12-digit runs aren't reported as Aadhaar.
+const VERHOEFF_D = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+  [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+  [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+  [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+  [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+  [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+  [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+  [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+  [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+];
+const VERHOEFF_P = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+  [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+  [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+  [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+  [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+  [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+  [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+];
+
+export const verhoeffValid = (digits: string): boolean => {
+  let check = 0;
+  for (let i = 0; i < digits.length; i++) {
+    check = VERHOEFF_D[check]![VERHOEFF_P[i % 8]![Number(digits[digits.length - 1 - i])]!]!;
+  }
+  return check === 0;
+};
+
 interface Rule {
   type: string;
   re: RegExp;
@@ -42,7 +74,12 @@ const RULES: Rule[] = [
     },
   },
   { type: 'PHONE', re: /(?<!\d)(?:\+91[\s-]?|0)?[6-9]\d{4}[\s-]?\d{5}(?!\d)/g },
-  { type: 'AADHAAR', re: /\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b/g },
+  // A hyphenated hex group on either side means the digits sit inside a UUID, not an Aadhaar number.
+  {
+    type: 'AADHAAR',
+    re: /(?<![0-9A-Fa-f]{4}-)\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b(?!-[0-9A-Fa-f]{4})/g,
+    accept: (m) => verhoeffValid(m.replace(/\D/g, '')),
+  },
   { type: 'PAN', re: /\b[A-Z]{5}\d{4}[A-Z]\b/g },
   { type: 'UPI', re: /\b[A-Za-z0-9._-]{2,256}@(?:ok)?[a-z]{2,64}\b/g },
   { type: 'PINCODE', re: /\b(?:pin(?:\s?code)?|postal code)\s*(?:[:#-]\s*)?[1-9]\d{5}\b/gi },

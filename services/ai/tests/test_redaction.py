@@ -13,7 +13,13 @@ CASES = [
     ("call +919876543210", "call [PHONE]"),
     ("card 4111-1111-1111-1111", "card [CARD]"),
     ("not a card 4111111111111112", "not a card 4111111111111112"),  # fails Luhn
-    ("aadhaar 2345 6789 0123", "aadhaar [AADHAAR]"),
+    ("aadhaar 2345 6789 0124", "aadhaar [AADHAAR]"),
+    ("aadhaar 2345-6789-0124", "aadhaar [AADHAAR]"),
+    ("aadhaar 234567890124", "aadhaar [AADHAAR]"),
+    ("bad check digit 2345 6789 0123", "bad check digit 2345 6789 0123"),  # fails Verhoeff
+    # Valid check digits inside UUIDs: last group, and the middle groups read with their hyphens.
+    ("uuid dcd95cd2-8b1e-4c17-a27b-539223914742", "uuid dcd95cd2-8b1e-4c17-a27b-539223914742"),
+    ("uuid 0f4b2c1e-2345-4789-8120-0123456789ab", "uuid 0f4b2c1e-2345-4789-8120-0123456789ab"),
     ("call +91 98765 43210", "call [PHONE]"),
     ("call +91-9876543210 now", "call [PHONE] now"),
     ("call 98765-43210", "call [PHONE]"),

@@ -44,6 +44,38 @@ def _card(match: str) -> bool:
     return 13 <= len(digits) <= 19 and _luhn(digits)
 
 
+# Verhoeff check digit (UIDAI's Aadhaar checksum): random 12-digit runs aren't Aadhaar numbers.
+_VERHOEFF_D = (
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+    (1, 2, 3, 4, 0, 6, 7, 8, 9, 5),
+    (2, 3, 4, 0, 1, 7, 8, 9, 5, 6),
+    (3, 4, 0, 1, 2, 8, 9, 5, 6, 7),
+    (4, 0, 1, 2, 3, 9, 5, 6, 7, 8),
+    (5, 9, 8, 7, 6, 0, 4, 3, 2, 1),
+    (6, 5, 9, 8, 7, 1, 0, 4, 3, 2),
+    (7, 6, 5, 9, 8, 2, 1, 0, 4, 3),
+    (8, 7, 6, 5, 9, 3, 2, 1, 0, 4),
+    (9, 8, 7, 6, 5, 4, 3, 2, 1, 0),
+)
+_VERHOEFF_P = (
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+    (1, 5, 7, 6, 2, 8, 3, 0, 9, 4),
+    (5, 8, 0, 3, 7, 9, 6, 1, 4, 2),
+    (8, 9, 1, 6, 0, 4, 3, 5, 2, 7),
+    (9, 4, 5, 3, 1, 2, 6, 8, 7, 0),
+    (4, 2, 8, 6, 5, 7, 3, 9, 0, 1),
+    (2, 7, 9, 3, 8, 0, 6, 4, 1, 5),
+    (7, 0, 4, 6, 9, 1, 3, 2, 5, 8),
+)
+
+
+def _aadhaar(match: str) -> bool:
+    check = 0
+    for i, ch in enumerate(reversed(re.sub(r"\D", "", match, flags=_A))):
+        check = _VERHOEFF_D[check][_VERHOEFF_P[i % 8][int(ch)]]
+    return check == 0
+
+
 # Order matters: longer, more specific patterns run first so they win overlaps.
 # The third item accepts or rejects a match; ``bool`` accepts every (non-empty) match.
 _RULES: tuple[tuple[str, Callable[[str], Iterator[re.Match[str]]], Callable[[str], bool]], ...] = (
@@ -54,7 +86,14 @@ _RULES: tuple[tuple[str, Callable[[str], Iterator[re.Match[str]]], Callable[[str
         re.compile(rf"(?<!\d)(?:\+91[{_S}-]?|0)?[6-9]\d{{4}}[{_S}-]?\d{{5}}(?!\d)", _A).finditer,
         bool,
     ),
-    ("AADHAAR", re.compile(r"\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b", _A).finditer, bool),
+    # A hyphenated hex group on either side means the digits sit inside a UUID, not an Aadhaar.
+    (
+        "AADHAAR",
+        re.compile(
+            r"(?<![0-9A-Fa-f]{4}-)\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b(?!-[0-9A-Fa-f]{4})", _A
+        ).finditer,
+        _aadhaar,
+    ),
     ("PAN", re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b", _A).finditer, bool),
     ("UPI", re.compile(r"\b[A-Za-z0-9._-]{2,256}@(?:ok)?[a-z]{2,64}\b", _A).finditer, bool),
     (
