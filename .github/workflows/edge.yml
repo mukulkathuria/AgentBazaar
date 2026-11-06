@@ -1,0 +1,47 @@
+name: Edge (WAF and CrowdSec)
+
+# Builds the lite edge (Caddy + Coraza with the OWASP CRS + the CrowdSec bouncer, deploy/compose/caddy), puts it in
+# front of the demo API with a CrowdSec agent, and runs test-edge.sh: ordinary storefront, API, MCP and A2A traffic
+# passes, SQL injection, XSS and path traversal get 403, and a brute-force source is banned.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/compose/Caddyfile'
+      - 'deploy/compose/caddy/**'
+      - 'deploy/compose/docker-compose.yml'
+      - '.github/workflows/edge.yml'
+  pull_request:
+    paths:
+      - 'deploy/compose/Caddyfile'
+      - 'deploy/compose/caddy/**'
+      - '.github/workflows/edge.yml'
+  schedule:
+    - cron: '45 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edge-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  edge:
+    name: Coraza CRS and CrowdSec in front of the demo API
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: The lite stack still parses with the new edge
+        run: touch .env && docker compose -f deploy/compose/docker-compose.yml --profile lite config -q
+      - name: Build and start the edge test stack
+        run: docker compose -f deploy/compose/caddy/compose.edge-test.yml up -d --build --wait --wait-timeout 900
+      - name: Ordinary traffic passes, attacks get 403, brute force gets banned
+        run: bash deploy/compose/caddy/test-edge.sh
+      - name: Logs
+        if: failure()
+        run: docker compose -f deploy/compose/caddy/compose.edge-test.yml logs --tail=150
+      - if: always()
+        run: docker compose -f deploy/compose/caddy/compose.edge-test.yml down -v

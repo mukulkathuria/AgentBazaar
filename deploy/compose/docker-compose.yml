@@ -84,14 +84,34 @@ services:
     env_file: [../../.env]
     environment: { API_URL: 'http://api:4000' }
     depends_on: [api]
+  # Edge: Caddy with the Coraza WAF (OWASP CRS) and the CrowdSec bouncer (caddy/Dockerfile); CrowdSec reads its
+  # access log and bans abusive addresses. Both need CROWDSEC_BOUNCER_KEY in .env (openssl rand -hex 32).
   caddy:
-    image: caddy:2-alpine
+    build: { context: ./caddy }
+    image: ghcr.io/mukulkathuria/agentbazaar-caddy:${APP_VERSION:-latest}
     profiles: [lite, growth, scale]
     restart: unless-stopped
     ports: ['80:80', '443:443']
-    environment: { SITE_DOMAIN: '${SITE_DOMAIN:-localhost}', API_DOMAIN: '${API_DOMAIN:-api.localhost}' }
-    volumes: ['./Caddyfile:/etc/caddy/Caddyfile:ro', 'caddy_data:/data']
-    depends_on: [api, web]
+    environment:
+      SITE_DOMAIN: '${SITE_DOMAIN:-localhost}'
+      API_DOMAIN: '${API_DOMAIN:-api.localhost}'
+      CROWDSEC_BOUNCER_KEY: '${CROWDSEC_BOUNCER_KEY:-}'
+    volumes: ['./Caddyfile:/etc/caddy/Caddyfile:ro', './caddy/waf:/etc/caddy/waf:ro', 'caddy_data:/data', 'caddy_logs:/var/log/caddy']
+    depends_on: [api, web, crowdsec]
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.8.1
+    profiles: [lite, growth, scale]
+    restart: unless-stopped
+    environment:
+      COLLECTIONS: 'crowdsecurity/caddy crowdsecurity/base-http-scenarios crowdsecurity/http-cve'
+      BOUNCER_KEY_caddy: '${CROWDSEC_BOUNCER_KEY:-}'
+    volumes:
+      - './caddy/crowdsec/acquis.yaml:/etc/crowdsec/acquis.d/caddy.yaml:ro'
+      - './caddy/crowdsec/agentbazaar-sign-in-bf.yaml:/etc/crowdsec/scenarios/agentbazaar-sign-in-bf.yaml:ro'
+      - 'caddy_logs:/var/log/caddy:ro'
+      - 'crowdsec_data:/var/lib/crowdsec/data'
+      - 'crowdsec_config:/etc/crowdsec'
+    healthcheck: { test: ['CMD', 'cscli', 'lapi', 'status'], interval: 10s, timeout: 5s, retries: 30 }
   ai:
     build: { context: ../../services/ai }
     image: ghcr.io/mukulkathuria/agentbazaar-ai:${APP_VERSION:-latest}
@@ -211,4 +231,4 @@ services:
     profiles: [observability]
     ports: ['3001:3000']
 
-volumes: { pgdata: {}, pgreplica: {}, caddy_data: {}, meili: {}, nats: {}, temporal: {} }
+volumes: { pgdata: {}, pgreplica: {}, caddy_data: {}, caddy_logs: {}, crowdsec_data: {}, crowdsec_config: {}, meili: {}, nats: {}, temporal: {} }

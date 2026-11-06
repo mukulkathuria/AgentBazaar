@@ -1,0 +1,55 @@
+# Edge check (.github/workflows/edge.yml, test-edge.sh): the demo API behind the lite edge, i.e. this Caddy image with
+# Coraza + OWASP CRS and the CrowdSec bouncer, the CrowdSec agent, and nginx standing in for the storefront (the WAF
+# inspects requests, so any upstream will do). From the repository root:
+#   docker compose -f deploy/compose/caddy/compose.edge-test.yml up -d --build --wait
+#   bash deploy/compose/caddy/test-edge.sh
+#   docker compose -f deploy/compose/caddy/compose.edge-test.yml down -v
+name: agentbazaar-edge-test
+
+x-key: &key ci-only-bouncer-key-0000000000000000
+
+services:
+  api:
+    build: { context: ../../.., dockerfile: apps/api/Dockerfile }
+    environment:
+      NODE_ENV: production
+      DEMO_MODE: 'true'
+      SEED_ON_BOOT: 'true'
+      DATABASE_DRIVER: pglite
+      PUBLIC_API_URL: http://api.shop.test
+      PUBLIC_WEB_URL: http://shop.test
+      CORS_ORIGINS: http://shop.test
+      RATE_LIMIT_PER_MINUTE: '100000'
+    healthcheck: { test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4000/readyz'], interval: 5s, timeout: 3s, retries: 60 }
+
+  web:
+    image: nginx:1.29.8-alpine
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.8.1
+    environment:
+      COLLECTIONS: 'crowdsecurity/caddy crowdsecurity/base-http-scenarios crowdsecurity/http-cve'
+      BOUNCER_KEY_caddy: *key
+    volumes:
+      - './crowdsec/acquis.yaml:/etc/crowdsec/acquis.d/caddy.yaml:ro'
+      - './crowdsec/agentbazaar-sign-in-bf.yaml:/etc/crowdsec/scenarios/agentbazaar-sign-in-bf.yaml:ro'
+      - 'caddy_logs:/var/log/caddy:ro'
+    healthcheck: { test: ['CMD', 'cscli', 'lapi', 'status'], interval: 5s, timeout: 5s, retries: 60 }
+
+  caddy:
+    build: { context: . }
+    ports: ['8090:80']
+    environment:
+      SITE_DOMAIN: http://shop.test
+      API_DOMAIN: http://api.shop.test
+      WEB_UPSTREAM: web:80
+      API_UPSTREAM: api:4000
+      CROWDSEC_BOUNCER_KEY: *key
+    volumes: ['../Caddyfile:/etc/caddy/Caddyfile:ro', 'caddy_logs:/var/log/caddy']
+    depends_on:
+      api: { condition: service_healthy }
+      crowdsec: { condition: service_healthy }
+      web: { condition: service_started }
+    healthcheck: { test: ['CMD', 'wget', '-qO-', '--header', 'Host: api.shop.test', 'http://127.0.0.1/healthz'], interval: 5s, timeout: 3s, retries: 30 }
+
+volumes: { caddy_logs: {} }

@@ -1,11 +1,42 @@
-# Edge for the lite profile: automatic HTTPS, security headers, and /metrics never exposed.
+# Edge for the lite profile: automatic HTTPS, security headers, /metrics never exposed, the OWASP Core Rule Set through
+# Coraza (blocking, paranoia level 1; exclusions in caddy/waf/) and CrowdSec bans fed by the access log below.
+# Runs on the image built from caddy/Dockerfile; CROWDSEC_BOUNCER_KEY must match the crowdsec service's key.
 {
+	order crowdsec first
+	order coraza_waf after crowdsec
 	servers {
 		trusted_proxies static private_ranges
+	}
+	crowdsec {
+		api_url {$CROWDSEC_API_URL:http://crowdsec:8080}
+		api_key {$CROWDSEC_BOUNCER_KEY}
+		ticker_interval 10s
+	}
+}
+
+(edge) {
+	crowdsec
+	coraza_waf {
+		load_owasp_crs
+		directives `
+			Include @coraza.conf-recommended
+			Include @crs-setup.conf.example
+			Include /etc/caddy/waf/before-crs.conf
+			Include @owasp_crs/*.conf
+			Include /etc/caddy/waf/after-crs.conf
+		`
+	}
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 50MiB
+			roll_keep 5
+		}
+		format json
 	}
 }
 
 {$SITE_DOMAIN} {
+	import edge
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -14,10 +45,11 @@
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
 	}
-	reverse_proxy web:3000
+	reverse_proxy {$WEB_UPSTREAM:web:3000}
 }
 
 {$API_DOMAIN} {
+	import edge
 	encode zstd gzip
 	@internal path /metrics /metrics/*
 	respond @internal 404
@@ -25,7 +57,7 @@
 		max_size 1MB
 	}
 	header -Server
-	reverse_proxy api:4000 {
+	reverse_proxy {$API_UPSTREAM:api:4000} {
 		header_up X-Request-Id {http.request.uuid}
 	}
 }

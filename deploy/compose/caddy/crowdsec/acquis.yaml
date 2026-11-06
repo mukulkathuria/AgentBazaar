@@ -1,0 +1,7 @@
+# CrowdSec reads Caddy's JSON access log (written by the `log` block in deploy/compose/Caddyfile). The file appears on
+# Caddy's first request, so watch for it instead of skipping it at startup.
+filenames:
+  - /var/log/caddy/access.log
+force_inotify: true
+labels:
+  type: caddy

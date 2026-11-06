@@ -1,0 +1,24 @@
+# Failed sign-ins or agent token requests from one address: more than 5 within ~10 s bans it at the edge. The API also
+# locks an account after 5 failures; this stops one address from walking through many accounts.
+type: leaky
+name: agentbazaar/sign-in-bf
+description: "Failed AgentBazaar sign-ins or agent token requests from one address"
+filter: |
+  evt.Meta.log_type == 'http_access-log' &&
+  evt.Meta.http_verb == 'POST' &&
+  evt.Meta.http_status in ['401', '429'] &&
+  (evt.Meta.http_path startsWith '/api/v1/auth/login' || evt.Meta.http_path startsWith '/oauth/token')
+groupby: evt.Meta.source_ip
+capacity: 5
+leakspeed: 10s
+blackhole: 2m
+labels:
+  service: http
+  type: bruteforce
+  remediation: true
+  confidence: 3
+  spoofable: 0
+  classification:
+    - attack.T1110
+  label: "AgentBazaar sign-in brute force"
+  behavior: "http:bruteforce"
