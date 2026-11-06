@@ -12,7 +12,7 @@ export interface MeilisearchOptions extends JsonHttpOptions {
 }
 
 interface MeiliResponse {
-  hits: EngineDoc[];
+  hits: (EngineDoc & { _rankingScore?: number })[];
   facetDistribution?: Record<string, Record<string, number>>;
 }
 
@@ -86,7 +86,7 @@ export class MeilisearchAdapter implements SearchPort {
     const page: Record<string, unknown> = { indexUid: this.uid, q, filter, limit: query.limit, offset: query.offset };
     const [vector] = q ? await this.embeddings.embed([q]) : [];
     if (vector?.some((x) => x !== 0)) {
-      Object.assign(page, { vector, hybrid: { embedder: 'default', semanticRatio: 0.5 }, rankingScoreThreshold: MIN_HYBRID_SCORE });
+      Object.assign(page, { vector, hybrid: { embedder: 'default', semanticRatio: 0.5 }, showRankingScore: true });
     }
     if (!q) page.sort = ['name:asc'];
     const counts = { indexUid: this.uid, q, filter, facets: ['brand', 'category_top'], limit: 0 };
@@ -94,11 +94,14 @@ export class MeilisearchAdapter implements SearchPort {
       queries: [page, counts],
     });
     const [hits, all] = results;
+    // Vector neighbours come back however far away they are, so the floor is applied to the page here. With
+    // Meilisearch's own rankingScoreThreshold instead, p95 was over a second at 10,000 products in CI.
+    const items = hits.hits.filter((h) => (h._rankingScore ?? 1) >= MIN_HYBRID_SCORE);
     // Facet counts are exhaustive and every document has one top category, unlike the capped estimatedTotalHits.
     const matched = sum(all.facetDistribution?.category_top);
     return {
-      items: hits.hits.map(fromEngineDoc),
-      total: Math.max(matched, query.offset + hits.hits.length),
+      items: items.map(fromEngineDoc),
+      total: Math.max(matched, query.offset + items.length),
       facets: { brands: facetList(all.facetDistribution?.brand), categories: facetList(all.facetDistribution?.category_top) },
       tookMs: tookMs(started),
     };

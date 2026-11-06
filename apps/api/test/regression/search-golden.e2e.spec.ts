@@ -87,6 +87,15 @@ describe('@lite search golden queries (1,000 products)', () => {
     expect(r.facets.brands).toEqual([{ value: 'Zentrix', count: r.total }]);
   });
 
+  it('puts the product of an exact SKU first, for any variant and in any case', async () => {
+    // A generated SKU shares its brand and type with many products, which fusion ranked above the exact match.
+    const products = seed.products.slice(500, 560);
+    const skus = products.map((p) => p.variants[p.variants.length - 1]!.sku);
+    const first: (string | undefined)[] = [];
+    for (const sku of skus) first.push((await find(sku.toLowerCase())).items[0]?.slug);
+    expect(first).toEqual(products.map((p) => p.slug));
+  });
+
   it('applies price ranges as an overlap with the variant price range', async () => {
     const r = await find('', { minPricePaise: 5_000_000, limit: 50 });
     expect(r.total).toBeGreaterThan(0);

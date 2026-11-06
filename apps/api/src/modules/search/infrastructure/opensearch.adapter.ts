@@ -142,8 +142,13 @@ export class OpenSearchAdapter implements SearchPort {
       ...vec.result.map((p): [string, EngineDoc] => [String(p.id), p.payload]),
       ...kw.hits.hits.map((h): [string, EngineDoc] => [h._id, h._source]),
     ]);
-    const fused = reciprocalRankFusion([kw.hits.hits.map((h) => h._id), vec.result.map((p) => String(p.id))]);
-    const page = fused.slice(query.offset, query.offset + query.limit).map((f) => docs.get(f.id)!);
+    // The keyword ranking counts twice, the balance of lite's two lexical legs (full text, trigram) to one vector leg.
+    const keywordIds = kw.hits.hits.map((h) => h._id);
+    const fused = reciprocalRankFusion([keywordIds, keywordIds, vec.result.map((p) => String(p.id))]);
+    // An exact SKU (of any variant) is a lookup: that product goes first, as in the other engines.
+    const sku = kw.hits.hits.find((h) => h._source.skus.includes(q.toUpperCase()))?._id;
+    const ranked = sku ? [sku, ...fused.map((f) => f.id).filter((id) => id !== sku)] : fused.map((f) => f.id);
+    const page = ranked.slice(query.offset, query.offset + query.limit).map((id) => docs.get(id)!);
     // shortcut: facets cover keyword matches only and total is a lower bound; a second query would make both exact.
     return this.result(kw, page, Math.max(kw.hits.total.value, fused.length), started);
   }

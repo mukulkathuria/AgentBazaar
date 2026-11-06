@@ -25,15 +25,29 @@ export const workload = (n: number): SearchQueryInput[] =>
 
 const percentile = (sorted: number[], p: number) => sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)]!;
 
+export interface Latency {
+  p50: number;
+  p95: number;
+  max: number;
+  /** The three slowest queries, to tell which part of the workload costs most. */
+  slowest: string;
+}
+
 /** Warms up with 10 queries, then times `n` through SearchService (the REST and MCP code path). */
-export async function measureLatency(service: SearchService, n = 100): Promise<{ p50: number; p95: number; max: number }> {
+export async function measureLatency(service: SearchService, n = 100): Promise<Latency> {
   for (const q of workload(10)) await service.search(q);
-  const timings: number[] = [];
+  const runs: { q: SearchQueryInput; ms: number }[] = [];
   for (const q of workload(n)) {
     const started = performance.now();
     await service.search(q);
-    timings.push(performance.now() - started);
+    runs.push({ q, ms: performance.now() - started });
   }
-  timings.sort((a, b) => a - b);
-  return { p50: percentile(timings, 0.5), p95: percentile(timings, 0.95), max: timings[timings.length - 1]! };
+  const timings = runs.map((r) => r.ms).sort((a, b) => a - b);
+  const slowest = [...runs].sort((a, b) => b.ms - a.ms).slice(0, 3);
+  return {
+    p50: percentile(timings, 0.5),
+    p95: percentile(timings, 0.95),
+    max: timings[timings.length - 1]!,
+    slowest: slowest.map((r) => `${r.ms.toFixed(0)}ms ${JSON.stringify(r.q)}`).join(', '),
+  };
 }

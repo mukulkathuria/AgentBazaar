@@ -141,7 +141,8 @@ export interface GoldenScore {
   recall: number;
   ndcg: number;
   byKind: Record<GoldenKind, number>;
-  perQuery: { query: SearchQueryInput; recall: number }[];
+  /** Per query: recall@10 and the top-10 results that are not relevant (for the report). */
+  perQuery: { query: SearchQueryInput; recall: number; irrelevant: string[] }[];
 }
 
 /** Runs every golden query (top 10) through `search` and averages the scores. */
@@ -149,7 +150,8 @@ export async function scoreGolden(golden: readonly GoldenQuery[], search: (q: Se
   const perQuery: (GoldenScore['perQuery'][number] & { kind: GoldenKind; ndcg: number })[] = [];
   for (const g of golden) {
     const slugs = (await search(SearchQuery.parse({ ...g.query, limit: 10 }))).items.map((i) => i.slug);
-    perQuery.push({ kind: g.kind, query: g.query, recall: recallAt10(slugs, g.relevant), ndcg: ndcgAt10(slugs, g.relevant) });
+    const irrelevant = slugs.slice(0, 10).filter((s) => !g.relevant.has(s));
+    perQuery.push({ kind: g.kind, query: g.query, recall: recallAt10(slugs, g.relevant), ndcg: ndcgAt10(slugs, g.relevant), irrelevant });
   }
   const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
   const kinds = [...new Set(perQuery.map((r) => r.kind))];
@@ -157,6 +159,6 @@ export async function scoreGolden(golden: readonly GoldenQuery[], search: (q: Se
     recall: mean(perQuery.map((r) => r.recall)),
     ndcg: mean(perQuery.map((r) => r.ndcg)),
     byKind: Object.fromEntries(kinds.map((k) => [k, mean(perQuery.filter((r) => r.kind === k).map((r) => r.recall))])) as Record<GoldenKind, number>,
-    perQuery: perQuery.map(({ query, recall }) => ({ query, recall })),
+    perQuery: perQuery.map(({ query, recall, irrelevant }) => ({ query, recall, irrelevant })),
   };
 }

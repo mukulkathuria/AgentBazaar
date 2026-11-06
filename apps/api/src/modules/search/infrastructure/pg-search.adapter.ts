@@ -135,7 +135,9 @@ function hybridHits(q: string, where: SQL, vector: readonly number[]): SQL {
         FROM (SELECT d.product_id, d.embedding <=> ${vectorParam(vector)} AS dist FROM search_documents d WHERE ${where}) v
         WHERE dist <= ${1 - MIN_VECTOR_SIMILARITY}`);
   }
-  return sql`SELECT ${HIT_COLUMNS}, f.score FROM (
+  // An exact SKU (of any variant) is a lookup: that product goes first, above any fused score (at most 3 / 61).
+  const exactSku = sql`CASE WHEN ${q.toUpperCase()} = ANY(string_to_array(d.sku_text, ' ')) THEN 1 ELSE 0 END`;
+  return sql`SELECT ${HIT_COLUMNS}, f.score + ${exactSku} AS score FROM (
       SELECT product_id, sum(1.0::float8 / (${RRF_K} + r)) AS score
       FROM (${sql.join(
         legs.map((leg) => sql`(${leg})`),

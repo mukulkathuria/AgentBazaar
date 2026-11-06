@@ -131,8 +131,9 @@ describe('@growth Meilisearch adapter (fake fetch)', () => {
       limit: 5,
       offset: 0,
       hybrid: { embedder: 'default', semanticRatio: 0.5 },
-      rankingScoreThreshold: 0.65,
+      showRankingScore: true,
     });
+    expect(page).not.toHaveProperty('rankingScoreThreshold');
     expect(page!.vector).toEqual(hashEmbed('keyboard'));
     expect(counts).toEqual({ indexUid: 'products', q: 'keyboard', filter, facets: ['brand', 'category_top'], limit: 0 });
     expect(r.items).toEqual([summary]);
@@ -150,6 +151,14 @@ describe('@growth Meilisearch adapter (fake fetch)', () => {
     const { adapter } = make(() => ({ json: { results: [{ hits: [engineDoc, engineDoc] }, { hits: [] }] } }));
     const r = await adapter.search(SearchQuery.parse({ q: 'keybaord', offset: 12 }));
     expect(r).toMatchObject({ total: 14, facets: { brands: [], categories: [] } });
+  });
+
+  it('drops hybrid hits under the cosine floor of the other engines ((1 + 0.3) / 2 on its scale)', async () => {
+    const hit = (score: number) => ({ ...engineDoc, _rankingScore: score });
+    const { adapter } = make(() => ({ json: { results: [{ hits: [hit(0.98), hit(0.65), hit(0.6499)] }, { hits: [] }] } }));
+    const r = await adapter.search(SearchQuery.parse({ q: 'xyzzy qwerty' }));
+    expect(r.items).toHaveLength(2);
+    expect(r.total).toBe(2);
   });
 
   it('browses by name without vectors and escapes quotes in filter values', async () => {
@@ -174,8 +183,8 @@ describe('@growth Meilisearch adapter (fake fetch)', () => {
 });
 
 describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
-  const other = { ...engineDoc, id: 'aaaaaaaa-0000-4000-8000-000000000000', slug: 'keyvo-kb' };
-  const third = { ...engineDoc, id: 'bbbbbbbb-0000-4000-8000-000000000000', slug: 'thock-kb-2' };
+  const other = { ...engineDoc, id: 'aaaaaaaa-0000-4000-8000-000000000000', slug: 'keyvo-kb', skus: ['KEYVO-KB-1'] };
+  const third = { ...engineDoc, id: 'bbbbbbbb-0000-4000-8000-000000000000', slug: 'thock-kb-2', skus: ['THOCK-KB-2'] };
   const make = (respond?: Parameters<typeof fakeFetch>[0]) => {
     const f = fakeFetch(respond);
     const adapter = new OpenSearchAdapter({ url: 'http://os:9200', qdrantUrl: 'http://qdrant:6333', fetch: f.fetch }, embeddings);
@@ -260,10 +269,33 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
       { key: 'min_price_paise', range: { lte: 600_000 } },
       { key: 'in_stock', match: { value: true } },
     ]);
-    // `other` is ranked by both engines, so it wins; then keyword #1 beats vector #1 on the id tie-break.
+    // `other` is ranked by both engines, so it wins; keyword #1 then beats vector #1, as the keyword ranking counts twice.
     expect(r.items.map((i) => i.slug)).toEqual(['keyvo-kb', 'thock-tk87-mechanical-keyboard', 'thock-kb-2']);
     expect(r.total).toBe(3);
     expect(r.facets).toEqual({ brands: [{ value: 'Thock', count: 2 }], categories: [{ value: 'electronics', count: 2 }] });
+  });
+
+  it('puts the product with an exact SKU first, even when fusion favours products both engines found', async () => {
+    const { adapter } = make((url) =>
+      url.includes('qdrant')
+        ? { json: { result: [{ id: other.id, score: 0.9, payload: other }, { id: third.id, score: 0.8, payload: third }] } }
+        : {
+            json: {
+              hits: {
+                total: { value: 3 },
+                hits: [
+                  { _id: other.id, _source: other },
+                  { _id: third.id, _source: third },
+                  { _id: engineDoc.id, _source: engineDoc },
+                ],
+              },
+            },
+          },
+    );
+    const r = await adapter.search(SearchQuery.parse({ q: 'thock-tk87-blue' }));
+    expect(r.items.map((i) => i.slug)).toEqual(['thock-tk87-mechanical-keyboard', 'keyvo-kb', 'thock-kb-2']);
+    const plain = await adapter.search(SearchQuery.parse({ q: 'keyboard' }));
+    expect(plain.items.map((i) => i.slug)).toEqual(['keyvo-kb', 'thock-kb-2', 'thock-tk87-mechanical-keyboard']);
   });
 
   it('browses with keyword search only, paged by the engine', async () => {

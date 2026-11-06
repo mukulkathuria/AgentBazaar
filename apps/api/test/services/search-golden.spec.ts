@@ -26,9 +26,9 @@ const seconds = (since: number) => ((performance.now() - since) / 1000).toFixed(
 function report(golden: readonly GoldenQuery[], scores: Record<Engine, GoldenScore>): string {
   const f = (x: number) => x.toFixed(3);
   const misses = golden
-    .map((g, i) => ({ q: JSON.stringify(g.query), r: ENGINES.map((e) => scores[e].perQuery[i]!.recall) }))
-    .filter((m) => m.r.some((x) => x < 1))
-    .map((m) => `  ${m.q}: ${m.r.map(f).join(' / ')}`);
+    .map((g, i) => ({ q: JSON.stringify(g.query), r: ENGINES.map((e) => scores[e].perQuery[i]!) }))
+    .filter((m) => m.r.some((x) => x.recall < 1))
+    .map((m) => `  ${m.q}: ${m.r.map((x) => f(x.recall)).join(' / ')}; not relevant: ${m.r.map((x) => x.irrelevant.slice(0, 3).join(' ') || '-').join(' / ')}`);
   return [
     `golden set, ${golden.length} queries over ${PRODUCTS} products (engine: recall@10, nDCG@10, recall@10 by kind)`,
     ...ENGINES.map((e) => `${e}: ${f(scores[e].recall)}, ${f(scores[e].ndcg)}, ${JSON.stringify(scores[e].byKind)}`),
@@ -95,8 +95,9 @@ describe(`@growth @scale golden search queries and latency at ${PRODUCTS} produc
     const budget = name === 'postgres' ? Infinity : 50;
     it(`${name} answers 100 mixed queries through SearchService${budget < Infinity ? ' with p95 under 50 ms' : ''}`, { retry: 2, timeout: 600_000 }, async () => {
       const db = t.database.db;
-      const { p50, p95, max } = await measureLatency(new SearchService(ports[name], new AnalyticsService(db), db, createLogger('silent')));
+      const { p50, p95, max, slowest } = await measureLatency(new SearchService(ports[name], new AnalyticsService(db), db, createLogger('silent')));
       console.warn(`${name} search latency over 100 queries, ${PRODUCTS} products: p50=${p50.toFixed(1)}ms p95=${p95.toFixed(1)}ms max=${max.toFixed(1)}ms`);
+      console.warn(`${name} slowest: ${slowest}`);
       expect(p95).toBeLessThan(budget);
     });
   }
