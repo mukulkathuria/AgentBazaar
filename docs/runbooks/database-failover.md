@@ -80,8 +80,7 @@ released and opens new ones to the new host; the API's client connections stay u
 # Compose (growth): the image writes its config to /etc/pgbouncer/pgbouncer.ini at first start.
 docker compose -f deploy/compose/docker-compose.yml exec pgbouncer \
   sed -i 's/host=postgres /host=<new-primary-host> /' /etc/pgbouncer/pgbouncer.ini
-docker compose -f deploy/compose/docker-compose.yml exec pgbouncer \
-  psql -h 127.0.0.1 -p 6432 -U agentbazaar pgbouncer -c RELOAD
+docker compose -f deploy/compose/docker-compose.yml kill -s HUP pgbouncer   # SIGHUP is the same as RELOAD
 ```
 
 On Kubernetes, update the ConfigMap or Secret that holds the `[databases]` section, then run `RELOAD` through the
