@@ -16,8 +16,9 @@ export const VARIANTS = new Map(
 );
 
 const RUPEES = /₹\s?(\d[\d,]*(?:\.\d{1,2})?)/g;
-const DEVANAGARI = /[ऀ-ॿ]/;
-const CHECKOUT_LINK = /\/checkout\/[0-9a-f-]{36}\?t=/;
+// Plain comparisons rather than regexes on reply text (Semgrep regex_dos).
+const hasDevanagari = (text) => [...text].some((ch) => ch >= 'ऀ' && ch <= 'ॿ');
+const isCheckoutLink = (url) => url.includes('/checkout/') && url.includes('?t=');
 
 const parse = (output) => (typeof output === 'string' ? JSON.parse(output) : output);
 const verdict = (problems) =>
@@ -99,8 +100,8 @@ export function expected(output, context) {
       () => r.products.every((p) => p.minPricePaise <= e.maxPricePaise),
       'a product is over budget',
     ],
-    [e.checkout, () => CHECKOUT_LINK.test(r.checkoutUrl ?? ''), 'no checkout link'],
-    [e.hindi, () => DEVANAGARI.test(r.message), 'the reply is not in Hindi'],
+    [e.checkout, () => isCheckoutLink(r.checkoutUrl ?? ''), 'no checkout link'],
+    [e.hindi, () => hasDevanagari(r.message), 'the reply is not in Hindi'],
     [
       e.notContains,
       () => ![e.notContains].flat().some((s) => r.message.includes(s)),
