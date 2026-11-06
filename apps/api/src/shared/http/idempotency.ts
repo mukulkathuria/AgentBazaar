@@ -20,7 +20,8 @@ export interface IdempotentResult<T> {
 
 /**
  * Executes `fn` once per (scope, key). A retry with the same key and body returns the stored
- * response; the same key with a different body is rejected. Failed attempts release the key.
+ * response; the same key with a different body is rejected. Failed attempts release the key, and an
+ * attempt that could not (crash, database outage) loses it after a minute.
  */
 export async function withIdempotencyKey<T>(
   db: Executor,
@@ -33,10 +34,15 @@ export async function withIdempotencyKey<T>(
     throw new AppError('validation_failed', 'An Idempotency-Key header (8-128 chars of A-Z, a-z, 0-9, _ or -) is required');
   }
   const hash = sha256Hex(JSON.stringify(request ?? null));
+  // A claim left in progress for over a minute was abandoned (the process died, or the database failed
+  // before the key could be released), so the same request may take it over; otherwise it stays locked.
   const claimed = await one<{ key: string }>(
     db,
     sql`INSERT INTO idempotency_keys (scope, key, request_hash, status) VALUES (${scope}, ${key}, ${hash}, 'in_progress')
-        ON CONFLICT DO NOTHING RETURNING key`,
+        ON CONFLICT (scope, key) DO UPDATE SET created_at = now()
+          WHERE idempotency_keys.status = 'in_progress' AND idempotency_keys.request_hash = excluded.request_hash
+            AND idempotency_keys.created_at < now() - interval '60 seconds'
+        RETURNING key`,
   );
   if (!claimed) {
     const existing = await one<Stored>(
