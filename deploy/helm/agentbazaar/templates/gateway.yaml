@@ -1,0 +1,242 @@
+{{- /* APISIX standalone configuration: the ConfigMap's data, also hashed into the pod annotations. */ -}}
+{{- define "agentbazaar.gatewayConfig" -}}
+{{- $fullname := include "agentbazaar.fullname" . }}
+{{- $g := .Values.gateway }}
+{{- $webHost := include "agentbazaar.hostname" (required "config.PUBLIC_WEB_URL is required" .Values.config.PUBLIC_WEB_URL) }}
+{{- $apiHost := include "agentbazaar.hostname" (required "config.PUBLIC_API_URL is required" .Values.config.PUBLIC_API_URL) }}
+{{- $svc := printf "%s.svc.%s" .Release.Namespace $g.clusterDomain }}
+{{- /* One bucket per bearer token (an agent's token); APISIX falls back to the client IP without one. */}}
+{{- $limit := dict "key_type" "var" "key" "http_authorization" "rejected_code" 429 "policy" "local" "show_limit_quota_header" true }}
+config.yaml: |
+  deployment:
+    role: data_plane
+    role_data_plane:
+      config_provider: yaml
+  apisix:
+    node_listen: {{ $g.port | int }}
+    enable_ipv6: false
+    ssl:
+      enable: false
+  nginx_config:
+    worker_processes: {{ $g.workerProcesses }}
+    error_log: /dev/stderr
+    error_log_level: warn
+    http:
+      access_log: /dev/stdout
+      # Paths only: query strings can carry checkout and order tokens.
+      access_log_format: '$remote_addr [$time_local] $host "$request_method $uri" $status $body_bytes_sent $request_time $upstream_status'
+      client_max_body_size: {{ max $g.maxBodySize.api $g.maxBodySize.web | int }}
+      real_ip_header: X-Forwarded-For
+      real_ip_recursive: "on"
+      real_ip_from:
+        {{- toYaml $g.trustedProxies | nindent 8 }}
+  plugins:
+    - client-control
+    - limit-count
+apisix.yaml: |
+  routes:
+    - id: agents
+      name: agent traffic
+      hosts: [{{ $apiHost | quote }}]
+      uris: ["/mcp", "/mcp/*", "/a2a", "/a2a/*", "/api/v1/chat/*"]
+      priority: 20
+      upstream_id: {{ include "agentbazaar.agentComponent" . }}
+      plugins:
+        client-control: { max_body_size: {{ $g.maxBodySize.api | int }} }
+        limit-count: {{ merge (dict "count" ($g.rateLimit.agents.count | int) "time_window" ($g.rateLimit.agents.timeWindow | int)) $limit | toJson }}
+    - id: api
+      name: api
+      hosts: [{{ $apiHost | quote }}]
+      uris: ["/*"]
+      priority: 10
+      upstream_id: api
+      plugins:
+        client-control: { max_body_size: {{ $g.maxBodySize.api | int }} }
+        limit-count: {{ merge (dict "count" ($g.rateLimit.api.count | int) "time_window" ($g.rateLimit.api.timeWindow | int)) $limit | toJson }}
+    - id: web
+      name: storefront
+      hosts: [{{ $webHost | quote }}]
+      uris: ["/*"]
+      upstream_id: web
+      plugins:
+        client-control: { max_body_size: {{ $g.maxBodySize.web | int }} }
+        limit-count: {{ merge (dict "count" ($g.rateLimit.web.count | int) "time_window" ($g.rateLimit.web.timeWindow | int)) $limit | toJson }}
+  upstreams:
+    {{- range $component := splitList "," (include "agentbazaar.components" .) }}
+    {{- if has $component (list "web" "api" "agents") }}
+    - id: {{ $component }}
+      type: roundrobin
+      timeout: { connect: 5, send: 60, read: 120 }
+      nodes:
+        - host: {{ printf "%s-%s.%s" $fullname $component $svc }}
+          port: {{ (index $.Values $component).port | int }}
+          weight: 1
+    {{- end }}
+    {{- end }}
+  #END
+{{- end -}}
+
+{{- if .Values.gateway.enabled }}
+{{- $fullname := include "agentbazaar.fullname" . }}
+{{- $g := .Values.gateway }}
+{{- $selector := include "agentbazaar.selectorLabels" (dict "root" . "component" "gateway") }}
+{{- $image := printf "%s:%s" $g.image.repository $g.image.tag }}
+{{- /* APISIX renders nginx.conf into conf/ and keeps runtime files under its prefix, so those paths are
+       emptyDirs (conf/ seeded from the image) and the root filesystem stays read-only. */}}
+{{- $writable := list "logs" "client_body_temp" "proxy_temp" "fastcgi_temp" "uwsgi_temp" "scgi_temp" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-gateway
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+data:
+  {{- include "agentbazaar.gatewayConfig" . | trim | nindent 2 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-gateway
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: {{ $g.replicaCount }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- $selector | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "agentbazaar.labels" . | nindent 8 }}
+        app.kubernetes.io/component: gateway
+      annotations:
+        checksum/config: {{ include "agentbazaar.gatewayConfig" . | sha256sum }}
+        {{- with $g.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "agentbazaar.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # The apisix image runs as uid 636.
+      securityContext:
+        {{- toYaml (merge (dict "runAsUser" 636 "runAsGroup" 636 "fsGroup" 636) (omit .Values.podSecurityContext "runAsUser" "runAsGroup" "fsGroup")) | nindent 8 }}
+      initContainers:
+        - name: seed-conf
+          image: {{ $image | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ['sh', '-c', 'cp -r /usr/local/apisix/conf/. /seed/']
+          resources:
+            {{- toYaml $g.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: conf
+              mountPath: /seed
+      containers:
+        - name: gateway
+          image: {{ $image | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            # Use the mounted config.yaml and apisix.yaml; no etcd.
+            - name: APISIX_STAND_ALONE
+              value: "true"
+          ports:
+            - name: http
+              containerPort: {{ $g.port }}
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml $g.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: conf
+              mountPath: /usr/local/apisix/conf
+            - name: config
+              mountPath: /usr/local/apisix/conf/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: config
+              mountPath: /usr/local/apisix/conf/apisix.yaml
+              subPath: apisix.yaml
+              readOnly: true
+            {{- range $writable }}
+            - name: {{ replace "_" "-" . }}
+              mountPath: /usr/local/apisix/{{ . }}
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $fullname }}-gateway
+        - name: conf
+          emptyDir: {}
+        {{- range $writable }}
+        - name: {{ replace "_" "-" . }}
+          emptyDir: {}
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with $g.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $g.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $g.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-gateway
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  type: {{ $g.service.type }}
+  selector:
+    {{- $selector | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $g.service.port }}
+      targetPort: http
+      protocol: TCP
+{{- if $g.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullname }}-gateway
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  maxUnavailable: {{ $g.pdb.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- $selector | nindent 6 }}
+{{- end }}
+{{- end }}

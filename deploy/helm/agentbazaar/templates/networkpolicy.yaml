@@ -1,6 +1,7 @@
 {{- if .Values.networkPolicy.enabled }}
 {{- $fullname := include "agentbazaar.fullname" . }}
 {{- $release := dict "app.kubernetes.io/name" (include "agentbazaar.name" .) "app.kubernetes.io/instance" .Release.Name }}
+{{- $servers := ternary (list "web" "api" "agents") (list "web" "api") .Values.agents.enabled }}
 # Default deny: no pod of this release accepts traffic unless a policy below allows it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -15,7 +16,7 @@ spec:
   policyTypes:
     - Ingress
 ---
-# Ingress controller or load balancer -> web and api.
+# Ingress controller or load balancer -> the gateway, or straight to the serving pods without one.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -29,7 +30,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In
-        values: ["web", "api"]
+        values: {{ ternary (list "gateway") $servers .Values.gateway.enabled | toJson }}
   policyTypes:
     - Ingress
   ingress:
@@ -37,6 +38,33 @@ spec:
         {{- toYaml .Values.networkPolicy.ingressFrom | nindent 8 }}
       ports:
         - port: http
+{{- if .Values.gateway.enabled }}
+---
+# gateway -> web, api and agents.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-allow-gateway
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $release | nindent 6 }}
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: {{ $servers | toJson }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "agentbazaar.selectorLabels" (dict "root" . "component" "gateway") | nindent 14 }}
+      ports:
+        - port: http
+{{- end }}
 ---
 # web -> api (server-side rendering calls the API inside the cluster).
 apiVersion: networking.k8s.io/v1
@@ -60,7 +88,7 @@ spec:
         - port: http
 {{- if .Values.ai.enabled }}
 ---
-# api -> ai.
+# api and agents -> ai.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -77,13 +105,17 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              {{- include "agentbazaar.selectorLabels" (dict "root" . "component" "api") | nindent 14 }}
+              {{- toYaml $release | nindent 14 }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values: ["api", "agents"]
       ports:
         - port: http
 {{- end }}
 {{- if .Values.serviceMonitor.enabled }}
 ---
-# Prometheus -> api /metrics.
+# Prometheus -> /metrics on api and agents.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -93,7 +125,11 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      {{- include "agentbazaar.selectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+      {{- toYaml $release | nindent 6 }}
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: ["api", "agents"]
   policyTypes:
     - Ingress
   ingress:

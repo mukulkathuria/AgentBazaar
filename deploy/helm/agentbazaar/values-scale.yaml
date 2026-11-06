@@ -9,7 +9,51 @@ config:
   EVENT_BUS: kafka
   QDRANT_URL: http://qdrant:6333
   OPENBAO_ADDR: http://openbao:8200
+  SEMANTIC_CACHE: valkey
+  # Order and payment sagas on Temporal, run by `worker` below.
+  WORKFLOW_ENGINE: temporal
+  TEMPORAL_ADDRESS: temporal-frontend:7233
+  TEMPORAL_NAMESPACE: default
+  TEMPORAL_TASK_QUEUE: agentbazaar
+  # CLICKHOUSE_URL goes in the Secret.
+  ANALYTICS_ADAPTER: clickhouse
   # KAFKA_BROKERS, OPENSEARCH_URL, VALKEY_URL and the public URLs come from Terraform's helm_values.
+
+gateway:
+  enabled: true
+  replicaCount: 3
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: topology.kubernetes.io/zone
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: gateway
+
+# S6: agent traffic on its own autoscaled pool.
+agents:
+  enabled: true
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 30
+    targetCPUUtilizationPercentage: 60
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+
+worker:
+  enabled: true
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
 
 api:
   replicaCount: 3

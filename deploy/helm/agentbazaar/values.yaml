@@ -7,7 +7,9 @@ fullnameOverride: ''
 # Required keys: DATABASE_URL, QUOTE_SIGNING_KEY, PII_MASTER_KEY, PII_BLIND_INDEX_KEY, JWT_PRIVATE_KEY
 # (builtin identity), plus your payment adapter's keys (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET,
 # RAZORPAY_WEBHOOK_SECRET or YOUPI_API_KEY, YOUPI_WEBHOOK_SECRET) and any service credentials you use
-# (OPENBAO_TOKEN, MEILISEARCH_API_KEY, ANTHROPIC_API_KEY, ...). See README.md.
+# (OPENBAO_TOKEN, MEILISEARCH_API_KEY, ANTHROPIC_API_KEY, ...). URLs that carry credentials belong here too:
+# DATABASE_URL (point it at PgBouncer when you run one), DATABASE_REPLICA_URLS, CLICKHOUSE_URL, plus
+# LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY. See README.md.
 existingSecret: agentbazaar-secrets
 
 # Non-secret environment shared by every component (rendered into a ConfigMap). Empty values are left
@@ -30,6 +32,23 @@ config:
   OPENBAO_ADDR: ''
   # Defaults to the in-chart ai Service when ai.enabled is true.
   AI_SERVICE_URL: ''
+  # Read replicas (DATABASE_REPLICA_URLS itself goes in the Secret): how stale a replica may be before reads
+  # fall back to the primary.
+  DATABASE_REPLICA_MAX_LAG_MS: ''
+  # OpenTelemetry tracing starts only when the endpoint is set (OTLP/HTTP, e.g. http://otel-collector:4318).
+  # Each Deployment sets OTEL_SERVICE_NAME to agentbazaar-<component>.
+  OTEL_EXPORTER_OTLP_ENDPOINT: ''
+  # off | memory | valkey
+  SEMANTIC_CACHE: ''
+  # Langfuse traces of LLM calls (keys in the Secret).
+  LANGFUSE_HOST: ''
+  # Temporal sagas (scale): set WORKFLOW_ENGINE=temporal and enable `worker`.
+  WORKFLOW_ENGINE: ''
+  TEMPORAL_ADDRESS: ''
+  TEMPORAL_NAMESPACE: ''
+  TEMPORAL_TASK_QUEUE: ''
+  # clickhouse (CLICKHOUSE_URL in the Secret)
+  ANALYTICS_ADAPTER: ''
 
 image:
   # Defaults to the chart's appVersion.
@@ -163,6 +182,142 @@ ai:
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
+
+# Agent pool: a second Deployment of the api image that serves agent traffic (/mcp, /a2a, /api/v1/chat),
+# which the gateway (or the Ingress) routes to it, so agent spikes scale and fail apart from the storefront.
+agents:
+  enabled: false
+  image:
+    repository: ghcr.io/mukulkathuria/agentbazaar-api
+  replicaCount: 2
+  podSecurityContext: {}
+  port: 4000
+  command: []
+  livenessPath: /healthz
+  readinessPath: /readyz
+  resources:
+    requests:
+      cpu: 250m
+      memory: 384Mi
+    limits:
+      cpu: '1'
+      memory: 768Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+    # Further HPA metrics, appended to CPU. Agent calls wait on LLMs more than they burn CPU, so a request-rate
+    # metric is the better signal when prometheus-adapter serves one (docs/operations/kubernetes.md), e.g.
+    #   - type: Pods
+    #     pods:
+    #       metric: { name: agentbazaar_agent_requests_per_second }
+    #       target: { type: AverageValue, averageValue: '20' }
+    extraMetrics: []
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  writablePaths: ['/tmp']
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+# Temporal workflow worker (scale): runs the order and payment sagas. Needs config.WORKFLOW_ENGINE=temporal
+# and the TEMPORAL_* settings. It serves no traffic, so it has no Service or HTTP probes.
+worker:
+  enabled: false
+  image:
+    repository: ghcr.io/mukulkathuria/agentbazaar-api
+  replicaCount: 2
+  podSecurityContext: {}
+  command: ['node', 'dist/cli/index.js', 'workflow-worker']
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+    extraMetrics: []
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  writablePaths: ['/tmp']
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+# Apache APISIX in standalone mode (routes from this chart, no etcd) in front of web, api and agents:
+# PUBLIC_WEB_URL's host goes to web; PUBLIC_API_URL's host goes to agents for /mcp, /a2a and /api/v1/chat
+# (to api when agents is off) and to api for everything else. The Ingress or the AWS target groups then
+# point at the gateway.
+gateway:
+  enabled: false
+  image:
+    repository: apache/apisix
+    tag: 3.19.0-debian
+  replicaCount: 2
+  port: 9080
+  workerProcesses: 2
+  service:
+    type: ClusterIP
+    port: 80
+  clusterDomain: cluster.local
+  # Proxies whose X-Forwarded-For is trusted for the client IP (the pod network, the VPC).
+  trustedProxies: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+  # Per-caller request limits: keyed on the bearer token (one bucket per agent token), falling back to the
+  # client IP for anonymous callers. Counts are per gateway replica. The app's own per-agent quota (the
+  # token's qpm claim) still applies behind it.
+  rateLimit:
+    agents: { count: 600, timeWindow: 60 }
+    api: { count: 1200, timeWindow: 60 }
+    web: { count: 1200, timeWindow: 60 }
+  # Largest request bodies in bytes (the API itself accepts 256 KiB).
+  maxBodySize:
+    api: 262144
+    web: 1048576
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Archival CronJob on the api image: writes archives to ARCHIVE_DIR on the volume you give it.
+archive:
+  enabled: false
+  schedule: '30 2 * * *'
+  command: ['node', 'dist/cli/index.js', 'archive']
+  dir: /archive
+  # Required when enabled: a volume source, e.g. { persistentVolumeClaim: { claimName: agentbazaar-archive } }.
+  volume: {}
+  activeDeadlineSeconds: 3600
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
 
 # Pre-install/pre-upgrade hook Job on the api image. The api pods then skip their own migration run.
 migrations:

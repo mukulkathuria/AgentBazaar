@@ -47,11 +47,23 @@ app.kubernetes.io/component: {{ .component }}
 {{- required "existingSecret is required: create a Secret with the app's keys first (see README.md)" .Values.existingSecret -}}
 {{- end -}}
 
-{{- /* Components this release runs: api and web always, ai when enabled. */ -}}
+{{- /* Components this release runs: api and web always; ai, the agents pool and the worker when enabled. */ -}}
 {{- define "agentbazaar.components" -}}
 {{- $c := list "api" "web" -}}
-{{- if .Values.ai.enabled -}}{{- $c = append $c "ai" -}}{{- end -}}
+{{- range $optional := list "ai" "agents" "worker" -}}
+{{- if (index $.Values $optional).enabled -}}{{- $c = append $c $optional -}}{{- end -}}
+{{- end -}}
 {{- join "," $c -}}
+{{- end -}}
+
+{{- /* The host of a public URL without its port, as Ingress rules and the gateway's host routes need. */ -}}
+{{- define "agentbazaar.hostname" -}}
+{{- regexReplaceAll ":[0-9]+$" (urlParse .).host "" -}}
+{{- end -}}
+
+{{- /* Where agent traffic (/mcp, /a2a, /api/v1/chat) goes: the agents pool when it runs, else the api. */ -}}
+{{- define "agentbazaar.agentComponent" -}}
+{{- ternary "agents" "api" .Values.agents.enabled -}}
 {{- end -}}
 
 {{- /* Non-secret env as a YAML map: ConfigMap data, and inline env for the pre-install migration Job. */ -}}

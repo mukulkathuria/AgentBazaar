@@ -1,0 +1,65 @@
+{{- if .Values.archive.enabled }}
+{{- $a := .Values.archive }}
+{{- if not $a.volume }}
+{{- fail "archive.volume is required when archive.enabled (e.g. { persistentVolumeClaim: { claimName: agentbazaar-archive } })" }}
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "agentbazaar.fullname" . }}-archive
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: archive
+spec:
+  schedule: {{ $a.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: {{ $a.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "agentbazaar.labels" . | nindent 12 }}
+            app.kubernetes.io/component: archive
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "agentbazaar.serviceAccountName" . }}
+          automountServiceAccountToken: false
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: archive
+              image: {{ include "agentbazaar.image" (dict "root" . "component" .Values.api) | quote }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command:
+                {{- toYaml $a.command | nindent 16 }}
+              env:
+                - name: ARCHIVE_DIR
+                  value: {{ $a.dir | quote }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "agentbazaar.fullname" . }}-config
+                - secretRef:
+                    name: {{ include "agentbazaar.secretName" . }}
+              resources:
+                {{- toYaml $a.resources | nindent 16 }}
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              volumeMounts:
+                - name: archive
+                  mountPath: {{ $a.dir }}
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: archive
+              {{- toYaml $a.volume | nindent 14 }}
+            - name: tmp
+              emptyDir: {}
+{{- end }}

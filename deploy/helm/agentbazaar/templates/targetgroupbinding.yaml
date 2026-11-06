@@ -13,7 +13,8 @@ metadata:
     app.kubernetes.io/component: {{ $component }}
 spec:
   serviceRef:
-    name: {{ include "agentbazaar.fullname" $ }}-{{ $component }}
+    # With the gateway on, both target groups feed it and it routes by host and path.
+    name: {{ include "agentbazaar.fullname" $ }}-{{ ternary "gateway" $component $.Values.gateway.enabled }}
     port: http
   targetGroupARN: {{ $arn | quote }}
   targetType: ip

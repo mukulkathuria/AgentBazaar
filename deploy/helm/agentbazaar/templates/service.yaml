@@ -1,6 +1,7 @@
 {{- $root := . -}}
 {{- range $component := splitList "," (include "agentbazaar.components" $root) }}
 {{- $c := index $root.Values $component }}
+{{- if $c.port }}
 ---
 apiVersion: v1
 kind: Service
@@ -18,4 +19,5 @@ spec:
       port: {{ $c.port }}
       targetPort: http
       protocol: TCP
+{{- end }}
 {{- end }}

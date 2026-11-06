@@ -1,10 +1,13 @@
 {{- if .Values.ingress.enabled }}
 {{- $fullname := include "agentbazaar.fullname" . }}
-{{- $webHost := (urlParse (required "config.PUBLIC_WEB_URL is required" .Values.config.PUBLIC_WEB_URL)).host }}
-{{- $apiHost := (urlParse (required "config.PUBLIC_API_URL is required" .Values.config.PUBLIC_API_URL)).host }}
+{{- $webHost := include "agentbazaar.hostname" (required "config.PUBLIC_WEB_URL is required" .Values.config.PUBLIC_WEB_URL) }}
+{{- $apiHost := include "agentbazaar.hostname" (required "config.PUBLIC_API_URL is required" .Values.config.PUBLIC_API_URL) }}
 {{- if eq $webHost $apiHost }}
 {{- fail "PUBLIC_WEB_URL and PUBLIC_API_URL must use different hosts (e.g. shop.example.com and api.shop.example.com)" }}
 {{- end }}
+{{- /* With the gateway on, both hosts go to it and it routes by host and path. */}}
+{{- $web := ternary "gateway" "web" .Values.gateway.enabled }}
+{{- $api := ternary "gateway" "api" .Values.gateway.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -34,17 +37,28 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ $fullname }}-web
+                name: {{ $fullname }}-{{ $web }}
                 port:
                   name: http
     - host: {{ $apiHost | quote }}
       http:
         paths:
+          {{- if and .Values.agents.enabled (not .Values.gateway.enabled) }}
+          {{- range list "/mcp" "/a2a" "/api/v1/chat" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-agents
+                port:
+                  name: http
+          {{- end }}
+          {{- end }}
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: {{ $fullname }}-api
+                name: {{ $fullname }}-{{ $api }}
                 port:
                   name: http
 {{- end }}

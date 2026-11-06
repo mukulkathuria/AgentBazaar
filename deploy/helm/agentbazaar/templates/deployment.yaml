@@ -45,13 +45,18 @@ spec:
           command:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- /* The worker serves no traffic: no port, no Service, no HTTP probes. */}}
+          {{- if $c.port }}
           ports:
             - name: http
               containerPort: {{ $c.port }}
               protocol: TCP
+          {{- end }}
           env:
+            {{- if $c.port }}
             - name: PORT
               value: {{ $c.port | quote }}
+            {{- end }}
             {{- if eq $component "web" }}
             # Server-side calls stay inside the cluster; Kubernetes sets HOSTNAME, which Next.js binds to.
             - name: API_URL
@@ -59,10 +64,15 @@ spec:
             - name: HOSTNAME
               value: 0.0.0.0
             {{- end }}
-            {{- if and (eq $component "api") $root.Values.migrations.enabled }}
+            {{- if has $component (list "api" "agents" "worker") }}
+            # Used only when config.OTEL_EXPORTER_OTLP_ENDPOINT is set.
+            - name: OTEL_SERVICE_NAME
+              value: agentbazaar-{{ $component }}
+            {{- if $root.Values.migrations.enabled }}
             # The pre-install/pre-upgrade Job has already migrated the schema.
             - name: SKIP_MIGRATIONS
               value: "true"
+            {{- end }}
             {{- end }}
             {{- with $c.extraEnv }}
             {{- toYaml . | nindent 12 }}
@@ -72,6 +82,7 @@ spec:
                 name: {{ include "agentbazaar.fullname" $root }}-config
             - secretRef:
                 name: {{ include "agentbazaar.secretName" $root }}
+          {{- if $c.port }}
           startupProbe:
             httpGet:
               path: {{ $c.livenessPath }}
@@ -92,6 +103,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 3
+          {{- end }}
           resources:
             {{- toYaml $c.resources | nindent 12 }}
           securityContext:

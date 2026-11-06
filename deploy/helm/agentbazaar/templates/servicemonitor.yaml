@@ -11,7 +11,13 @@ metadata:
 spec:
   selector:
     matchLabels:
-      {{- include "agentbazaar.selectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+      app.kubernetes.io/name: {{ include "agentbazaar.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+    # The agents pool serves the same /metrics.
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: ["api", "agents"]
   endpoints:
     - port: http
       path: /metrics

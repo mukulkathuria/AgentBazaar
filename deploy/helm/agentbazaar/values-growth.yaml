@@ -10,7 +10,12 @@ config:
   MEILISEARCH_URL: http://meilisearch:7700
   NATS_URL: nats://nats:4222
   OPENBAO_ADDR: http://openbao:8200
+  SEMANTIC_CACHE: valkey
   # VALKEY_URL, PUBLIC_WEB_URL and PUBLIC_API_URL come from Terraform's helm_values.
+
+# APISIX in front of web and api: per-caller rate limits and body size limits at the edge of the cluster.
+gateway:
+  enabled: true
 
 api:
   replicaCount: 2

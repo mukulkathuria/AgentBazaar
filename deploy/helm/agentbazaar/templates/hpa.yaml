@@ -24,5 +24,8 @@ spec:
         target:
           type: Utilization
           averageUtilization: {{ $c.autoscaling.targetCPUUtilizationPercentage }}
+    {{- with $c.autoscaling.extraMetrics }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 {{- end }}
 {{- end }}
