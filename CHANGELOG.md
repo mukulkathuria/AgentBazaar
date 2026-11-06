@@ -29,6 +29,10 @@ The lite release candidate: a complete, agent-ready store on one VPS. The date i
 - **CI.** Build, lint, types, unit, integration and end-to-end tests on both PostgreSQL and PGlite; gitleaks, Semgrep, OSV-Scanner, Trivy and a licence gate; a Docker demo smoke test with a k6 run; signed release images with SBOMs; and a job that runs the README quickstart.
 - **Documentation.** README, contributing guide, governance, security policy, Code of Conduct, architecture decision records, threat model, OWASP ASVS mapping, DPDP compliance pack with draft legal templates, runbooks, benchmark method and launch kit.
 
+### Fixed
+
+- **Lite Postgres data now lives in the `pgdata` volume.** pg18 images keep the data directory at `/var/lib/postgresql/18/docker`, but Compose mounted `pgdata` at `/var/lib/postgresql/data`, so the database sat in an anonymous volume and was lost when the container was recreated. If you ran the lite profile from an earlier commit, take a `pg_dump` (see `docs/runbooks/backup-restore.md`) before upgrading, then restore it into the new volume.
+
 ### Security
 
 - The pricing engine, quote signing, payment webhooks, PII handling and the agent surface have not yet had an independent penetration test. Do not take real payments until one is done.

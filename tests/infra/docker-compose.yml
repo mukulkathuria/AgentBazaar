@@ -8,6 +8,8 @@ name: ab-svc
 services:
   postgres:
     image: pgvector/pgvector:pg18
+    # Reaps orphaned healthcheck processes, which the postmaster would otherwise treat as crashed backends.
+    init: true
     environment: { POSTGRES_PASSWORD: postgres }
     command:
       [
