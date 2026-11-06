@@ -14,6 +14,9 @@ allowBuilds:
 # images.unoptimized, and webpack's minimizer (Temporal's workflow bundler) only loads it to shrink images.
 overrides:
   sharp: '-'
+  # StrykerJS (dev only) reaches qs through typed-rest-client, which pins qs 6.15.1 (GHSA-4mjr-xmp4-gh2g and
+  # three more, fixed in 6.16.1). Same 6.x API, so share the qs the runtime already uses.
+  'typed-rest-client>qs': ^6.17.1
 
 # Supply-chain guards. pnpm also re-checks every lockfile entry against them on install.
 blockExoticSubdeps: true
