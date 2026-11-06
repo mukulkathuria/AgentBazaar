@@ -101,3 +101,12 @@ nightly: it exercises the API (`siem-events.e2e.spec.ts` writes the `sec` lines 
 rule above except 100232 and 100251 (they need more events than the test makes) fires, and an ordinary API line
 stays at level 0. It also parses the Compose overlay and dry-runs the Fluent Bit config. Locally, with Docker and
 about 1.5 GB free: `bash deploy/siem/test/logtest.sh`.
+
+First run, 2026-11-06 ([run 42208272709](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42208272709),
+commit `01b4788`, wazuh-manager 4.14.8): the e2e test produced 42 security lines (the set committed in `samples/`),
+and both modes fired every expected rule: 100210, 100211, 100212, 100213, 100215, 100216, 100220, 100221, 100230,
+100231, 100240, 100241, 100245, 100246, 100250, 100252, 100253 and 100254, with the ordinary line held at the base
+rule; the Fluent Bit dry run reported "configuration test is successful".
+
+The shipping path itself (Docker's fluentd driver, Fluent Bit, syslog into a running manager) has not been run end
+to end; only its configuration is checked.

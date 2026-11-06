@@ -41,6 +41,12 @@ It then refuses to start, listing every problem, when a selected adapter lacks i
 | `valkey` | `VALKEY_URL` |
 | `openbao` | `OPENBAO_ADDR`, `OPENBAO_TOKEN` (transit key name in `OPENBAO_TRANSIT_KEY`, default `agentbazaar-pii`) |
 | `IDENTITY_PROVIDER=oidc` | `OIDC_ISSUER_URL` |
+| `ANALYTICS_ADAPTER=clickhouse` | `CLICKHOUSE_URL` with user, password and database, e.g. `http://agentbazaar:<password>@clickhouse:8123/agentbazaar` |
+
+Analytics stay in PostgreSQL in every profile unless `ANALYTICS_ADAPTER=clickhouse`: events then reach ClickHouse
+through the outbox (monthly partitions, 13-month TTL, created on first use) and the dashboards read from there. Set it
+on a fresh install, or accept that the ClickHouse dashboards start from the switch: there is no backfill from
+`analytics_events` yet ([ADR 0014](adr/0014-platform-at-scale-analytics-edge-siem.md)).
 
 Other rules: growth and scale need a real PostgreSQL (`DATABASE_DRIVER=postgres`), and a payment adapter that serves one payer at a time (YouPI-PG) stops growth and scale from starting unless `PAYMENT_ALLOW_SINGLE_SLOT=true`.
 

@@ -99,9 +99,16 @@ before approving.
 
 ## Validation so far
 
-`tests/load/scale.js` at 1% scale (50 shoppers, 5 agents, 6 orders/min with a 30 orders/min spike) against the demo
-API on a laptop, to prove the script, its thresholds and the phase tagging work: see the numbers below. These are
-not scale results.
+These prove the tooling works; they are **not** scale results.
+
+- **k6 profile at 1%** (2026-11-06, commit `5d88f3f`): `SCALE=0.01` (50 shoppers, 5 agents, 6 orders/min with a
+  spike to 30 orders/min), `DURATION=4m SPIKE_AT=60s SPIKE_FOR=60s RECOVERY=60s`, against the demo API (PGlite,
+  `DEMO_MODE`, one Node 26 process) on a laptop (Intel Core i5-1345U, 16 GB, Windows 11), k6 1.8.2 on the same
+  machine. Every threshold passed: 3,974 requests (16.2/s), 0.00% failed (0 of 966 in the recovered phase), read
+  p95 83.5 ms, checkout p95 237 ms, agent (MCP) p95 126 ms, recovered-phase read p95 67.6 ms; 3,002 reads, 708 MCP
+  calls (search, quote, offer) and 39 orders, all 3,827 checks green.
+- **Zone drill template:** `tofu test` plans it against mocked AWS (actions, zone filters, ARNs, stop alarm, the
+  Aurora and self-managed variants, and a zone outside the stack refused); 27 scale tests pass with OpenTofu 1.10.10.
 
 ## Results
 
