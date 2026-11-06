@@ -87,12 +87,15 @@ export async function createKafkaBus(
   const producer = kafka.producer({ idempotent: true, maxInFlightRequests: 1 });
   await producer.connect();
   const consumers: { disconnect(): Promise<void> }[] = [];
+  let closing = false;
   return {
     subscribe(sub: Subscription) {
-      const consumer = kafka.consumer({ groupId: sub.consumer });
+      // kafkajs restarts a crashed consumer by itself; a crash caused by close() must not bring it back.
+      const consumer = kafka.consumer({ groupId: sub.consumer, retry: { restartOnFailure: async () => !closing } });
       consumers.push(consumer);
       void (async () => {
         await consumer.connect();
+        if (closing) return consumer.disconnect();
         await consumer.subscribe({ topic, fromBeginning: true });
         await consumer.run({
           // Throwing makes kafkajs retry the message; the offset is committed only after success.
@@ -109,6 +112,7 @@ export async function createKafkaBus(
       });
     },
     async close() {
+      closing = true;
       await Promise.all(consumers.map((c) => c.disconnect()));
       await producer.disconnect();
     },

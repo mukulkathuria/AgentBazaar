@@ -175,7 +175,7 @@ describe('@scale Kafka: per-key order across partitions, idempotent replay and a
     await t?.cleanup();
   });
 
-  it('applies every key in order while two consumers share three partitions', async () => {
+  it('applies every key in order while two consumers share three partitions', { timeout: 240_000 }, async () => {
     const keys = Array.from({ length: 12 }, (_, i) => `order-${i}`);
     // Concurrent writers, three events of a key per transaction, published by two relays at once.
     await Promise.all(
@@ -198,9 +198,12 @@ describe('@scale Kafka: per-key order across partitions, idempotent replay and a
     expect((await admin.fetchTopicOffsets(topic)).filter((p) => Number(p.high) > 0)).toHaveLength(3);
   });
 
-  it('replays the topic from the earliest offset without applying anything twice', async () => {
+  it('replays the topic from the earliest offset without applying anything twice', { timeout: 240_000 }, async () => {
     while (buses.length > 1) await buses.pop()!.close();
     await until('ordering group caught up', () => caughtUp(ordering), 30_000);
+    // Offsets can only be reset once every member has left the group.
+    const empty = async () => (await admin.describeGroups([ordering])).groups[0]?.state === 'Empty';
+    await until('ordering group empty', empty, 60_000);
     await admin.resetOffsets({ groupId: ordering, topic, earliest: true });
     expect(await caughtUp(ordering)).toBe(false);
     await bus(steps);
@@ -209,7 +212,7 @@ describe('@scale Kafka: per-key order across partitions, idempotent replay and a
     expect(await count(db, sql`SELECT count(*)::int AS n FROM processed_events WHERE consumer = ${ordering}`)).toBe(180);
   });
 
-  it('rebuilds the search read model from scratch by consuming the topic from the beginning', async () => {
+  it('rebuilds the search read model from scratch by consuming the topic from the beginning', { timeout: 240_000 }, async () => {
     const inventory = new InventoryService(db, systemClock);
     const catalog = new CatalogService(db, inventory);
     const ids = await inTransaction(db, (tx) => catalog.importSeed(tx, generateCatalog({ products: 30 }), new Map()));
