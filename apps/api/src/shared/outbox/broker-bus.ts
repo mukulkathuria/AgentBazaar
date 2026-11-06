@@ -30,18 +30,19 @@ export async function deliver(db: Executor, sub: Subscription, raw: string): Pro
   return (await runIdempotent(db, sub.consumer, event, sub.handler)) ? 'processed' : 'duplicate';
 }
 
-const STREAM = 'AGENTBAZAAR';
-const SUBJECT_PREFIX = 'agentbazaar.';
-
-/** NATS JetStream (growth). Publishes with msgID for broker-side dedupe; durable pull consumers ack after commit. */
-export async function createNatsBus(url: string, db: Executor, logger: Logger): Promise<EventBus> {
+/**
+ * NATS JetStream (growth). Publishes with msgID for broker-side dedupe; durable pull consumers ack after commit.
+ * Events go to `<stream in lower case>.<topic>` subjects; tests pass their own stream.
+ */
+export async function createNatsBus(url: string, db: Executor, logger: Logger, stream = 'AGENTBAZAAR'): Promise<EventBus> {
   const { AckPolicy, connect, StringCodec } = await import('nats');
   const nc = await connect({ servers: url, name: 'agentbazaar-api' });
   const jsm = await nc.jetstreamManager();
+  const prefix = `${stream.toLowerCase()}.`;
   try {
-    await jsm.streams.info(STREAM);
+    await jsm.streams.info(stream);
   } catch {
-    await jsm.streams.add({ name: STREAM, subjects: [`${SUBJECT_PREFIX}>`], duplicate_window: 120_000_000_000 });
+    await jsm.streams.add({ name: stream, subjects: [`${prefix}>`], duplicate_window: 120_000_000_000 });
   }
   const js = nc.jetstream();
   const sc = StringCodec();
@@ -49,8 +50,8 @@ export async function createNatsBus(url: string, db: Executor, logger: Logger): 
   return {
     subscribe(sub: Subscription) {
       void (async () => {
-        await jsm.consumers.add(STREAM, { durable_name: sub.consumer, ack_policy: AckPolicy.Explicit, max_deliver: -1 });
-        const consumer = await js.consumers.get(STREAM, sub.consumer);
+        await jsm.consumers.add(stream, { durable_name: sub.consumer, ack_policy: AckPolicy.Explicit, max_deliver: -1 });
+        const consumer = await js.consumers.get(stream, sub.consumer);
         const messages = await consumer.consume();
         stopped.push(() => void messages.close());
         for await (const m of messages) {
@@ -65,7 +66,7 @@ export async function createNatsBus(url: string, db: Executor, logger: Logger): 
       })().catch((err: unknown) => logger.error({ err, consumer: sub.consumer }, 'nats consumer stopped'));
     },
     async publish(events: OutboxEvent[]) {
-      for (const e of events) await js.publish(`${SUBJECT_PREFIX}${e.topic}`, sc.encode(encodeEvent(e)), { msgID: e.id });
+      for (const e of events) await js.publish(`${prefix}${e.topic}`, sc.encode(encodeEvent(e)), { msgID: e.id });
     },
     async close() {
       for (const stop of stopped) stop();
@@ -74,10 +75,13 @@ export async function createNatsBus(url: string, db: Executor, logger: Logger): 
   };
 }
 
-const KAFKA_TOPIC = 'agentbazaar.events';
-
-/** Apache Kafka (scale). One topic keyed by aggregate id keeps per-aggregate ordering. */
-export async function createKafkaBus(brokers: string[], db: Executor, logger: Logger): Promise<EventBus> {
+/** Apache Kafka (scale). One topic keyed by aggregate id keeps per-aggregate ordering; tests pass their own topic. */
+export async function createKafkaBus(
+  brokers: string[],
+  db: Executor,
+  logger: Logger,
+  topic = 'agentbazaar.events',
+): Promise<EventBus> {
   const { Kafka, logLevel } = await import('kafkajs');
   const kafka = new Kafka({ clientId: 'agentbazaar-api', brokers, logLevel: logLevel.WARN });
   const producer = kafka.producer({ idempotent: true, maxInFlightRequests: 1 });
@@ -89,7 +93,7 @@ export async function createKafkaBus(brokers: string[], db: Executor, logger: Lo
       consumers.push(consumer);
       void (async () => {
         await consumer.connect();
-        await consumer.subscribe({ topic: KAFKA_TOPIC, fromBeginning: true });
+        await consumer.subscribe({ topic, fromBeginning: true });
         await consumer.run({
           // Throwing makes kafkajs retry the message; the offset is committed only after success.
           eachMessage: async ({ message }) => {
@@ -100,7 +104,7 @@ export async function createKafkaBus(brokers: string[], db: Executor, logger: Lo
     },
     async publish(events: OutboxEvent[]) {
       await producer.send({
-        topic: KAFKA_TOPIC,
+        topic,
         messages: events.map((e) => ({ key: e.aggregateId, value: encodeEvent(e), headers: { topic: e.topic, id: e.id } })),
       });
     },
