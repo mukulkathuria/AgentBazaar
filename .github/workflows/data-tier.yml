@@ -41,11 +41,11 @@ jobs:
         run: |
           pnpm --filter @agentbazaar/api test:int
           pnpm --filter @agentbazaar/api test:e2e
+      # One file per step, in this order: the drill is destructive (it kills the primary), so it runs last.
       - name: Read-your-writes, lag ejection and replica fallback
-        run: pnpm --filter @agentbazaar/api test:services -- data-tier.spec
-      # Destructive (kills the primary), so it runs last.
+        run: pnpm --filter @agentbazaar/api exec vitest run --project services test/services/data-tier.spec.ts
       - name: Failover drill
-        run: pnpm --filter @agentbazaar/api test:services -- failover-drill
+        run: pnpm --filter @agentbazaar/api exec vitest run --project services test/services/failover-drill.spec.ts
       - name: Service logs
         if: failure()
         run: docker compose -f tests/infra/data-tier.yml logs --tail=200
