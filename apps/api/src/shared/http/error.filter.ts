@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Logger } from 'pino';
 import { ZodError } from 'zod';
 import { AppError } from '../kernel/errors.js';
+import { isDependencyDown } from '../resilience/resilience.js';
 import { issuesOf } from './zod.js';
 
 const BY_STATUS: Record<number, ErrorCode> = {
@@ -37,6 +38,9 @@ export function toErrorResponse(err: unknown, requestId?: string): { status: num
   if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
     // Fastify's own errors (bad JSON, body too large, unsupported media type, rate limit).
     return withId(statusCode, BY_STATUS[statusCode] ?? 'validation_failed', (err as Error).message);
+  }
+  if (isDependencyDown(err)) {
+    return { ...withId(503, 'unavailable', 'The store is temporarily unavailable. Please try again shortly.'), internal: true };
   }
   return { ...withId(500, 'internal', 'Something went wrong. Please try again.'), internal: true };
 }

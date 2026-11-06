@@ -47,6 +47,25 @@ export async function retry<T>(fn: (attempt: number) => Promise<T>, opts: RetryO
   }
 }
 
+const NETWORK_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN', 'ENOTFOUND']);
+// Postgres SQLSTATEs: connection exceptions (class 08), shutdown or failover (57P01-57P03), statement
+// timeout (57014) and exhausted connection slots (53300).
+const PG_DOWN_CODES = /^(08[0-9A-Z]{3}|57P0[1-3]|57014|53300)$/;
+// Driver errors that carry no code: pg pool and query timeouts or dropped connections, and the Valkey
+// client while it is disconnected.
+const DOWN_MESSAGES =
+  /timeout exceeded when trying to connect|connection terminated|query read timeout|not queryable|stream isn't writeable|connection is closed|max retries per request/i;
+
+/** True when an error, or one it wraps, means a backing service is unreachable rather than that the request is wrong. */
+export function isDependencyDown(err: unknown): boolean {
+  for (let e = err, depth = 0; e instanceof Error && depth < 5; e = e.cause, depth++) {
+    const code = (e as { code?: unknown }).code;
+    if (typeof code === 'string' && (NETWORK_CODES.has(code) || PG_DOWN_CODES.test(code))) return true;
+    if (DOWN_MESSAGES.test(e.message)) return true;
+  }
+  return false;
+}
+
 export type BreakerState = 'closed' | 'open' | 'half_open';
 
 /**
