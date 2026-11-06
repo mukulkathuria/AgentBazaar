@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { createApp, type RunningApp } from '../bootstrap/create-app.js';
 import { createDatabase, MIGRATIONS_DIR } from '../bootstrap/infra.js';
 import { AccountService, AgentClientService } from '../modules/identity/index.js';
+import { CheckoutSagaSteps, loadSagaWorker } from '../modules/orders/index.js';
 import { SearchIndexer } from '../modules/search/index.js';
 import { generateKeyEnv } from '../shared/crypto/keyring.js';
 import { loadMigrations, migrate } from '../shared/db/migrator.js';
@@ -17,6 +18,7 @@ const USAGE = `Usage: pnpm --filter @agentbazaar/api cli <command> [options]
   seed [--products 300] [--admin-email E] [--admin-password P]
                                                Demo catalog, GST rates, an MFA admin and a demo agent client
   reindex                                      Rebuild the search index
+  workflow-worker                              Run the checkout saga worker (WORKFLOW_ENGINE=temporal)
   keys                                         Print fresh secrets as .env lines
   create-admin --email E --password P [--name N]
   create-agent-client --name N [--scopes "catalog:read quote:create order:create"] [--quota 60]
@@ -96,6 +98,20 @@ async function createAgentClient(running: RunningApp, v: Values): Promise<void> 
   console.log(`client_secret=${c.clientSecret} (shown once)`);
 }
 
+/** Runs until SIGINT or SIGTERM; the worker drains its running steps, then the app closes. */
+async function runWorkflowWorker(running: RunningApp): Promise<void> {
+  const env = running.infra.config.env;
+  if (env.WORKFLOW_ENGINE !== 'temporal') throw new ConfigError(['workflow-worker requires WORKFLOW_ENGINE=temporal']);
+  const { runSagaWorker } = await loadSagaWorker();
+  console.log(`Checkout saga worker on ${env.TEMPORAL_ADDRESS}, task queue ${env.TEMPORAL_TASK_QUEUE}.`);
+  await runSagaWorker({
+    address: env.TEMPORAL_ADDRESS!,
+    namespace: env.TEMPORAL_NAMESPACE,
+    taskQueue: env.TEMPORAL_TASK_QUEUE,
+    activities: running.app.get(CheckoutSagaSteps).activities,
+  });
+}
+
 async function main(argv: string[]): Promise<void> {
   // `pii rewrap` is the one two-word command.
   const [command, ...rest] = argv[0] === 'pii' ? [`pii ${argv[1] ?? ''}`, ...argv.slice(2)] : argv;
@@ -121,6 +137,8 @@ async function main(argv: string[]): Promise<void> {
         const n = await r.app.get(SearchIndexer).reindexAll(undefined, (done) => console.log(`... ${done} indexed`));
         console.log(`Indexed ${n} products.`);
       });
+    case 'workflow-worker':
+      return withApp(runWorkflowWorker);
     case 'create-admin':
       return withApp((r) => createAdmin(r, values));
     case 'create-agent-client':

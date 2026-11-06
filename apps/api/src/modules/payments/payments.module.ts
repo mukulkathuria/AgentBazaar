@@ -54,16 +54,30 @@ export class PaymentsService {
     @Inject(PAYMENT_PORT) readonly port: PaymentPort,
   ) {}
 
-  /** Creates the gateway payment after the order commits (never inside the order transaction). */
+  /**
+   * Creates the gateway payment after the order commits (never inside the order transaction). Once
+   * per order: a retried saga step reuses the row, and goes back to the gateway only if that call never completed.
+   */
   async createForOrder(order: { id: string; number: string; totalPaise: number }): Promise<PaymentView> {
     const accessToken = randomToken(24);
-    const row = await one<PaymentRow>(
-      this.db,
-      sql`INSERT INTO payments (order_id, provider, status, amount_paise, access_token_hash)
-          VALUES (${order.id}, ${this.port.name}, 'created', ${order.totalPaise}, ${sha256Hex(accessToken)}) RETURNING *`,
-    );
+    const row = await inTransaction(this.db, async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`payment:${order.id}`}))`);
+      const existing = await one<PaymentRow>(
+        tx,
+        sql`SELECT * FROM payments WHERE order_id = ${order.id} AND provider = ${this.port.name} ORDER BY created_at LIMIT 1`,
+      );
+      return (
+        existing ??
+        (await one<PaymentRow>(
+          tx,
+          sql`INSERT INTO payments (order_id, provider, status, amount_paise, access_token_hash)
+              VALUES (${order.id}, ${this.port.name}, 'created', ${order.totalPaise}, ${sha256Hex(accessToken)}) RETURNING *`,
+        ))!
+      );
+    });
+    if (row.provider_order_id) return view(row);
     const created = await this.port.createPayment({
-      paymentId: row!.id,
+      paymentId: row.id,
       orderId: order.id,
       orderNumber: order.number,
       amountPaise: order.totalPaise,
@@ -73,7 +87,8 @@ export class PaymentsService {
     const updated = await one<PaymentRow>(
       this.db,
       sql`UPDATE payments SET provider_order_id = ${created.providerOrderId}, payment_url = ${created.paymentUrl},
-            client_params = ${json(created.clientParams)}, updated_at = now() WHERE id = ${row!.id} RETURNING *`,
+            client_params = ${json(created.clientParams)}, access_token_hash = ${sha256Hex(accessToken)}, updated_at = now()
+          WHERE id = ${row.id} RETURNING *`,
     );
     return view(updated!);
   }

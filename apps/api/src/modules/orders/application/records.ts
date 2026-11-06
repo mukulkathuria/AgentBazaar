@@ -27,6 +27,7 @@ export interface OrderRow {
   tax_paise: number;
   total_paise: number;
   access_token_hash: string;
+  checkout_session_id: string | null;
   invoice_number: string | null;
   tracking_number: string | null;
   payment_expires_at: Date | null;

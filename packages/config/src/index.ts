@@ -48,6 +48,11 @@ export const EnvSchema = z.object({
   OPENBAO_TOKEN: optionalString,
   OPENBAO_TRANSIT_KEY: z.string().default('agentbazaar-pii'),
   OPENBAO_TRANSIT_MOUNT: z.string().default('transit'),
+  /** Checkout and payment: the API's own transactions (default) or a Temporal saga (scale). */
+  WORKFLOW_ENGINE: z.enum(['inprocess', 'temporal']).default('inprocess'),
+  TEMPORAL_ADDRESS: optionalString,
+  TEMPORAL_NAMESPACE: z.string().min(1).default('default'),
+  TEMPORAL_TASK_QUEUE: z.string().min(1).default('agentbazaar-checkout'),
   IDENTITY_PROVIDER: z.enum(['builtin', 'oidc']).default('builtin'),
   OIDC_ISSUER_URL: z.url().optional(),
   OIDC_AUDIENCE: z.string().default('agentbazaar-api'),
@@ -218,6 +223,7 @@ function checkServices(env: Env, profile: Profile, adapters: AppConfig['adapters
     [adapters.cache === 'valkey', `${p} with cache "valkey"`, ['VALKEY_URL']],
     [adapters.secrets === 'openbao', `${p} with secrets "openbao"`, ['OPENBAO_ADDR', 'OPENBAO_TOKEN']],
     [adapters.identity === 'oidc', 'IDENTITY_PROVIDER=oidc', ['OIDC_ISSUER_URL']],
+    [env.WORKFLOW_ENGINE === 'temporal', 'WORKFLOW_ENGINE=temporal', ['TEMPORAL_ADDRESS']],
     [adapters.llm === 'anthropic', 'LLM_ADAPTER=anthropic', ['ANTHROPIC_API_KEY']],
     [adapters.llm === 'openai-compatible', 'LLM_ADAPTER=openai-compatible', ['OPENAI_COMPAT_BASE_URL']],
     [

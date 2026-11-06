@@ -44,6 +44,10 @@ OpenTelemetry JS (@opentelemetry/api, sdk-node, sdk-trace,         Apache-2.0
 nats.js (nats)                                                     Apache-2.0
 KafkaJS (kafkajs)                                                  MIT
 iovalkey                                                           MIT
+Temporal TypeScript SDK (@temporalio/client, worker, workflow,     MIT
+  activity; scale profile). The worker bundles webpack (MIT), SWC
+  (@swc/core, Apache-2.0), memfs (Apache-2.0), unionfs (Unlicense) and
+  heap-js (BSD-3-Clause)
 reflect-metadata                                                   Apache-2.0
 RxJS                                                               Apache-2.0
 Tailwind CSS                                                       MIT
@@ -80,6 +84,7 @@ Keycloak                        Apache-2.0     (growth profile)
 Apache Kafka                    Apache-2.0     (scale profile)
 OpenSearch                      Apache-2.0     (scale profile)
 Qdrant                          Apache-2.0     (scale profile)
+Temporal Server and CLI         MIT            (scale profile)
 Prometheus                      Apache-2.0     (observability profile)
 Grafana OSS                     AGPL-3.0       (observability profile; separate
                                                service only, never linked)

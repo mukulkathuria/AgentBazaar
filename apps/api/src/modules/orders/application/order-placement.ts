@@ -2,7 +2,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { CompleteCheckoutInput, OrderStatus, OrderView, PaymentMethod } from '@agentbazaar/contracts';
 import { sql } from 'drizzle-orm';
 import type { Logger } from 'pino';
-import { randomToken, sha256Hex } from '../../../shared/crypto/primitives.js';
 import { one, type Executor } from '../../../shared/db/database.js';
 import { json } from '../../../shared/db/sql-helpers.js';
 import { addSeconds, type Clock } from '../../../shared/kernel/clock.js';
@@ -13,6 +12,7 @@ import { CustomizationService } from '../../customization/index.js';
 import { PaymentsService } from '../../payments/index.js';
 import { PiiService } from '../../pii/index.js';
 import { TaxService } from '../../tax/index.js';
+import type { Buyer } from './checkout-saga.js';
 import type { LockedLine } from './locked-line.js';
 import { OrdersService } from './orders.service.js';
 
@@ -22,7 +22,6 @@ export const PAYMENT_WINDOW_S = 1800;
 export interface PlacedOrder {
   id: string;
   number: string;
-  accessToken: string;
   totalPaise: number;
   method: PaymentMethod;
 }
@@ -41,12 +40,8 @@ export class OrderPlacement {
     @Inject(OrdersService) private readonly orders: OrdersService,
   ) {}
 
-  /** Runs inside the checkout transaction. Prices are the ones locked on the session. */
-  async place(
-    tx: Executor,
-    session: { id: string; subject: string; lines: LockedLine[] },
-    input: CompleteCheckoutInput,
-  ): Promise<PlacedOrder> {
+  /** The buyer's personal data goes to the PII vault; the order (and the checkout saga) keep only tokens. */
+  async vaultBuyer(tx: Executor, input: CompleteCheckoutInput): Promise<Buyer> {
     const { address } = input;
     const customerToken = await this.pii.upsertCustomer(tx, {
       email: input.email,
@@ -55,17 +50,27 @@ export class OrderPlacement {
     });
     const addressToken = await this.pii.storeAddress(tx, customerToken, address);
     await this.pii.recordConsent(tx, customerToken, 'order_fulfilment', true, 'checkout');
+    return { customerToken, addressToken, stateCode: address.stateCode, paymentMethod: input.paymentMethod };
+  }
+
+  /** Runs inside the checkout transaction. Prices are the ones locked on the session. */
+  async place(
+    tx: Executor,
+    session: { id: string; subject: string; lines: LockedLine[] },
+    buyer: Buyer,
+    accessTokenHash: string,
+  ): Promise<PlacedOrder> {
+    const { customerToken, addressToken, paymentMethod } = buyer;
     const lines = session.lines;
     const taxes = await this.tax.computeLines(
       lines.map((l) => ({ hsnCode: l.hsnCode, totalPaise: l.totalPaise })),
-      address.stateCode,
+      buyer.stateCode,
       tx,
     );
     const seq = await one<{ n: number }>(tx, sql`SELECT nextval('order_number_seq')::int AS n`);
     const number = `AB-${seq!.n}`;
-    const accessToken = randomToken(24);
     const now = this.clock.now();
-    const cod = input.paymentMethod === 'cod';
+    const cod = paymentMethod === 'cod';
     const status: OrderStatus = cod ? 'cod_confirmed' : 'pending_payment';
     const total = lines.reduce((s, l) => s + l.totalPaise, 0);
     const tax = taxes.reduce((s, t) => s + t.taxPaise, 0);
@@ -73,8 +78,8 @@ export class OrderPlacement {
       tx,
       sql`INSERT INTO orders (number, status, payment_method, subject, customer_token, address_token, place_of_supply, subtotal_paise,
             tax_paise, total_paise, checkout_session_id, access_token_hash, payment_expires_at, updated_at)
-          VALUES (${number}, ${status}, ${input.paymentMethod}, ${session.subject}, ${customerToken}, ${addressToken}, ${address.stateCode},
-            ${total - tax}, ${tax}, ${total}, ${session.id}, ${sha256Hex(accessToken)}, ${cod ? null : addSeconds(now, PAYMENT_WINDOW_S)}, ${now})
+          VALUES (${number}, ${status}, ${paymentMethod}, ${session.subject}, ${customerToken}, ${addressToken}, ${buyer.stateCode},
+            ${total - tax}, ${tax}, ${total}, ${session.id}, ${accessTokenHash}, ${cod ? null : addSeconds(now, PAYMENT_WINDOW_S)}, ${now})
           RETURNING id`,
     );
     const orderId = o!.id;
@@ -104,14 +109,14 @@ export class OrderPlacement {
       orderId,
       number,
       customerToken,
-      paymentMethod: input.paymentMethod,
+      paymentMethod,
       totalPaise: total,
     });
-    return { id: orderId, number, accessToken, totalPaise: total, method: input.paymentMethod };
+    return { id: orderId, number, totalPaise: total, method: paymentMethod };
   }
 
   /** After commit, never inside the transaction: opens the gateway payment. A gateway failure never loses the order. */
-  async confirm(order: PlacedOrder): Promise<OrderView> {
+  async confirm(order: PlacedOrder & { accessToken: string }): Promise<OrderView> {
     let paymentUrl: string | null = null;
     if (order.method === 'online') {
       try {
@@ -128,5 +133,11 @@ export class OrderPlacement {
     }
     this.metrics.ordersCreated.inc({ method: order.method });
     return { ...(await this.orders.view(order.id)), paymentUrl, accessToken: order.accessToken };
+  }
+
+  /** The checkout saga placed the order and opened its payment; the buyer gets the view and the one-time token. */
+  async placedBySaga(order: { orderId: string; method: PaymentMethod }, accessToken: string): Promise<OrderView> {
+    this.metrics.ordersCreated.inc({ method: order.method });
+    return { ...(await this.orders.view(order.orderId)), accessToken };
   }
 }

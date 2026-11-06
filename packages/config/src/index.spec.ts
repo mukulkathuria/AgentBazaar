@@ -55,6 +55,23 @@ describe('@lite config profile loader', () => {
     expect(cfg.env.KAFKA_BROKERS).toEqual(['k1:9092', 'k2:9092']);
   });
 
+  it('runs checkout in-process by default; the Temporal engine needs its address', () => {
+    expect(loadConfig(base).env).toMatchObject({
+      WORKFLOW_ENGINE: 'inprocess',
+      TEMPORAL_NAMESPACE: 'default',
+      TEMPORAL_TASK_QUEUE: 'agentbazaar-checkout',
+    });
+    expect(problemsOf({ ...base, WORKFLOW_ENGINE: 'temporal' })).toEqual([
+      'WORKFLOW_ENGINE=temporal requires TEMPORAL_ADDRESS',
+    ]);
+    expect(problemsOf({ ...base, WORKFLOW_ENGINE: 'airflow' })).toEqual([
+      expect.stringContaining('WORKFLOW_ENGINE'),
+    ]);
+    expect(loadConfig({ ...base, WORKFLOW_ENGINE: 'temporal', TEMPORAL_ADDRESS: 'temporal:7233' }).env.TEMPORAL_ADDRESS).toBe(
+      'temporal:7233',
+    );
+  });
+
   it('requires a database URL for postgres and refuses pglite outside lite', () => {
     expect(problemsOf({})).toEqual([expect.stringContaining('DATABASE_URL')]);
     expect(problemsOf({ DATABASE_DRIVER: 'pglite', PROFILE: 'growth' })).toEqual(

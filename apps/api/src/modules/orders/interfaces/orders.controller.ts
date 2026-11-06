@@ -27,6 +27,7 @@ import { withIdempotencyKey } from '../../../shared/http/idempotency.js';
 import { ZodPipe } from '../../../shared/http/zod.js';
 import { DB } from '../../../shared/kernel/tokens.js';
 import { CartService } from '../application/cart.service.js';
+import { CheckoutCompletion } from '../application/checkout-completion.js';
 import { CheckoutService } from '../application/checkout.service.js';
 import { OrdersService } from '../application/orders.service.js';
 
@@ -41,6 +42,7 @@ export class OrdersController {
     @Inject(DB) private readonly db: Executor,
     @Inject(CartService) private readonly carts: CartService,
     @Inject(CheckoutService) private readonly checkout: CheckoutService,
+    @Inject(CheckoutCompletion) private readonly completion: CheckoutCompletion,
     @Inject(OrdersService) private readonly orders: OrdersService,
   ) {}
 
@@ -136,7 +138,7 @@ export class OrdersController {
       { sessionId: p.id, body },
       async () => ({
         status: 201,
-        body: await this.checkout.complete(p.id, q.t, body),
+        body: await this.completion.complete(p.id, q.t, body),
       }),
     );
     void reply.status(r.status);

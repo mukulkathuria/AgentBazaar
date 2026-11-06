@@ -56,6 +56,16 @@ export async function runIdempotent(db: Executor, consumer: string, event: Outbo
   });
 }
 
+/** An aggregate's events on a topic that the relay has not published yet (pending rows are few and indexed). */
+export async function pendingEvents(db: Executor, topic: string, aggregateId: string): Promise<OutboxEvent[]> {
+  const found = await rows<Row>(
+    db,
+    sql`SELECT id, topic, aggregate_id, payload, created_at, attempts FROM outbox_events
+        WHERE published_at IS NULL AND topic = ${topic} AND aggregate_id = ${aggregateId} ORDER BY created_at, id`,
+  );
+  return found.map(toEvent);
+}
+
 export const matchesTopic = (topics: readonly string[], topic: string): boolean =>
   topics.some((t) => t === topic || t === '*' || (t.endsWith('.*') && topic.startsWith(t.slice(0, -1))));
 
@@ -96,6 +106,14 @@ interface Row {
   attempts: number;
   seq: number;
 }
+
+const toEvent = (r: Row): OutboxEvent => ({
+  id: r.id,
+  topic: r.topic,
+  aggregateId: r.aggregate_id,
+  payload: r.payload,
+  createdAt: r.created_at,
+});
 
 export interface RelayOptions {
   batchSize?: number;
@@ -143,7 +161,7 @@ export class OutboxRelay {
     );
     claimed.sort((a, b) => a.seq - b.seq);
     for (const r of claimed) {
-      const event: OutboxEvent = { id: r.id, topic: r.topic, aggregateId: r.aggregate_id, payload: r.payload, createdAt: r.created_at };
+      const event = toEvent(r);
       try {
         await this.bus.publish([event]);
         await this.db.execute(sql`UPDATE outbox_events SET published_at = now(), last_error = NULL WHERE id = ${r.id}`);

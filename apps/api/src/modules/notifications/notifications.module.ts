@@ -1,12 +1,36 @@
-import { Inject, Module, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Module, type OnModuleInit } from '@nestjs/common';
 import type { AppConfig } from '@agentbazaar/config';
 import type { Logger } from 'pino';
-import { CONFIG, EVENT_BUS, LOGGER } from '../../shared/kernel/tokens.js';
-import type { EventBus } from '../../shared/outbox/outbox.js';
+import type { Executor } from '../../shared/db/database.js';
+import { CONFIG, DB, EVENT_BUS, LOGGER } from '../../shared/kernel/tokens.js';
+import { runIdempotent, type EventBus, type OutboxEvent, type Subscription } from '../../shared/outbox/outbox.js';
 import { ORDER_EMAIL_TOPICS, orderEmailFor, type MailerPort } from './domain/mailer.js';
 import { LogMailer } from './infrastructure/log-mailer.js';
 
 export const MAILER = Symbol('MAILER');
+
+/** Order emails from outbox events. The checkout saga delivers through the same consumer, so each goes out once. */
+@Injectable()
+export class OrderEmails {
+  readonly subscription: Subscription = {
+    consumer: 'notifications-orders',
+    topics: ORDER_EMAIL_TOPICS,
+    handler: async (event) => {
+      const mail = orderEmailFor(event.topic, event.payload);
+      if (mail) await this.mailer.send(mail);
+    },
+  };
+
+  constructor(
+    @Inject(DB) private readonly db: Executor,
+    @Inject(MAILER) private readonly mailer: MailerPort,
+  ) {}
+
+  /** Sends the email for an event unless the outbox relay already did (or does it concurrently). */
+  deliver(event: OutboxEvent): Promise<boolean> {
+    return runIdempotent(this.db, this.subscription.consumer, event, this.subscription.handler);
+  }
+}
 
 @Module({
   providers: [
@@ -20,23 +44,17 @@ export const MAILER = Symbol('MAILER');
         return new LogMailer(logger);
       },
     },
+    OrderEmails,
   ],
-  exports: [MAILER],
+  exports: [MAILER, OrderEmails],
 })
 export class NotificationsModule implements OnModuleInit {
   constructor(
     @Inject(EVENT_BUS) private readonly bus: EventBus,
-    @Inject(MAILER) private readonly mailer: MailerPort,
+    @Inject(OrderEmails) private readonly emails: OrderEmails,
   ) {}
 
   onModuleInit(): void {
-    this.bus.subscribe({
-      consumer: 'notifications-orders',
-      topics: ORDER_EMAIL_TOPICS,
-      handler: async (event) => {
-        const mail = orderEmailFor(event.topic, event.payload);
-        if (mail) await this.mailer.send(mail);
-      },
-    });
+    this.bus.subscribe(this.emails.subscription);
   }
 }

@@ -5,7 +5,9 @@ packages:
 # Native/postinstall builds we trust. Everything else is blocked by default.
 allowBuilds:
   esbuild: true
-  # OpenTelemetry's OTLP exporters; its postinstall only checks for the optional protobufjs CLI.
+  # Temporal's workflow bundler (scale sagas); its postinstall only probes for the native binding we already ship.
+  '@swc/core': false
+  # OpenTelemetry's OTLP exporters and Temporal; its postinstall only checks for the optional protobufjs CLI.
   protobufjs: false
 
 # Supply-chain guards. pnpm also re-checks every lockfile entry against them on install.
