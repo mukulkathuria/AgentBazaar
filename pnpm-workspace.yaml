@@ -10,6 +10,11 @@ allowBuilds:
   # OpenTelemetry's OTLP exporters and Temporal; its postinstall only checks for the optional protobufjs CLI.
   protobufjs: false
 
+# sharp bundles LGPL libvips, which the licence policy refuses. Nothing uses it: Next.js runs with
+# images.unoptimized, and webpack's minimizer (Temporal's workflow bundler) only loads it to shrink images.
+overrides:
+  sharp: '-'
+
 # Supply-chain guards. pnpm also re-checks every lockfile entry against them on install.
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
