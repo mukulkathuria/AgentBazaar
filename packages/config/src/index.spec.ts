@@ -62,6 +62,16 @@ describe('@lite config profile loader', () => {
     );
   });
 
+  it('reads replica URLs and a lag limit, and refuses replicas without postgres', () => {
+    const cfg = loadConfig({ ...base, DATABASE_REPLICA_URLS: 'postgres://r1/db, postgres://r2/db' });
+    expect(cfg.env.DATABASE_REPLICA_URLS).toEqual(['postgres://r1/db', 'postgres://r2/db']);
+    expect(cfg.env.DATABASE_REPLICA_MAX_LAG_MS).toBe(5_000);
+    expect(problemsOf({ ...base, DATABASE_REPLICA_MAX_LAG_MS: '10' })[0]).toContain('DATABASE_REPLICA_MAX_LAG_MS');
+    expect(problemsOf({ DATABASE_DRIVER: 'pglite', DATABASE_REPLICA_URLS: 'postgres://r1/db' })).toEqual([
+      'DATABASE_REPLICA_URLS needs DATABASE_DRIVER=postgres',
+    ]);
+  });
+
   it('requires real secrets in production but only warns in development', () => {
     expect(problemsOf({ ...base, NODE_ENV: 'production' })[0]).toContain('QUOTE_SIGNING_KEY');
     expect(loadConfig(base).warnings.join(' ')).toContain('ephemeral');

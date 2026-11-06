@@ -5,6 +5,8 @@ export interface Cache {
   delete(key: string): Promise<void>;
   /** Atomically increments a counter that expires `ttlSeconds` after its first increment. */
   incr(key: string, ttlSeconds: number): Promise<number>;
+  /** Atomically keeps the larger of the stored number and `value`, and restarts the TTL. */
+  setMax(key: string, value: number, ttlSeconds: number): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -60,6 +62,10 @@ export class MemoryCache implements Cache {
     }
     e.value = (e.value as number) + 1;
     return e.value as number;
+  }
+
+  async setMax(key: string, value: number, ttlSeconds: number): Promise<void> {
+    this.put(key, Math.max(value, (this.live(key)?.value as number | undefined) ?? value), ttlSeconds);
   }
 
   async close(): Promise<void> {

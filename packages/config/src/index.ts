@@ -28,6 +28,8 @@ export const EnvSchema = z.object({
   DATABASE_DRIVER: z.enum(['postgres', 'pglite']).default('postgres'),
   DATABASE_URL: optionalString,
   DATABASE_REPLICA_URLS: csv.optional(),
+  /** A replica lagging more than this is taken out of read rotation until it catches up. */
+  DATABASE_REPLICA_MAX_LAG_MS: z.coerce.number().int().min(500).max(3_600_000).default(5_000),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(500).default(20),
   PGLITE_DATA_DIR: optionalString,
 
@@ -198,6 +200,7 @@ function checkPayments(env: Env, profile: Profile, problems: string[], warnings:
 function checkDatabase(env: Env, profile: Profile, problems: string[]): void {
   if (env.DATABASE_DRIVER === 'postgres') requireVars(env, problems, 'DATABASE_DRIVER=postgres', ['DATABASE_URL']);
   if (env.DATABASE_DRIVER !== 'pglite') return;
+  if (env.DATABASE_REPLICA_URLS?.length) problems.push('DATABASE_REPLICA_URLS needs DATABASE_DRIVER=postgres');
   if (env.NODE_ENV === 'production' && !env.DEMO_MODE) {
     problems.push('DATABASE_DRIVER=pglite is for demos and tests only; set DEMO_MODE=true or use postgres');
   }
