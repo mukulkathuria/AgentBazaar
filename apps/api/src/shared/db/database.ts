@@ -59,17 +59,39 @@ export interface PostgresOptions {
 }
 
 export function createPostgresDatabase(opts: PostgresOptions): Database {
+  const statementTimeoutMs = opts.statementTimeoutMs ?? 15_000;
   const pool = new pg.Pool({
     connectionString: opts.url,
     max: opts.poolMax ?? 20,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
-    statement_timeout: opts.statementTimeoutMs ?? 15_000,
+    statement_timeout: statementTimeoutMs,
+    // Client-side backstop for a server that stops answering (partition, black-holed failover); the
+    // server cancels slow statements itself first.
+    query_timeout: statementTimeoutMs + 5_000,
     application_name: opts.applicationName ?? 'agentbazaar-api',
   });
-  // An idle client error must not crash the process; the pool replaces the client.
-  pool.on('error', (err) => console.error('postgres pool error', err.message));
+  // A dropped connection must never crash the process. The pool replaces idle clients itself; a
+  // checked-out one (mid-transaction) has no pool listener, and its next query fails instead.
+  pool.on('connect', (client) => client.on('error', (err) => console.error('postgres connection error', err.message)));
+  pool.on('error', () => undefined); // idle clients: already logged by the listener above
+  // After a client-side timeout the connection still waits for an answer that may never come (its bytes
+  // were lost), and transactions release their client without an error: close it so nobody reuses it.
+  pool.on('release', (_err, client) => {
+    if (!(client as unknown as { readyForQuery: boolean }).readyForQuery) void client.end();
+  });
   const db = drizzlePg({ client: pool, casing: 'snake_case' }) as unknown as Executor;
+  // drizzle-orm 0.45 never releases a pooled client whose BEGIN fails (BEGIN runs before its try/finally),
+  // so a few database blips drain the pool for good. Root transactions run on a client released here.
+  const transaction: Executor['transaction'] = async (fn, config) => {
+    const client = await pool.connect();
+    try {
+      return await (drizzlePg({ client, casing: 'snake_case' }) as unknown as Executor).transaction(fn, config);
+    } finally {
+      client.release();
+    }
+  };
+  Object.assign(db, { transaction });
   return {
     driver: 'postgres',
     db,
