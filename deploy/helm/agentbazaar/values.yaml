@@ -42,7 +42,7 @@ config:
   SEMANTIC_CACHE: ''
   # Langfuse traces of LLM calls (keys in the Secret).
   LANGFUSE_HOST: ''
-  # Temporal sagas (scale): set WORKFLOW_ENGINE=temporal and enable `worker`.
+  # Temporal sagas (scale): set WORKFLOW_ENGINE=temporal and enable `workflowWorker`.
   WORKFLOW_ENGINE: ''
   TEMPORAL_ADDRESS: ''
   TEMPORAL_NAMESPACE: ''
@@ -225,22 +225,26 @@ agents:
   affinity: {}
   topologySpreadConstraints: []
 
-# Temporal workflow worker (scale): runs the order and payment sagas. Needs config.WORKFLOW_ENGINE=temporal
-# and the TEMPORAL_* settings. It serves no traffic, so it has no Service or HTTP probes.
-worker:
+# Temporal workflow worker (scale): runs the checkout and payment sagas. Needs config.WORKFLOW_ENGINE=temporal
+# and TEMPORAL_ADDRESS (Temporal from its own chart, or Temporal Cloud). Its image is the workflow-worker target
+# of apps/api/Dockerfile (Debian slim: Temporal's native worker has no musl build), whose default command is the
+# worker. It serves no traffic, so it has no Service or HTTP probes.
+workflowWorker:
   enabled: false
   image:
-    repository: ghcr.io/mukulkathuria/agentbazaar-api
+    repository: ghcr.io/mukulkathuria/agentbazaar-workflow-worker
   replicaCount: 2
   podSecurityContext: {}
-  command: ['node', 'dist/cli/index.js', 'workflow-worker']
+  command: []
+  # Lets an activity in flight finish before the pod goes.
+  terminationGracePeriodSeconds: 60
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 250m
+      memory: 384Mi
     limits:
       cpu: '1'
-      memory: 512Mi
+      memory: 768Mi
   autoscaling:
     enabled: false
     minReplicas: 2
@@ -250,6 +254,21 @@ worker:
   pdb:
     enabled: true
     maxUnavailable: 1
+  # Egress the worker pods may open when networkPolicy.enabled: DNS plus what the app process talks to.
+  # Trim it to the services you run.
+  egressPorts:
+    - { port: 53, protocol: UDP }
+    - { port: 53, protocol: TCP }
+    - { port: 7233, protocol: TCP } # Temporal frontend
+    - { port: 5432, protocol: TCP } # Postgres and read replicas
+    - { port: 6432, protocol: TCP } # PgBouncer
+    - { port: 6379, protocol: TCP } # Valkey
+    - { port: 4222, protocol: TCP } # NATS
+    - { port: 9092, protocol: TCP } # Kafka
+    - { port: 9094, protocol: TCP } # Kafka over TLS (MSK)
+    - { port: 8200, protocol: TCP } # OpenBao
+    - { port: 8123, protocol: TCP } # ClickHouse
+    - { port: 443, protocol: TCP } # payment gateways, managed AWS endpoints, LLM APIs
   writablePaths: ['/tmp']
   extraEnv: []
   podAnnotations: {}
@@ -257,6 +276,41 @@ worker:
   tolerations: []
   affinity: {}
   topologySpreadConstraints: []
+
+# PgBouncer in transaction-pooling mode between the app and Postgres (growth). Point the Secret's DATABASE_URL
+# at it (postgres://USER:PASS@<fullname>-pgbouncer:6432/DB) and put the primary's own URL in the Secret key
+# named by upstreamSecretKey: PgBouncer connects with it, and the migration Job uses it to bypass the pooler.
+# node-postgres sends statement_timeout at startup, which PgBouncer ignores, so set it on the role once:
+#   ALTER ROLE agentbazaar SET statement_timeout = '15s';
+pgbouncer:
+  enabled: false
+  image:
+    repository: edoburu/pgbouncer
+    tag: v1.26.1-p0
+  replicaCount: 2
+  port: 6432
+  upstreamSecretKey: PGBOUNCER_DATABASE_URL
+  authType: scram-sha-256
+  poolMode: transaction
+  maxClientConn: 1000
+  defaultPoolSize: 20
+  ignoreStartupParameters: extra_float_digits,statement_timeout
+  # Retry a failed server login after 1 s, so a repointed pool recovers quickly after a failover.
+  serverLoginRetry: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 500m
+      memory: 128Mi
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 # Apache APISIX in standalone mode (routes from this chart, no etcd) in front of web, api and agents:
 # PUBLIC_WEB_URL's host goes to web; PUBLIC_API_URL's host goes to agents for /mcp, /a2a and /api/v1/chat

@@ -1,6 +1,8 @@
 {{- $root := . -}}
-{{- range $component := splitList "," (include "agentbazaar.components" $root) }}
-{{- $c := index $root.Values $component }}
+{{- range $key := splitList "," (include "agentbazaar.components" $root) }}
+{{- $c := index $root.Values $key }}
+{{- /* Values keys are camelCase (workflowWorker); resource names and labels are kebab-case. */}}
+{{- $component := kebabcase $key }}
 {{- if $c.pdb.enabled }}
 ---
 apiVersion: policy/v1

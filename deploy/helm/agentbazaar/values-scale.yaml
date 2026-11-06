@@ -10,11 +10,11 @@ config:
   QDRANT_URL: http://qdrant:6333
   OPENBAO_ADDR: http://openbao:8200
   SEMANTIC_CACHE: valkey
-  # Order and payment sagas on Temporal, run by `worker` below.
+  # Checkout and payment sagas on Temporal: the API starts them, `workflowWorker` below runs them.
   WORKFLOW_ENGINE: temporal
   TEMPORAL_ADDRESS: temporal-frontend:7233
   TEMPORAL_NAMESPACE: default
-  TEMPORAL_TASK_QUEUE: agentbazaar
+  TEMPORAL_TASK_QUEUE: agentbazaar-checkout
   # CLICKHOUSE_URL goes in the Secret.
   ANALYTICS_ADAPTER: clickhouse
   # KAFKA_BROKERS, OPENSEARCH_URL, VALKEY_URL and the public URLs come from Terraform's helm_values.
@@ -48,11 +48,16 @@ agents:
       topologyKey: kubernetes.io/hostname
       whenUnsatisfiable: ScheduleAnyway
 
-worker:
+# Checkout and payment sagas on Temporal (from its own chart or Temporal Cloud at TEMPORAL_ADDRESS).
+workflowWorker:
   enabled: true
+  replicaCount: 2
   topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
       whenUnsatisfiable: ScheduleAnyway
 
 api:

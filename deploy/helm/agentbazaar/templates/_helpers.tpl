@@ -50,7 +50,7 @@ app.kubernetes.io/component: {{ .component }}
 {{- /* Components this release runs: api and web always; ai, the agents pool and the worker when enabled. */ -}}
 {{- define "agentbazaar.components" -}}
 {{- $c := list "api" "web" -}}
-{{- range $optional := list "ai" "agents" "worker" -}}
+{{- range $optional := list "ai" "agents" "workflowWorker" -}}
 {{- if (index $.Values $optional).enabled -}}{{- $c = append $c $optional -}}{{- end -}}
 {{- end -}}
 {{- join "," $c -}}

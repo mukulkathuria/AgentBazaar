@@ -1,6 +1,8 @@
 {{- $root := . -}}
-{{- range $component := splitList "," (include "agentbazaar.components" $root) }}
-{{- $c := index $root.Values $component }}
+{{- range $key := splitList "," (include "agentbazaar.components" $root) }}
+{{- $c := index $root.Values $key }}
+{{- /* Values keys are camelCase (workflowWorker); resource names and labels are kebab-case. */}}
+{{- $component := kebabcase $key }}
 {{- $selector := include "agentbazaar.selectorLabels" (dict "root" $root "component" $component) | fromYaml }}
 ---
 apiVersion: apps/v1
@@ -31,6 +33,9 @@ spec:
     spec:
       serviceAccountName: {{ include "agentbazaar.serviceAccountName" $root }}
       automountServiceAccountToken: false
+      {{- with $c.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
       {{- with $root.Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -64,7 +69,7 @@ spec:
             - name: HOSTNAME
               value: 0.0.0.0
             {{- end }}
-            {{- if has $component (list "api" "agents" "worker") }}
+            {{- if has $component (list "api" "agents" "workflow-worker") }}
             # Used only when config.OTEL_EXPORTER_OTLP_ENDPOINT is set.
             - name: OTEL_SERVICE_NAME
               value: agentbazaar-{{ $component }}

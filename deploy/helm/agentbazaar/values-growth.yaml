@@ -11,7 +11,15 @@ config:
   NATS_URL: nats://nats:4222
   OPENBAO_ADDR: http://openbao:8200
   SEMANTIC_CACHE: valkey
+  # Reads go to the replicas in DATABASE_REPLICA_URLS (Secret) while they lag the primary by less than this.
+  DATABASE_REPLICA_MAX_LAG_MS: '5000'
   # VALKEY_URL, PUBLIC_WEB_URL and PUBLIC_API_URL come from Terraform's helm_values.
+
+# The Secret's DATABASE_URL points at PgBouncer (postgres://...@agentbazaar-pgbouncer:6432/...); its
+# PGBOUNCER_DATABASE_URL is the primary itself. Run once on the primary:
+#   ALTER ROLE agentbazaar SET statement_timeout = '15s';
+pgbouncer:
+  enabled: true
 
 # APISIX in front of web and api: per-caller rate limits and body size limits at the edge of the cluster.
 gateway:

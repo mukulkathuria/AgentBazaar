@@ -138,4 +138,46 @@ spec:
       ports:
         - port: http
 {{- end }}
+{{- if .Values.pgbouncer.enabled }}
+---
+# The release's pods -> PgBouncer.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-allow-pgbouncer
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbazaar.selectorLabels" (dict "root" . "component" "pgbouncer") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- toYaml $release | nindent 14 }}
+      ports:
+        - port: postgres
+{{- end }}
+{{- if .Values.workflowWorker.enabled }}
+---
+# The workflow worker may only open the ports of the services it uses (Temporal, Postgres, Valkey, ...).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-workflow-worker-egress
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentbazaar.selectorLabels" (dict "root" . "component" "workflow-worker") | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        {{- toYaml .Values.workflowWorker.egressPorts | nindent 8 }}
+{{- end }}
 {{- end }}

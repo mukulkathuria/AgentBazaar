@@ -40,6 +40,14 @@ spec:
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+            {{- if .Values.pgbouncer.enabled }}
+            # Migrations go to the primary directly (the pooler may not be up yet before install).
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentbazaar.secretName" . }}
+                  key: {{ .Values.pgbouncer.upstreamSecretKey }}
+            {{- end }}
           envFrom:
             - secretRef:
                 name: {{ include "agentbazaar.secretName" . }}

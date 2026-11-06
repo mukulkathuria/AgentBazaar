@@ -1,0 +1,126 @@
+{{- if .Values.pgbouncer.enabled }}
+{{- $fullname := include "agentbazaar.fullname" . }}
+{{- $p := .Values.pgbouncer }}
+{{- $selector := include "agentbazaar.selectorLabels" (dict "root" . "component" "pgbouncer") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-pgbouncer
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pgbouncer
+spec:
+  replicas: {{ $p.replicaCount }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- $selector | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "agentbazaar.labels" . | nindent 8 }}
+        app.kubernetes.io/component: pgbouncer
+      {{- with $p.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "agentbazaar.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # The image runs as alpine's postgres user, uid 70.
+      securityContext:
+        {{- toYaml (merge (dict "runAsUser" 70 "runAsGroup" 70 "fsGroup" 70) (omit .Values.podSecurityContext "runAsUser" "runAsGroup" "fsGroup")) | nindent 8 }}
+      containers:
+        - name: pgbouncer
+          image: {{ printf "%s:%s" $p.image.repository $p.image.tag | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The entrypoint writes pgbouncer.ini and userlist.txt into /etc/pgbouncer from these.
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agentbazaar.secretName" . }}
+                  key: {{ $p.upstreamSecretKey }}
+            - { name: LISTEN_PORT, value: {{ $p.port | quote }} }
+            - { name: AUTH_TYPE, value: {{ $p.authType | quote }} }
+            - { name: POOL_MODE, value: {{ $p.poolMode | quote }} }
+            - { name: MAX_CLIENT_CONN, value: {{ $p.maxClientConn | int | quote }} }
+            - { name: DEFAULT_POOL_SIZE, value: {{ $p.defaultPoolSize | int | quote }} }
+            - { name: IGNORE_STARTUP_PARAMETERS, value: {{ $p.ignoreStartupParameters | quote }} }
+            - { name: SERVER_LOGIN_RETRY, value: {{ $p.serverLoginRetry | int | quote }} }
+          ports:
+            - name: postgres
+              containerPort: {{ $p.port }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: postgres
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: postgres
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml $p.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/pgbouncer
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      {{- with $p.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $p.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $p.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-pgbouncer
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pgbouncer
+spec:
+  type: ClusterIP
+  selector:
+    {{- $selector | nindent 4 }}
+  ports:
+    - name: postgres
+      port: {{ $p.port }}
+      targetPort: postgres
+      protocol: TCP
+{{- if $p.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullname }}-pgbouncer
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pgbouncer
+spec:
+  maxUnavailable: {{ $p.pdb.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- $selector | nindent 6 }}
+{{- end }}
+{{- end }}
