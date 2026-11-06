@@ -49,7 +49,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo run build --filter=@agentbazaar/api^...
       - name: OIDC suite
-        run: pnpm --filter @agentbazaar/api test:services -- keycloak
+        # Only this file: the other services suites need the full stack.
+        run: pnpm --filter @agentbazaar/api exec vitest run --project services test/services/keycloak.spec.ts
         env:
           KEYCLOAK_URL: http://localhost:8080
       - name: Keycloak logs

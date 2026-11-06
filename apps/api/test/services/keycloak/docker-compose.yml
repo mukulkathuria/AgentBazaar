@@ -1,7 +1,7 @@
 # Keycloak for apps/api/test/services/keycloak.spec.ts (not part of tests/infra: it is heavy, so only the
 # Keycloak workflow and people working on OIDC start it). Throwaway test values, not secrets.
 #   docker compose -f apps/api/test/services/keycloak/docker-compose.yml up -d --wait
-#   KEYCLOAK_URL=http://localhost:8080 pnpm --filter @agentbazaar/api test:services -- keycloak
+#   KEYCLOAK_URL=http://localhost:8080 pnpm --filter @agentbazaar/api exec vitest run --project services test/services/keycloak.spec.ts
 #   docker compose -f apps/api/test/services/keycloak/docker-compose.yml down -v
 name: ab-t6
 
