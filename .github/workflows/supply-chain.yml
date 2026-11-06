@@ -1,0 +1,64 @@
+name: Supply chain
+
+# Every pull request: GitHub dependency review (fails on high-severity advisories and on licences outside the
+# allowlist of scripts/license-check.mjs) and an SBOM diff of base against head in the job summary.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          # SPDX form of the license gate's allowlist (scripts/license-check.mjs).
+          allow-licenses: >-
+            MIT, MIT-0, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, ISC, PostgreSQL, MPL-2.0,
+            BlueOak-1.0.0, CC0-1.0, Python-2.0, Unlicense, CC-BY-4.0
+
+  sbom-diff:
+    name: SBOM diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { ref: '${{ github.event.pull_request.base.sha }}', path: base, persist-credentials: false }
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { path: head, persist-credentials: false }
+      # pnpm 12 writes pnpm-lock.yaml as two YAML documents (pnpm's own packages, then the project's) and syft
+      # reads only the first, so keep the last one.
+      - name: Keep the project's lockfile document
+        run: |
+          for side in base head; do
+            awk '/^---$/{n++} {doc[n] = doc[n] $0 ORS} END {printf "%s", doc[n]}' "$side/pnpm-lock.yaml" > lock.tmp
+            mv lock.tmp "$side/pnpm-lock.yaml"
+          done
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with: { path: base, format: spdx-json, output-file: base.spdx.json, upload-artifact: false }
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with: { path: head, format: spdx-json, output-file: head.spdx.json, upload-artifact: false }
+      - name: Diff into the job summary
+        run: |
+          export LC_ALL=C # comm needs both lists in the same byte order
+          purls() { jq -r '.packages[].externalRefs[]? | select(.referenceType == "purl") | .referenceLocator' "$1" | sort -u; }
+          purls base.spdx.json > base.txt
+          purls head.spdx.json > head.txt
+          comm -13 base.txt head.txt > added.txt
+          comm -23 base.txt head.txt > removed.txt
+          {
+            echo "## SBOM diff"
+            echo "$(wc -l < base.txt) packages in base, $(wc -l < head.txt) in head: $(wc -l < added.txt) added, $(wc -l < removed.txt) removed (a version change counts once in each)."
+            for f in added removed; do
+              if [ -s "$f.txt" ]; then printf '\n### %s\n\n```\n' "${f^}"; cat "$f.txt"; printf '```\n'; fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
