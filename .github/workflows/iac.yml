@@ -53,7 +53,8 @@ jobs:
           tar -xzf /tmp/conftest.tar.gz -C /tmp conftest
           tofu test -json -verbose -filter="tests/$PROFILE.tftest.hcl" > /tmp/test.jsonl
           jq -c 'select(.type == "test_plan" and .["@testrun"] == "plans_with_defaults") | .test_plan' /tmp/test.jsonl > /tmp/plan.json
-          test -s /tmp/plan.json
+          # Guard against passing on an empty plan: show what the policies saw.
+          jq -e '{resources: (.resource_changes | length), iam_documents: ([.. | objects | select(.type? == "aws_iam_policy_document")] | length)} | ., .resources > 5' /tmp/plan.json
           /tmp/conftest test --policy ../../../policies/terraform /tmp/plan.json
 
   lint:

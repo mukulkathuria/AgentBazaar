@@ -1,0 +1,119 @@
+name: Cluster
+
+# G4: a fresh k3s cluster (k3d) installs the chart with the growth values, the APISIX gateway and the agent pool,
+# then passes a smoke suite and an end-to-end sale over MCP through the gateway.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/helm/**'
+      - 'tests/cluster/**'
+      - 'apps/demo/src/**'
+      - '.github/workflows/cluster.yml'
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cluster-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Fresh k3s install, smoke and end-to-end (@growth)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NS: agentbazaar
+      API_URL: http://api.agentbazaar.test:18080
+      WEB_URL: http://shop.agentbazaar.test:18080
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+      - name: Install k3d
+        run: |
+          curl -fsSLo /tmp/k3d https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-amd64
+          echo "06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0  /tmp/k3d" | sha256sum -c -
+          sudo install -m 0755 /tmp/k3d /usr/local/bin/k3d
+      - name: Create the cluster (k3s, Traefik, metrics-server, network policies)
+        run: |
+          k3d cluster create ab-t6 --image rancher/k3s:v1.35.9-k3s1 -p '18080:80@loadbalancer' --wait --timeout 180s
+          kubectl get nodes -o wide
+      - name: Build the api and web images
+        run: |
+          docker build -f apps/api/Dockerfile -t agentbazaar-api:ci .
+          docker build -f apps/web/Dockerfile --build-arg NEXT_PUBLIC_API_URL=http://api.agentbazaar.test -t agentbazaar-web:ci .
+          k3d image import agentbazaar-api:ci agentbazaar-web:ci -c ab-t6
+      - name: Start Postgres, Valkey, Meilisearch, NATS JetStream and OpenBao
+        run: |
+          kubectl create namespace "$NS"
+          kubectl -n "$NS" apply -f tests/cluster/deps.yaml
+          kubectl -n "$NS" rollout status deployment --timeout=300s
+          bao() { kubectl -n "$NS" exec deploy/openbao -- env BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN=ci-only-root-token bao "$@"; }
+          bao secrets enable transit
+          bao write -f transit/keys/agentbazaar-pii derived=true
+          # PgBouncer ignores the statement_timeout node-postgres sends at startup: set it on the role instead.
+          kubectl -n "$NS" exec deploy/postgres -- psql -U postgres -c "ALTER ROLE postgres SET statement_timeout = '15s'"
+      - name: Create the app Secret
+        run: |
+          docker run --rm agentbazaar-api:ci node dist/cli/index.js keys > /tmp/app.env
+          cat >> /tmp/app.env <<'EOF'
+          DATABASE_URL=postgres://postgres:ci-only-postgres@agentbazaar-pgbouncer:6432/agentbazaar
+          PGBOUNCER_DATABASE_URL=postgres://postgres:ci-only-postgres@postgres:5432/agentbazaar
+          OPENBAO_TOKEN=ci-only-root-token
+          MEILISEARCH_API_KEY=ci-only-meili-master-key
+          EOF
+          kubectl -n "$NS" create secret generic agentbazaar-secrets --from-env-file=/tmp/app.env
+          rm -f /tmp/app.env
+      - name: Install the chart (growth values, gateway, agent pool)
+        run: |
+          helm install agentbazaar deploy/helm/agentbazaar -n "$NS" \
+            -f deploy/helm/agentbazaar/values-growth.yaml -f tests/cluster/values-k3d.yaml --wait --timeout 10m
+          kubectl -n "$NS" get pods,hpa,ingress,networkpolicy
+      - name: Seed the catalog and the demo agent client
+        run: |
+          kubectl -n "$NS" exec deploy/agentbazaar-api -- node dist/cli/index.js seed --products 300 > /tmp/seed.txt
+          grep -E '^Catalog' /tmp/seed.txt
+          creds=$(sed -n 's/^Demo agent client: client_id=\([^ ]*\) client_secret=\([^ ]*\)$/\1 \2/p' /tmp/seed.txt)
+          read -r id secret <<< "$creds"
+          echo "::add-mask::$secret"
+          echo "AGENT_CLIENT_ID=$id" >> "$GITHUB_ENV"
+          echo "AGENT_CLIENT_SECRET=$secret" >> "$GITHUB_ENV"
+          rm -f /tmp/seed.txt
+      - name: Smoke suite (health, readiness, catalog, search, gateway limits)
+        run: |
+          echo "127.0.0.1 shop.agentbazaar.test api.agentbazaar.test" | sudo tee -a /etc/hosts
+          bash tests/cluster/smoke.sh
+      - name: Build the scripted buyer agent
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter "@agentbazaar/demo..." build
+      - name: End-to-end sale over MCP through the gateway
+        run: node apps/demo/dist/cluster-e2e.js
+      - name: Agent traffic was served by the agent pool, not the api
+        run: |
+          mcp_calls() {
+            for pod in $(kubectl -n "$NS" get pods -l "app.kubernetes.io/component=$1" -o name); do
+              kubectl -n "$NS" exec "$pod" -- wget -qO- http://127.0.0.1:4000/metrics
+            done | awk '/^agentbazaar_http_request_duration_seconds_count\{.*route="\/mcp"/ { n += $NF } END { print n + 0 }'
+          }
+          agents=$(mcp_calls agents)
+          api=$(mcp_calls api)
+          echo "MCP requests: agent pool $agents, api $api"
+          test "$agents" -gt 0 && test "$api" -eq 0
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl -n "$NS" get pods,events --sort-by=.lastTimestamp | tail -60
+          for d in gateway api agents web; do kubectl -n "$NS" logs "deploy/agentbazaar-$d" --all-containers --tail=80 || true; done
+          kubectl -n "$NS" logs job/agentbazaar-migrate --tail=80 || true
+      - if: always()
+        run: k3d cluster delete ab-t6

@@ -1,0 +1,34 @@
+# Layered over deploy/helm/agentbazaar/values-growth.yaml for the fresh-cluster install test
+# (.github/workflows/cluster.yml): images built in the job and imported into k3d, the services from deps.yaml,
+# k3s's Traefik as the ingress controller in front of the APISIX gateway, and the agent pool on.
+image:
+  tag: ci
+
+api:
+  image: { repository: agentbazaar-api }
+web:
+  image: { repository: agentbazaar-web }
+agents:
+  enabled: true
+  image: { repository: agentbazaar-api }
+
+config:
+  PUBLIC_WEB_URL: http://shop.agentbazaar.test
+  PUBLIC_API_URL: http://api.agentbazaar.test
+  VALKEY_URL: redis://valkey:6379
+
+ingress:
+  enabled: true
+  className: traefik
+  tls:
+    enabled: false
+
+targetGroupBindings:
+  enabled: false
+
+networkPolicy:
+  # Traefik runs in kube-system on k3s.
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system

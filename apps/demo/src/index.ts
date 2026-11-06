@@ -8,8 +8,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp, seedDemo } from '@agentbazaar/api';
 import { loadConfig } from '@agentbazaar/config';
-import { formatInr, type OrderView } from '@agentbazaar/contracts';
+import { formatInr } from '@agentbazaar/contracts';
 import { type BuyerEvent, ScriptedBuyer } from '@agentbazaar/testkit';
+import { fetchOrder, payAsHuman } from './checkout.js';
 
 type Speaker = 'system' | 'buyer' | 'seller' | 'tool' | 'human' | 'result';
 const COLORS: Record<Speaker, string> = { system: '90', buyer: '36', seller: '33', tool: '35', human: '32', result: '1;32' };
@@ -59,17 +60,6 @@ function narrate(e: BuyerEvent): void {
   (NARRATORS[e.type] as ((ev: BuyerEvent) => void) | undefined)?.(e);
 }
 
-async function call<T>(base: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
-  const res = await fetch(`${base}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const json = (await res.json()) as T & { error?: { message: string } };
-  if (!res.ok) throw new Error(`${path} -> ${res.status}: ${json.error?.message ?? 'request failed'}`);
-  return json;
-}
-
 async function main(): Promise<void> {
   const t0 = Date.now();
   const port = Number(process.env.DEMO_PORT ?? 4000);
@@ -100,25 +90,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const link = new URL(result.checkoutUrl);
-  const sessionId = link.pathname.split('/').pop()!;
-  const token = link.searchParams.get('t')!;
   say('human', 'Opens the link, confirms the delivery address and pays with the mock gateway');
-  const order = await call<OrderView>(
-    base,
-    `/api/v1/checkout/sessions/${sessionId}/complete?t=${encodeURIComponent(token)}`,
-    {
-      email: 'demo.buyer@example.com',
-      address: { name: 'Demo Buyer', phone: '9876543210', line1: '42 MG Road', city: 'Bengaluru', stateCode: 'KA', pincode: '560001' },
-      paymentMethod: 'online',
-      acceptTerms: true,
-    },
-    { 'idempotency-key': `demo-${Date.now()}` },
-  );
-  const paymentId = new URL(order.paymentUrl!).pathname.split('/').pop()!;
-  await call(base, `/api/v1/mock-gateway/payments/${paymentId}/complete`, { outcome: 'success' });
+  const order = await payAsHuman(base, result.checkoutUrl);
   await running.infra.relay.drain();
-  const paid = await call<OrderView>(base, `/api/v1/orders/${order.orderId}?t=${encodeURIComponent(order.accessToken!)}`);
+  const paid = await fetchOrder(base, order);
   say(
     'result',
     `Order ${paid.number} ${paid.status} · ${formatInr(paid.totalPaise)} incl. ${formatInr(paid.taxPaise)} GST · invoice ${paid.invoiceNumber}`,
