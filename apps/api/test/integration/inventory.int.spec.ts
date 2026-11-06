@@ -120,7 +120,11 @@ describe('@lite inventory service (reservations against a real schema)', () => {
       'cart:fail',
     ).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AppError);
-    expect(err).toMatchObject({ code: 'out_of_stock', details: { variantId: b, requested: 1 } });
+    expect(err).toMatchObject({
+      code: 'out_of_stock',
+      message: 'Not enough stock for one or more items',
+      details: { variantId: b, requested: 1 },
+    });
     expect(await stock(a)).toEqual({ on_hand: 5, reserved: 3 });
     expect(await reservations('cart:fail')).toEqual([]);
   });
