@@ -22,6 +22,7 @@
     "test": "vitest run --project unit",
     "test:int": "vitest run --project integration",
     "test:e2e": "vitest run --project e2e",
+    "test:services": "vitest run --project services --passWithNoTests",
     "test:coverage": "vitest run --project unit --coverage"
   },
   "dependencies": {

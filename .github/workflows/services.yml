@@ -1,0 +1,42 @@
+name: Services
+
+# Growth and scale suites against real Meilisearch, NATS, Kafka, OpenSearch, Qdrant, Valkey, OpenBao,
+# Temporal, ClickHouse and Toxiproxy (tests/infra/docker-compose.yml).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: services-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  services:
+    name: Real-service suites (@growth, @scale)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Start the real services
+        run: |
+          sudo sysctl -w vm.max_map_count=262144
+          docker compose -f tests/infra/docker-compose.yml up -d --wait --wait-timeout 300 --quiet-pull
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@agentbazaar/api^...
+      - name: Real-service suites
+        run: pnpm --filter @agentbazaar/api test:services
+      - name: Service logs
+        if: failure()
+        run: docker compose -f tests/infra/docker-compose.yml logs --tail=150
+      - if: always()
+        run: docker compose -f tests/infra/docker-compose.yml down -v

@@ -24,6 +24,15 @@ export default defineConfig({
           ],
         },
       },
+      // Growth and scale suites against real services (tests/infra/docker-compose.yml).
+      {
+        extends: true,
+        test: {
+          name: 'services',
+          include: ['test/services/**/*.spec.ts'],
+          setupFiles: ['test/services/load-env.ts'],
+        },
+      },
     ],
     coverage: {
       provider: 'v8',
