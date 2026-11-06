@@ -2,7 +2,8 @@
 #   60-second demo, no keys:  docker compose -f deploy/compose/docker-compose.yml --profile demo up --build
 #   Lite store (one VPS):      cp .env.example .env  # fill in secrets, then
 #                              docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile lite up -d --build
-#   Growth services:           add --profile growth   (Meilisearch, NATS JetStream, OpenBao, Keycloak)
+#   Growth services:           add --profile growth   (Meilisearch, NATS JetStream, OpenBao, Keycloak, PgBouncer and a
+#                              streaming read replica; set DATABASE_HOST and DATABASE_REPLICA_URLS in .env to use them)
 #   Scale services:            add --profile scale    (Kafka, OpenSearch, Qdrant, Temporal and the checkout saga
 #                              worker; set WORKFLOW_ENGINE=temporal and TEMPORAL_ADDRESS=temporal:7233 in .env)
 #   Metrics:                   add --profile observability (Prometheus, Grafana)
@@ -49,11 +50,15 @@ services:
     image: pgvector/pgvector:pg18
     profiles: [lite, growth, scale]
     restart: unless-stopped
+    # Reaps orphaned healthcheck processes, which the postmaster would otherwise treat as crashed backends.
+    init: true
+    # Same rules as the image's default, plus password-authenticated streaming replication for postgres-replica.
+    command: ['postgres', '-c', 'hba_file=/etc/postgresql/pg_hba.conf']
     environment:
       POSTGRES_DB: agentbazaar
       POSTGRES_USER: agentbazaar
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-    volumes: [pgdata:/var/lib/postgresql/data]
+    volumes: [pgdata:/var/lib/postgresql/data, './pg_hba.conf:/etc/postgresql/pg_hba.conf:ro']
     healthcheck: { test: ['CMD-SHELL', 'pg_isready -U agentbazaar'], interval: 5s, timeout: 5s, retries: 20 }
   valkey:
     image: valkey/valkey:8-alpine
@@ -67,7 +72,7 @@ services:
     env_file: [../../.env]
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://agentbazaar:${POSTGRES_PASSWORD}@postgres:5432/agentbazaar
+      DATABASE_URL: postgres://agentbazaar:${POSTGRES_PASSWORD}@${DATABASE_HOST:-postgres:5432}/agentbazaar
       VALKEY_URL: redis://valkey:6379
     depends_on:
       postgres: { condition: service_healthy }
@@ -93,6 +98,44 @@ services:
     restart: unless-stopped
 
   # ---------- growth ----------
+  # Transaction pooling in front of the primary (DATABASE_HOST=pgbouncer:6432). PgBouncer cannot carry the client's
+  # statement_timeout, so set it on the role once: ALTER ROLE agentbazaar SET statement_timeout = '15s'.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.26.1-p0
+    profiles: [growth]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://agentbazaar:${POSTGRES_PASSWORD}@postgres:5432/agentbazaar
+      LISTEN_PORT: '6432'
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: '500'
+      DEFAULT_POOL_SIZE: '20'
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,statement_timeout
+      SERVER_LOGIN_RETRY: '1'
+      ADMIN_USERS: agentbazaar
+    depends_on: { postgres: { condition: service_healthy } }
+    healthcheck: { test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-p', '6432'], interval: 5s, timeout: 5s, retries: 20 }
+  # Hot standby cloned from the primary on first start; the API reads from it through DATABASE_REPLICA_URLS
+  # (postgres://agentbazaar:<password>@postgres-replica:5432/agentbazaar). Failover: docs/runbooks/database-failover.md.
+  postgres-replica:
+    image: pgvector/pgvector:pg18
+    profiles: [growth]
+    restart: unless-stopped
+    init: true
+    user: postgres
+    environment: { PGPASSWORD: '${POSTGRES_PASSWORD:-}' }
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -s "$$PGDATA/PG_VERSION" ]; then
+          until pg_basebackup -h postgres -U agentbazaar -D "$$PGDATA" -X stream -R; do sleep 2; done
+        fi
+        exec postgres
+    volumes: [pgreplica:/var/lib/postgresql]
+    depends_on: { postgres: { condition: service_healthy } }
+    healthcheck: { test: ['CMD-SHELL', 'pg_isready -U agentbazaar'], interval: 5s, timeout: 5s, retries: 20 }
   meilisearch:
     image: getmeili/meilisearch:v1.15
     profiles: [growth]
@@ -149,7 +192,7 @@ services:
     env_file: [../../.env]
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://agentbazaar:${POSTGRES_PASSWORD}@postgres:5432/agentbazaar
+      DATABASE_URL: postgres://agentbazaar:${POSTGRES_PASSWORD}@${DATABASE_HOST:-postgres:5432}/agentbazaar
       VALKEY_URL: redis://valkey:6379
       WORKFLOW_ENGINE: temporal
       TEMPORAL_ADDRESS: temporal:7233
@@ -167,4 +210,4 @@ services:
     profiles: [observability]
     ports: ['3001:3000']
 
-volumes: { pgdata: {}, caddy_data: {}, meili: {}, nats: {}, temporal: {} }
+volumes: { pgdata: {}, pgreplica: {}, caddy_data: {}, meili: {}, nats: {}, temporal: {} }
