@@ -11,7 +11,6 @@ on:
       - 'apps/api/test/services/keycloak*'
       - 'apps/api/test/services/keycloak/**'
       - 'packages/config/src/**'
-      - 'pnpm-lock.yaml'
       - '.github/workflows/keycloak.yml'
   pull_request:
     paths:
@@ -28,7 +27,8 @@ permissions:
 
 concurrency:
   group: keycloak-${{ github.ref }}
-  cancel-in-progress: true
+  # Main moves fast; let each run on main finish so it reports a result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   oidc:
