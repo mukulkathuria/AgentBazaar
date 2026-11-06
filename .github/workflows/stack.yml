@@ -17,7 +17,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # k6 sends ~1,800 requests a minute from one IP, so lift the per-IP limit (as docs/benchmarks/lite.md does)
+      # or the run measures 429s instead of the app.
       - run: docker compose -f deploy/compose/docker-compose.yml --profile demo up -d --build
+        env: { RATE_LIMIT_PER_MINUTE: '100000' }
       - name: Wait for API
         run: for i in $(seq 1 60); do curl -fs http://localhost:4000/readyz && exit 0; sleep 5; done; docker compose -f deploy/compose/docker-compose.yml --profile demo logs; exit 1
       - name: Smoke
