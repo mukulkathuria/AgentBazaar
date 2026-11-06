@@ -281,6 +281,13 @@ the old one is removed).
 - ALB: TLS 1.2+ policy, HTTP→HTTPS redirect, invalid headers dropped, `/metrics` answered with 404, WAF
   with the AWS Core rule set, Known bad inputs, IP reputation and a per-IP rate limit
   (`SizeRestrictions_BODY` counts instead of blocking: API bodies may exceed 8 KB).
+- WAF bot management (`modules/waf`): rate rules on the sign-in endpoints and per bearer token besides per IP,
+  all answering 429; on scale, AWS WAF Bot Control (`waf_bot_control_level`, default `COMMON`, about $10 a month
+  plus $1 per million inspected requests) on the storefront host only, with AI crawlers and HTTP-library clients
+  counted and throttled per bot instead of blocked, since agents are customers; `waf_verified_agent_cidrs` exempts
+  partner agents' IPv4 ranges from the per-IP limit.
+- Zone-failure drill (scale, `enable_zone_failure_drill`, off by default): an AWS FIS template that takes one zone
+  down for ten minutes with a 1% 5xx stop alarm; see `docs/runbooks/scale-load-and-zone-drill.md`.
 - Deletion protection, termination protection and final snapshots when `environment = "prod"`
   (override with `deletion_protection`).
 
