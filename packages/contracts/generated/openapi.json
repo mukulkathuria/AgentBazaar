@@ -630,6 +630,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         }
       }
@@ -1192,6 +1195,65 @@
               }
             }
           },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -1250,6 +1312,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         }
       }
@@ -1658,6 +1723,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         }
       }
@@ -2026,6 +2094,65 @@
               }
             }
           },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -2084,6 +2211,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         }
       }
@@ -2484,6 +2614,65 @@
               }
             }
           },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -2542,6 +2731,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         }
       }
@@ -2942,6 +3134,65 @@
               }
             }
           },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -3000,6 +3251,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         }
       }
@@ -3444,6 +3698,65 @@
               }
             }
           },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -3502,6 +3815,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         }
       }
@@ -3933,6 +4249,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -3991,6 +4425,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -4520,6 +4957,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -4578,6 +5074,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -5144,6 +5643,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -5202,6 +5819,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -5664,6 +6284,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -5722,6 +6401,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -6165,6 +6847,65 @@
               }
             }
           },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -6223,6 +6964,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -6666,6 +7410,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -6724,6 +7586,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -7227,6 +8092,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -7285,6 +8268,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -7757,6 +8743,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -7815,6 +8919,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -8293,6 +9400,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -8351,6 +9517,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -8877,6 +10046,65 @@
               }
             }
           },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -8935,6 +10163,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -9309,6 +10540,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -9367,6 +10716,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -10012,6 +11364,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -10070,6 +11540,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -10824,6 +12297,65 @@
               }
             }
           },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -10882,6 +12414,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -11581,6 +13116,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -12215,6 +13753,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -12273,6 +13929,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -12908,6 +14567,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -12966,6 +14743,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -13417,6 +15197,65 @@
               }
             }
           },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -13475,6 +15314,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -13820,6 +15662,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -13878,6 +15838,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -14247,6 +16210,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -14305,6 +16327,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -14705,6 +16730,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -14763,6 +16847,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -15143,6 +17230,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -15201,6 +17347,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -15667,6 +17816,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -16059,6 +18211,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -16117,6 +18328,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -16531,6 +18745,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -16864,6 +19081,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -16922,6 +19198,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -17278,6 +19557,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -17336,6 +19674,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -17669,6 +20010,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -17727,6 +20127,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -18093,6 +20496,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -18151,6 +20613,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -18854,6 +21319,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -18912,6 +21495,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -19267,6 +21853,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -19325,6 +21970,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -19994,6 +22642,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         }
       }
@@ -20544,6 +23195,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -20990,6 +23644,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -21386,6 +24043,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -21444,6 +24219,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -21894,6 +24672,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -22271,6 +25052,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -22329,6 +25228,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -22769,6 +25671,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -23136,6 +26041,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -23194,6 +26217,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -23693,6 +26719,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -24153,6 +27182,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -24550,6 +27582,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -24608,6 +27699,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -25250,6 +28344,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -25308,6 +28461,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -25898,6 +29054,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -26271,6 +29430,65 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -26329,6 +29547,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -26994,6 +30215,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -27052,6 +30391,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "requestBody": {
@@ -27698,6 +31040,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -27756,6 +31216,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [
@@ -28381,6 +31844,124 @@
               }
             }
           },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "429": {
             "description": "Error",
             "content": {
@@ -28439,6 +32020,9 @@
                 }
               }
             }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
           }
         },
         "security": [

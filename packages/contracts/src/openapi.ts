@@ -46,7 +46,11 @@ export function buildOpenApi(version: string): JsonSchema {
         '403': error,
         '404': error,
         '409': error,
+        // Transport limits: request body over 256 KB, path parameter over 256 characters.
+        ...(def.method === 'get' ? {} : { '413': error }),
+        ...(def.params ? { '414': error } : {}),
         '429': error,
+        '431': { description: 'Request line and headers over 16 KB, rejected by the HTTP server before the API runs' },
       },
     };
     if (def.body) {

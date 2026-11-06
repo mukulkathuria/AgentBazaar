@@ -32,6 +32,9 @@ playwright-report/
 test-results/
 blob-report/
 tests/load/results/
+.lighthouseci/
+.schemathesis/
+schemathesis-report/
 # mutation testing (StrykerJS sandboxes, reports and incremental files)
 .stryker-tmp/
 apps/api/reports/

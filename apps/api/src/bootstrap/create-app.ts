@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { AppConfig } from '@agentbazaar/config';
+import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { AppModule } from '../app.module.js';
 import { safeEqual } from '../shared/crypto/primitives.js';
 import { ErrorFilter, logRefusal, toErrorResponse } from '../shared/http/error.filter.js';
@@ -31,6 +32,13 @@ export async function createApp(config: AppConfig, opts: CreateAppOptions = {}):
     logger: false,
     trustProxy: true,
     bodyLimit: 256 * 1024,
+    // Above the longest path parameter in the contracts (slug, 160), so the router never answers a valid one with 414.
+    routerOptions: { maxParamLength: 256 },
+    // The router rejects malformed URLs (400) and over-long parameters (414) before any hook: same error envelope.
+    frameworkErrors: (err: FastifyError, req: FastifyRequest, reply: FastifyReply) => {
+      const { status, body } = toErrorResponse(err, req.id);
+      void reply.status(status).send(body);
+    },
     // Accept a caller's request id only if it is well-formed, so it cannot inject into logs.
     genReqId: (req: IncomingMessage) => {
       const incoming = req.headers['x-request-id'];

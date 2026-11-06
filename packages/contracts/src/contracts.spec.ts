@@ -58,6 +58,15 @@ describe('@lite contracts', () => {
     expect(JSON.stringify(buildOpenApi('0.9.0'))).toBe(JSON.stringify(doc));
   });
 
+  it('documents the transport limits the server can answer with (found by Schemathesis)', () => {
+    const doc = buildOpenApi('0.9.0') as { paths: Record<string, Record<string, { responses: Record<string, unknown> }>> };
+    const codes = (path: string, method: string) => Object.keys(doc.paths[path]![method]!.responses);
+    expect(codes('/api/v1/products/{slug}', 'get')).toEqual(expect.arrayContaining(['414', '431']));
+    expect(codes('/api/v1/products/{slug}', 'get')).not.toContain('413'); // GET bodies are never read
+    expect(codes('/api/v1/products', 'get')).not.toContain('414'); // no path parameter
+    expect(codes('/api/v1/analytics/events', 'post')).toEqual(expect.arrayContaining(['413', '431']));
+  });
+
   it('route paths are unique per method and convert to Fastify syntax', () => {
     const keys = Object.values(Routes).map((r) => `${r.method} ${r.path}`);
     expect(new Set(keys).size).toBe(keys.length);
