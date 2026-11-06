@@ -1,0 +1,26 @@
+stateDiagram-v2
+  [*] --> inquiry: buyer asks about a product
+  [*] --> quote: request_quote (signed opening quote)
+  inquiry --> quote
+  quote --> counter: offer below the ask
+  counter --> counter: next round
+  quote --> accepted: offer meets the ask
+  counter --> accepted: offer meets the next ask
+  quote --> rejected: fixed price
+  counter --> rejected: rounds exhausted
+  quote --> pending_approval: discount above threshold
+  counter --> pending_approval: discount above threshold
+  pending_approval --> accepted: admin approves
+  pending_approval --> rejected: admin declines
+  quote --> checkout: accept_quote
+  counter --> checkout: accept_quote
+  accepted --> checkout: accept_quote
+  rejected --> checkout: last quote still valid
+  inquiry --> expired
+  quote --> expired
+  counter --> expired
+  pending_approval --> expired
+  accepted --> expired
+  rejected --> expired
+  checkout --> [*]
+  expired --> [*]

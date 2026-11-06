@@ -1,0 +1,20 @@
+sequenceDiagram
+  autonumber
+  participant B as Buyer (agent, chat or REST)
+  participant A as API (pricing module)
+  participant Q as Approval queue
+  actor Ad as Admin (MFA-verified session)
+
+  B->>A: make_offer on a premium item, e.g. 2 graphics cards
+  A->>A: decideOffer: total discount above the band's approval threshold
+  A->>Q: pricing_approvals row (pending), no new quote issued
+  A-->>B: "I've asked a manager to approve it" (state pending_approval)
+  Ad->>A: GET /api/v1/admin/approvals
+  Ad->>A: POST /api/v1/admin/approvals/{id}/decide {approve, note}
+  alt Approved
+    A->>A: Re-check the price is still above the guarded floor
+    A-->>B: New signed quote at the approved price (state accepted)
+  else Declined, or 24 hours pass
+    A-->>B: Rejected or expired. A still-valid earlier quote can be accepted
+  end
+  A->>A: audit_log: pricing.approval_granted or pricing.approval_declined

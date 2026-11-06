@@ -1,0 +1,51 @@
+flowchart LR
+  shopper(["Shopper"])
+  agent(["Buyer agent<br/>Claude, Cursor, VS Code,<br/>any MCP or A2A client"])
+  admin(["Store admin"])
+
+  subgraph doors["Four doors, one backend"]
+    web["Web storefront and admin<br/>Next.js SSR, JSON-LD, sitemap, llms.txt"]
+    chat["Chat widget<br/>REST + SSE"]
+    mcp["MCP server<br/>POST /mcp"]
+    a2a["A2A endpoint<br/>/a2a + Agent Card"]
+  end
+
+  shopper --> web
+  shopper --> chat
+  admin --> web
+  agent --> mcp
+  agent --> a2a
+
+  subgraph api["apps/api: NestJS on Fastify, modular monolith"]
+    router["Agent router<br/>rules, classifier, small LLM, large LLM, human<br/>may only escalate or deny"]
+    pricing["Pricing policy engine<br/>guarded floor, Boulware ladder,<br/>signed single-use quotes"]
+    commerce["Catalog, search, customization, inventory,<br/>cart, checkout, orders, GST"]
+    pay["PaymentPort<br/>mock, razorpay, youpi-pg (experimental)"]
+    pii["PII vault<br/>per-customer keys, blind indexes,<br/>crypto-shredding"]
+    audit["Audit log and LLM traces<br/>append-only, redacted"]
+  end
+
+  web -->|REST| commerce
+  chat --> router
+  mcp --> router
+  a2a --> router
+  router --> pricing
+  router --> commerce
+  commerce --> pricing
+  commerce --> pay
+  commerce --> pii
+  router --> audit
+
+  router -.-> llm["LlmPort: writes the words only<br/>template (default), Anthropic,<br/>OpenAI-compatible (vLLM)"]
+  router -.-> ai["services/ai (optional)<br/>FastAPI: classifier, embeddings, redaction"]
+
+  subgraph data["Data (lite profile)"]
+    pg[("PostgreSQL<br/>outbox, ltree, pg_trgm, pgvector")]
+    valkey[("Valkey<br/>cache, rate limits, agent quotas")]
+  end
+
+  pricing --> pg
+  commerce --> pg
+  pii --> pg
+  audit --> pg
+  router -.-> valkey

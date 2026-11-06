@@ -1,0 +1,110 @@
+AgentBazaar
+Copyright (c) 2026 Mukul Kathuria
+
+This product is licensed under the MIT License (see LICENSE). It depends on, or runs
+alongside, third-party components that carry their own licences, listed below. Each
+component remains the property of its copyright holders and is used under its licence.
+
+The authoritative, complete list for a given release is the SPDX software bill of
+materials (SBOM) attached to that GitHub release, and the licence gate
+(`pnpm license:check`) enforces the dependency policy described in CONTRIBUTING.md.
+Licences marked "verified" were read from the installed package metadata when this
+file was written; the others were taken from the upstream projects and must be
+re-checked at each release.
+
+-----------------------------------------------------------------------------------
+1. Libraries linked into the TypeScript applications (apps/api, apps/web, packages/*)
+   Licence verified from installed package.json files.
+-----------------------------------------------------------------------------------
+
+NestJS (@nestjs/common, @nestjs/core, @nestjs/platform-fastify)  MIT
+Fastify, @fastify/helmet, @fastify/rate-limit                      MIT
+Next.js                                                            MIT
+React, React DOM                                                   MIT
+TanStack Query (@tanstack/react-query)                             MIT
+React Hook Form, @hookform/resolvers                               MIT
+Zod                                                                MIT
+Drizzle ORM                                                        Apache-2.0
+PGlite (@electric-sql/pglite)                                      Apache-2.0
+  (embeds PostgreSQL compiled to WebAssembly; PostgreSQL License)
+@electric-sql/pglite-pgvector                                      Apache-2.0
+  (packages pgvector; pgvector itself is under the PostgreSQL License)
+node-postgres (pg)                                                 MIT
+Model Context Protocol TypeScript SDK (@modelcontextprotocol/sdk)  MIT
+A2A JavaScript SDK (@a2a-js/sdk)                                   Apache-2.0
+Anthropic TypeScript SDK (@anthropic-ai/sdk)                       Apache-2.0
+jose                                                               MIT
+pino                                                               MIT
+@prometheus-io/client                                              Apache-2.0
+nats.js (nats)                                                     Apache-2.0
+KafkaJS (kafkajs)                                                  MIT
+iovalkey                                                           MIT
+reflect-metadata                                                   Apache-2.0
+RxJS                                                               Apache-2.0
+Tailwind CSS                                                       MIT
+
+-----------------------------------------------------------------------------------
+2. Python libraries used by the optional AI service (services/ai)
+-----------------------------------------------------------------------------------
+
+FastAPI                         MIT            (verified)
+Pydantic, pydantic-core         MIT            (verified)
+Starlette                       BSD-3-Clause   (verified)
+Uvicorn                         BSD-3-Clause   (verified)
+AnyIO                           MIT            (verified)
+h11                             MIT            (verified)
+Optional extras, installed only with `uv sync --extra ml` or `--extra presidio`:
+  Hugging Face Transformers     Apache-2.0
+  sentence-transformers         Apache-2.0
+  Microsoft Presidio Analyzer   MIT
+  (models these libraries download have their own licences: see MODELS.md)
+
+-----------------------------------------------------------------------------------
+3. Services run as separate processes or containers (never linked into our code)
+-----------------------------------------------------------------------------------
+
+PostgreSQL                      PostgreSQL License
+pgvector                        PostgreSQL License
+Valkey                          BSD-3-Clause
+Caddy                           Apache-2.0
+Meilisearch (Community Edition) MIT            (growth profile; check the image's
+                                               edition and licence at release)
+NATS Server                     Apache-2.0     (growth profile)
+OpenBao                         MPL-2.0        (growth and scale profiles)
+Keycloak                        Apache-2.0     (growth profile)
+Apache Kafka                    Apache-2.0     (scale profile)
+OpenSearch                      Apache-2.0     (scale profile)
+Qdrant                          Apache-2.0     (scale profile)
+Prometheus                      Apache-2.0     (observability profile)
+Grafana OSS                     AGPL-3.0       (observability profile; separate
+                                               service only, never linked)
+YouPI-PG                        Not bundled. Optional, experimental external
+                                service reached over REST and webhooks; confirm
+                                its licence before deploying or redistributing it.
+
+-----------------------------------------------------------------------------------
+4. Development and build tools (not distributed with the product)
+   Licence verified from installed package.json files.
+-----------------------------------------------------------------------------------
+
+TypeScript                      Apache-2.0
+Turborepo                       MIT
+tsx                             MIT
+Vitest                          MIT
+fast-check                      MIT
+ESLint, typescript-eslint       MIT
+dependency-cruiser              MIT
+Prettier                        MIT
+Playwright                      Apache-2.0
+axe-core for Playwright         MPL-2.0
+jsdom                           MIT
+Testing Library                 MIT
+
+-----------------------------------------------------------------------------------
+5. Documentation assets
+-----------------------------------------------------------------------------------
+
+docs/assets/demo.gif and docs/assets/social-preview.png are rendered with the
+DejaVu Sans Mono font (Bitstream Vera Fonts licence; DejaVu changes are in the
+public domain). The font is downloaded at render time by scripts/make-demo-gif.py
+from the DejaVu project's GitHub release and is not distributed in this repository.

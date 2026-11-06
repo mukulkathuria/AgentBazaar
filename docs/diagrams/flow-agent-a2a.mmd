@@ -1,0 +1,31 @@
+sequenceDiagram
+  autonumber
+  actor H as Human buyer
+  participant B as Buyer agent (MCP or A2A client)
+  participant M as AgentBazaar /mcp or /a2a
+  participant P as Pricing policy engine
+  participant L as LlmPort (words only)
+  participant C as Checkout page (web)
+
+  H->>B: Find a TKL keyboard under ₹6,000 and get a good price
+  B->>M: search_products {query, max_price_inr}
+  M-->>B: Products, buyer-visible fields only
+  B->>M: request_quote {sku, quantity}
+  M->>P: Ladder from list price, secret floor, band policy
+  P-->>M: Opening price + volume alternatives
+  M->>L: Phrase this outcome (allowed numbers only)
+  L-->>M: Reply, or the template if the number guard trips
+  M-->>B: Signed quote ₹5,499, expires, quote_token
+  loop At most the band's max rounds
+    B->>M: make_offer (MCP) or offer DataPart (A2A)
+    M->>P: decideOffer: never at or below the guarded floor
+    P-->>M: Counter, accept, reject or needs human approval
+    M-->>B: New signed quote, previous one superseded
+  end
+  B->>M: accept_quote {quote_token}
+  M-->>B: Checkout session: price locked, stock reserved
+  B->>M: create_checkout_link {checkout_session_id}
+  M-->>B: Signed checkout URL with expiry
+  B->>H: Deal at ₹5,100. Please confirm and pay
+  H->>C: Open link, confirm address, pay (UPI, card or COD)
+  C-->>H: Order confirmed

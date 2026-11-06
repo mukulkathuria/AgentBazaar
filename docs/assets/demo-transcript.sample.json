@@ -1,0 +1,22 @@
+[
+  { "speaker": "system", "text": "$ pnpm demo" },
+  { "speaker": "system", "text": "AgentBazaar 0.9.0 · profile lite · embedded Postgres (PGlite) · mock payments · template LLM, no keys" },
+  { "speaker": "system", "text": "Seller agent ready. MCP endpoint: http://localhost:4000/mcp" },
+  { "speaker": "buyer", "text": "I need a tenkeyless mechanical keyboard for coding, under ₹6,000." },
+  { "speaker": "tool", "text": "search_products {\"query\":\"mechanical keyboard\",\"max_price_inr\":6000}" },
+  { "speaker": "tool", "text": "→ Thock TK-87 Hot-swap Mechanical Keyboard · THOCK-TK87-RED · ₹5,499 · in stock" },
+  { "speaker": "tool", "text": "request_quote {\"sku\":\"THOCK-TK87-RED\",\"quantity\":1}" },
+  { "speaker": "seller", "text": "1 × Thock TK-87 Hot-swap Mechanical Keyboard: ₹5,499 each (₹5,499 total). This quote is valid until 05:45 pm. Take 3 and I can do ₹5,390 each." },
+  { "speaker": "buyer", "text": "Can you do ₹4,400?" },
+  { "speaker": "seller", "text": "I can do: ₹5,472 each. Take 3 and I can do ₹5,364 each." },
+  { "speaker": "buyer", "text": "I only need one. ₹4,800?" },
+  { "speaker": "seller", "text": "I can do: ₹5,390 each. Take 3 and I can do ₹5,283 each." },
+  { "speaker": "buyer", "text": "Meet me at ₹4,900." },
+  { "speaker": "seller", "text": "I can do: ₹5,253 each. Take 3 and I can do ₹5,148 each." },
+  { "speaker": "buyer", "text": "Last offer: ₹5,100." },
+  { "speaker": "seller", "text": "Deal! 1 × Thock TK-87 Hot-swap Mechanical Keyboard at ₹5,100 each (₹5,100 total). Check out before 05:45 pm." },
+  { "speaker": "tool", "text": "accept_quote → checkout session: price locked, stock reserved" },
+  { "speaker": "tool", "text": "create_checkout_link → http://localhost:3000/checkout/… (expires 05:45 pm)" },
+  { "speaker": "human", "text": "Opens the link, confirms the delivery address and pays with the mock gateway." },
+  { "speaker": "result", "text": "Order AB-1001 paid · ₹5,100 incl. GST (taxable ₹4,322.03 + CGST ₹388.98 + SGST ₹388.99)" }
+]

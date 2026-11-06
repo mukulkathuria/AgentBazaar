@@ -1,0 +1,26 @@
+sequenceDiagram
+  autonumber
+  actor S as Shopper
+  participant W as Web storefront (Next.js)
+  participant A as AgentBazaar API
+  participant G as Payment gateway (mock or Razorpay)
+
+  S->>W: Search, browse, open a product page
+  W->>A: GET /api/v1/products?q=...
+  A-->>W: Results (server-rendered, with JSON-LD)
+  S->>W: Pick a variant, optionally add text or a catalog design
+  W->>A: POST /api/v1/customization/{sku}/validate
+  W->>A: POST /api/v1/carts/{id}/lines
+  S->>W: Checkout
+  W->>A: POST /api/v1/checkout/sessions (Idempotency-Key)
+  A-->>W: Prices locked, stock reserved, session expiry
+  S->>W: Email, delivery address, UPI/card or COD, accept terms
+  W->>A: POST /api/v1/checkout/sessions/{id}/complete
+  A-->>W: Order with GST lines (CGST+SGST or IGST)
+  alt Pay online
+    S->>G: Pay on the gateway-hosted page (card data never reaches us)
+    G->>A: Signed webhook, verified on the raw body, deduplicated by event id
+    A-->>S: Order paid
+  else Cash on delivery
+    A-->>S: Order confirmed as COD (money not yet received)
+  end
