@@ -63,6 +63,8 @@ export const EnvSchema = z.object({
   CLASSIFIER_ADAPTER: z.enum(['rules', 'ai-service']).default('rules'),
   EMBEDDINGS_ADAPTER: z.enum(['hash', 'ai-service']).default('hash'),
   AI_SERVICE_URL: z.url().optional(),
+  /** Bearer token for services/ai when it runs with AI_SERVICE_TOKEN set. */
+  AI_SERVICE_TOKEN: optionalString,
   ROUTER_SHADOW_MODE: bool.default(false),
   SESSION_TOKEN_BUDGET: z.coerce.number().int().min(500).max(1_000_000).default(20_000),
 

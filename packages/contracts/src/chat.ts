@@ -19,6 +19,8 @@ export const ChatReply = z.object({
   intent: Intent,
   products: z.array(ProductSummary),
   negotiation: NegotiationOutcome.nullable(),
+  /** Set when the buyer accepted: a signed link where a human confirms address and pays. */
+  checkoutUrl: z.string().nullable(),
   handoff: z.boolean(),
   tokensRemaining: z.number().int(),
 });

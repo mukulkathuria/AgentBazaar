@@ -13,6 +13,11 @@ async function main(): Promise<void> {
     throw err;
   }
   const running = await createApp(config);
+  if (process.env.SEED_ON_BOOT === 'true') {
+    // Demo containers start empty (embedded database), so they seed the synthetic catalog first.
+    const { seedDemo } = await import('./cli/seed.js');
+    await seedDemo(running, {});
+  }
   await running.app.listen({ port: config.env.PORT, host: config.env.HOST });
   running.infra.logger.info({ profile: config.profile, port: config.env.PORT, adapters: config.adapters }, 'AgentBazaar API listening');
 

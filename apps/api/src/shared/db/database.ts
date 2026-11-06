@@ -29,11 +29,18 @@ export interface Database {
 // int8 fits safely in a JS number for every amount we store (max ₹1 crore in paise).
 pg.types.setTypeParser(pg.types.builtins.INT8, (v) => Number(v));
 const INT8_OID = 20;
+const TIMESTAMPTZ_OID = 1184;
 
 export async function rows<T>(ex: Executor, query: SQL): Promise<T[]> {
-  // Both drivers return `{ rows }`; their result types differ, so we normalise here.
+  // Both drivers return `{ rows, fields }`; their result types differ, so we normalise here.
   const res: unknown = await ex.execute(query);
-  return (res as { rows: T[] }).rows;
+  const { rows: out, fields = [] } = res as { rows: Record<string, unknown>[]; fields?: { name: string; dataTypeID: number }[] };
+  // Drizzle's raw execute leaves timestamptz as text on both drivers; callers get Date, as with the pool.
+  const stamps = fields.filter((f) => f.dataTypeID === TIMESTAMPTZ_OID).map((f) => f.name);
+  for (const r of stamps.length ? out : []) {
+    for (const k of stamps) if (typeof r[k] === 'string') r[k] = new Date(r[k]);
+  }
+  return out as T[];
 }
 
 export async function one<T>(ex: Executor, query: SQL): Promise<T | undefined> {
@@ -56,7 +63,7 @@ export function createPostgresDatabase(opts: PostgresOptions): Database {
     connectionString: opts.url,
     max: opts.poolMax ?? 20,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 10_000,
     statement_timeout: opts.statementTimeoutMs ?? 15_000,
     application_name: opts.applicationName ?? 'agentbazaar-api',
   });

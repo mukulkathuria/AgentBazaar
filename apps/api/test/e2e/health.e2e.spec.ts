@@ -42,6 +42,15 @@ describe('@lite app boot, health and error envelope', () => {
     expect(res.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it('returns the contract error envelope for malformed JSON and unsupported media types', async () => {
+    const bad = await app.inject({ method: 'POST', url: '/api/v1/carts', headers: { 'content-type': 'application/json' }, payload: '{bad json' });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toMatchObject({ error: { code: 'validation_failed' } });
+    const xml = await app.inject({ method: 'POST', url: '/api/v1/carts', headers: { 'content-type': 'application/xml' }, payload: '<a/>' });
+    expect(xml.statusCode).toBe(415);
+    expect(xml.json()).toMatchObject({ error: { code: 'validation_failed' } });
+  });
+
   it('rejects malformed and forged bearer tokens', async () => {
     const malformed = await app.inject({ method: 'GET', url: '/healthz', headers: { authorization: 'Basic abc' } });
     expect(malformed.statusCode).toBe(401);

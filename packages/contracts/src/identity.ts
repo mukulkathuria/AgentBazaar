@@ -87,6 +87,7 @@ export const ConsentView = z.object({
   noticeVersion: z.string(),
   at: z.string(),
 });
+export type ConsentView = z.infer<typeof ConsentView>;
 
 export const MeView = z.object({
   customerToken: z.string(),

@@ -87,6 +87,8 @@ export const CheckoutSessionView = z.object({
   source: z.enum(['cart', 'quote']),
   terms: z.array(z.string()),
   orderId: Uuid.nullable(),
+  /** Capability token for this session (query param `t`). Returned only when the session is created. */
+  token: z.string().optional(),
 });
 export type CheckoutSessionView = z.infer<typeof CheckoutSessionView>;
 
@@ -130,6 +132,8 @@ export const OrderView = z.object({
   invoiceNumber: z.string().nullable(),
   trackingNumber: z.string().nullable(),
   paymentUrl: z.string().nullable(),
+  /** Guest tracking token (query param `t`). Returned only when the order is created. */
+  accessToken: z.string().optional(),
   createdAt: z.string(),
   timeline: z.array(z.object({ status: OrderStatus, at: z.string(), note: z.string().nullable() })),
 });

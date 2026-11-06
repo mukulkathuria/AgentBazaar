@@ -7,6 +7,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { AppConfig } from '@agentbazaar/config';
 import { AppModule } from '../app.module.js';
+import { safeEqual } from '../shared/crypto/primitives.js';
 import { ErrorFilter, toErrorResponse } from '../shared/http/error.filter.js';
 import { NestPinoLogger } from '../shared/observability/logger.js';
 import { createInfra, type Infra, type InfraOverrides } from './infra.js';
@@ -54,11 +55,17 @@ export async function createApp(config: AppConfig, opts: CreateAppOptions = {}):
     contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"], imgSrc: ["'self'", 'data:'] } },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   });
+  const ingestKey = config.env.ANALYTICS_INGEST_KEY;
   await app.register(rateLimit, {
     global: true,
     max: config.env.RATE_LIMIT_PER_MINUTE,
     timeWindow: 60_000,
-    allowList: (req) => req.url === '/healthz' || req.url === '/readyz',
+    // The web server reports every crawler hit from one IP; its ingest key exempts it from the per-IP limit.
+    allowList: (req) => {
+      if (req.url === '/healthz' || req.url === '/readyz') return true;
+      const key = req.headers['x-ingest-key'];
+      return Boolean(ingestKey) && typeof key === 'string' && safeEqual(key, ingestKey!);
+    },
   });
   fastify.addHook('onSend', async (req, reply) => {
     void reply.header('x-request-id', req.id);

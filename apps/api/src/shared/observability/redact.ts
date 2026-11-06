@@ -30,21 +30,22 @@ interface Rule {
 }
 
 // Order matters: longer, more specific patterns run first so they win overlaps.
+// Every pattern can only start at a run boundary, so scanning stays linear (no ReDoS on long input).
 const RULES: Rule[] = [
-  { type: 'EMAIL', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g },
+  { type: 'EMAIL', re: /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g },
   {
     type: 'CARD',
-    re: /\b(?:\d[ -]?){13,19}\b/g,
+    re: /\b\d(?:[ -]?\d){12,18}\b/g,
     accept: (m) => {
       const d = m.replace(/\D/g, '');
       return d.length >= 13 && d.length <= 19 && luhnValid(d);
     },
   },
+  { type: 'PHONE', re: /(?<!\d)(?:\+91[\s-]?|0)?[6-9]\d{4}[\s-]?\d{5}(?!\d)/g },
   { type: 'AADHAAR', re: /\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b/g },
-  { type: 'PHONE', re: /(?:\+91[\s-]?|\b0)?\b[6-9]\d{4}[\s-]?\d{5}\b/g },
   { type: 'PAN', re: /\b[A-Z]{5}\d{4}[A-Z]\b/g },
   { type: 'UPI', re: /\b[A-Za-z0-9._-]{2,256}@(?:ok)?[a-z]{2,64}\b/g },
-  { type: 'PINCODE', re: /\b(?:pin(?:\s?code)?|postal code)\s*[:#-]?\s*[1-9]\d{5}\b/gi },
+  { type: 'PINCODE', re: /\b(?:pin(?:\s?code)?|postal code)\s*(?:[:#-]\s*)?[1-9]\d{5}\b/gi },
 ];
 
 export function findPii(text: string): Finding[] {

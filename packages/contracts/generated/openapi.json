@@ -7977,6 +7977,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "token": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -8558,6 +8561,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "token": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -9642,6 +9648,9 @@
                         "null"
                       ]
                     },
+                    "accessToken": {
+                      "type": "string"
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -10451,6 +10460,9 @@
                         "null"
                       ]
                     },
+                    "accessToken": {
+                      "type": "string"
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -11146,6 +11158,9 @@
                           "null"
                         ]
                       },
+                      "accessToken": {
+                        "type": "string"
+                      },
                       "createdAt": {
                         "type": "string"
                       },
@@ -11836,6 +11851,9 @@
                         "null"
                       ]
                     },
+                    "accessToken": {
+                      "type": "string"
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -12525,6 +12543,9 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "accessToken": {
+                      "type": "string"
                     },
                     "createdAt": {
                       "type": "string"
@@ -18507,6 +18528,12 @@
                         }
                       ]
                     },
+                    "checkoutUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "handoff": {
                       "type": "boolean"
                     },
@@ -18523,6 +18550,7 @@
                     "intent",
                     "products",
                     "negotiation",
+                    "checkoutUrl",
                     "handoff",
                     "tokensRemaining"
                   ],
@@ -26602,6 +26630,9 @@
                         "null"
                       ]
                     },
+                    "accessToken": {
+                      "type": "string"
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -27303,6 +27334,9 @@
                         "null"
                       ]
                     },
+                    "accessToken": {
+                      "type": "string"
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -27982,6 +28016,9 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "accessToken": {
+                      "type": "string"
                     },
                     "createdAt": {
                       "type": "string"
