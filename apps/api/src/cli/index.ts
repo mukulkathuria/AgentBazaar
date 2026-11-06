@@ -98,6 +98,16 @@ async function createAgentClient(running: RunningApp, v: Values): Promise<void> 
   console.log(`client_secret=${c.clientSecret} (shown once)`);
 }
 
+async function migrateDatabase(): Promise<void> {
+  const database = await createDatabase(loadConfig());
+  try {
+    const applied = await migrate(database, loadMigrations(MIGRATIONS_DIR));
+    console.log(applied.length ? `Applied ${applied.join(', ')}` : 'Database is up to date.');
+  } finally {
+    await database.close();
+  }
+}
+
 /** Runs until SIGINT or SIGTERM; the worker drains its running steps, then the app closes. */
 async function runWorkflowWorker(running: RunningApp): Promise<void> {
   const env = running.infra.config.env;
@@ -120,16 +130,8 @@ async function main(argv: string[]): Promise<void> {
     case 'keys':
       for (const [k, v] of Object.entries(generateKeyEnv())) console.log(`${k}=${v}`);
       return;
-    case 'migrate': {
-      const database = await createDatabase(loadConfig());
-      try {
-        const applied = await migrate(database, loadMigrations(MIGRATIONS_DIR));
-        console.log(applied.length ? `Applied ${applied.join(', ')}` : 'Database is up to date.');
-      } finally {
-        await database.close();
-      }
-      return;
-    }
+    case 'migrate':
+      return migrateDatabase();
     case 'seed':
       return withApp((r) => seed(r, values));
     case 'reindex':
