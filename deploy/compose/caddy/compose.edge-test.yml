@@ -34,6 +34,7 @@ services:
       - './crowdsec/acquis.yaml:/etc/crowdsec/acquis.d/caddy.yaml:ro'
       - './crowdsec/agentbazaar-sign-in-bf.yaml:/etc/crowdsec/scenarios/agentbazaar-sign-in-bf.yaml:ro'
       - 'caddy_logs:/var/log/caddy:ro'
+      - 'crowdsec_data:/var/lib/crowdsec/data' # CrowdSec 1.8 refuses to start without it
     healthcheck: { test: ['CMD', 'cscli', 'lapi', 'status'], interval: 5s, timeout: 5s, retries: 60 }
 
   caddy:
@@ -52,4 +53,4 @@ services:
       web: { condition: service_started }
     healthcheck: { test: ['CMD', 'wget', '-qO-', '--header', 'Host: api.shop.test', 'http://127.0.0.1/healthz'], interval: 5s, timeout: 3s, retries: 30 }
 
-volumes: { caddy_logs: {} }
+volumes: { caddy_logs: {}, crowdsec_data: {} }

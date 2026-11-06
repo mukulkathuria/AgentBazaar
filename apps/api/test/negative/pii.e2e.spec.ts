@@ -73,14 +73,15 @@ describe('@lite negative: personal data never leaks, and erasure leaves none beh
     await app.drain();
     expect((await getOrder(app, order)).status).toBe('delivered');
 
-    // Every field of every line, except pino's epoch-millisecond `time` (13 digits that can pass the card check).
+    // Every field of every line, except pino's epoch-millisecond `time` (13 digits that can pass the card check) and
+    // random UUIDs (request, order and audit target ids), whose last group can be 12 digits that pass the Aadhaar check.
     const text = logs
       .join('')
       .split('\n')
       .filter(Boolean)
       .map((line) => {
         const { time: _time, ...entry } = JSON.parse(line) as Record<string, unknown>;
-        return JSON.stringify(entry);
+        return JSON.stringify(entry).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<uuid>');
       })
       .join('\n');
     expect(text).toContain('order email'); // the mailer ran and logged something
