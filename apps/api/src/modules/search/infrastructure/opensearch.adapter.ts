@@ -3,7 +3,7 @@ import type { SearchDocument, SearchPort } from '../application/ports.js';
 import type { EmbeddingsPort } from '../domain/embeddings.js';
 import { MIN_VECTOR_SIMILARITY, reciprocalRankFusion } from '../domain/ranking.js';
 import { type EngineDoc, facetList, fromEngineDoc, toEngineDoc, tookMs } from './engine-doc.js';
-import { JsonHttp, type JsonHttpOptions } from './json-http.js';
+import { JsonHttp, type JsonHttpOptions, WRITE_TIMEOUT_MS } from './json-http.js';
 
 export interface OpenSearchOptions extends JsonHttpOptions {
   url: string;
@@ -22,6 +22,10 @@ interface OsResponse {
 }
 interface QdrantResponse {
   result: { id: string; score: number; payload: EngineDoc }[];
+}
+interface BulkResponse {
+  errors: boolean;
+  items: { index: { error?: { reason?: string } } }[];
 }
 
 const MAPPINGS = {
@@ -67,8 +71,8 @@ const buckets = (b?: { buckets: Bucket[] }) => facetList(Object.fromEntries((b?.
 
 /**
  * Scale profile: OpenSearch for keywords (fuzzy), filters and facets, Qdrant for vectors, fused
- * with Reciprocal Rank Fusion. UNVERIFIED against live engines in this repo's CI: request shapes
- * and response mapping are unit-tested with a fake fetch.
+ * with Reciprocal Rank Fusion. Verified against live engines by apps/api/test/services. Writes are
+ * visible to searches after OpenSearch's next refresh (one second by default).
  */
 export class OpenSearchAdapter implements SearchPort {
   private readonly os: JsonHttp;
@@ -87,16 +91,22 @@ export class OpenSearchAdapter implements SearchPort {
     this.points = `/collections/${opts.collection ?? 'products'}`;
   }
 
-  async upsert(doc: SearchDocument, embedding: readonly number[]): Promise<void> {
+  async upsert(docs: readonly SearchDocument[], embeddings: readonly (readonly number[])[]): Promise<void> {
+    if (!docs.length) return;
     await this.ensure();
-    const body = toEngineDoc(doc);
-    await this.os.request('PUT', `${this.index}/_doc/${encodeURIComponent(doc.productId)}`, body);
-    await this.qdrant.request('PUT', `${this.points}/points?wait=true`, { points: [{ id: doc.productId, vector: embedding, payload: body }] });
+    const bodies = docs.map(toEngineDoc);
+    const bulk = bodies.map((b) => `${JSON.stringify({ index: { _id: b.id } })}\n${JSON.stringify(b)}\n`).join('');
+    // _bulk answers 200 even when some documents fail, so the per-item errors decide.
+    const r = await this.os.request<BulkResponse>('POST', `${this.index}/_bulk`, bulk, [], WRITE_TIMEOUT_MS);
+    const failed = r.items.filter((i) => i.index.error);
+    if (r.errors) throw new Error(`opensearch rejected ${failed.length} of ${docs.length} documents: ${failed[0]?.index.error?.reason}`);
+    const points = bodies.map((payload, i) => ({ id: payload.id, vector: embeddings[i], payload }));
+    await this.qdrant.request('PUT', `${this.points}/points?wait=true`, { points }, [], WRITE_TIMEOUT_MS);
   }
 
   async remove(productId: string): Promise<void> {
-    await this.os.request('DELETE', `${this.index}/_doc/${encodeURIComponent(productId)}`, undefined, [404]);
-    await this.qdrant.request('POST', `${this.points}/points/delete?wait=true`, { points: [productId] });
+    await this.os.request('DELETE', `${this.index}/_doc/${encodeURIComponent(productId)}`, undefined, [404], WRITE_TIMEOUT_MS);
+    await this.qdrant.request('POST', `${this.points}/points/delete?wait=true`, { points: [productId] }, [], WRITE_TIMEOUT_MS);
   }
 
   async count(): Promise<number> {
@@ -158,8 +168,8 @@ export class OpenSearchAdapter implements SearchPort {
   /** Creates the index and collection once; "already exists" answers (400/409) count as success. */
   private ensure(): Promise<unknown> {
     this.ready ??= Promise.all([
-      this.os.request('PUT', this.index, { mappings: MAPPINGS }, [400]),
-      this.qdrant.request('PUT', this.points, { vectors: { size: this.embeddings.dim, distance: 'Cosine' } }, [400, 409]),
+      this.os.request('PUT', this.index, { mappings: MAPPINGS }, [400], WRITE_TIMEOUT_MS),
+      this.qdrant.request('PUT', this.points, { vectors: { size: this.embeddings.dim, distance: 'Cosine' } }, [400, 409], WRITE_TIMEOUT_MS),
     ]).catch((err: unknown) => {
       this.ready = undefined;
       throw err;

@@ -112,9 +112,10 @@ async function main(argv: string[]): Promise<void> {
     case 'seed':
       return withApp((r) => seed(r, values));
     case 'reindex':
-      return withApp(async (r) =>
-        console.log(`Indexed ${await r.app.get(SearchIndexer).reindexAll()} products.`),
-      );
+      return withApp(async (r) => {
+        const n = await r.app.get(SearchIndexer).reindexAll(undefined, (done) => console.log(`... ${done} indexed`));
+        console.log(`Indexed ${n} products.`);
+      });
     case 'create-admin':
       return withApp((r) => createAdmin(r, values));
     case 'create-agent-client':

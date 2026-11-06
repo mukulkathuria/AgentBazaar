@@ -10,8 +10,12 @@ export type SearchDocument = SearchSource;
  * chosen by `config.adapters.search`.
  */
 export interface SearchPort {
-  /** `ex` lets the Postgres adapter write inside the caller's transaction; HTTP engines ignore it. */
-  upsert(doc: SearchDocument, embedding: readonly number[], ex?: Executor): Promise<void>;
+  /**
+   * Writes documents with their vectors (same order) in one engine request; callers keep batches to
+   * a page (at most 1,000). `ex` lets the Postgres adapter write inside the caller's transaction;
+   * HTTP engines ignore it.
+   */
+  upsert(docs: readonly SearchDocument[], embeddings: readonly (readonly number[])[], ex?: Executor): Promise<void>;
   remove(productId: string, ex?: Executor): Promise<void>;
   search(query: SearchQuery): Promise<SearchResult>;
   count(): Promise<number>;

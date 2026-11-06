@@ -260,32 +260,52 @@ export class CatalogService {
   }
 
   async searchSource(productId: string, ex: Executor = this.db): Promise<SearchSource | null> {
-    const p = await one<ProductRow>(ex, sql`${PRODUCT_SELECT} WHERE p.id = ${productId} AND p.status = 'active'`);
-    if (!p) return null;
-    const variants = await this.variantsOf([p.id], ex);
-    if (!variants.length) return null;
-    const avail = await this.inventory.availability(
-      variants.map((v) => v.id),
+    return (await this.searchSources([productId], ex))[0] ?? null;
+  }
+
+  /** Search documents for a page of products in three queries; inactive, unknown and variant-less ones are left out. */
+  async searchSources(productIds: readonly string[], ex: Executor = this.db): Promise<SearchSource[]> {
+    if (!productIds.length) return [];
+    const ps = await rows<ProductRow>(
+      ex,
+      sql`${PRODUCT_SELECT} WHERE p.id = ANY(${pgArray(productIds, 'uuid')}) AND p.status = 'active' ORDER BY p.id`,
+    );
+    const all = await this.variantsOf(
+      ps.map((p) => p.id),
       ex,
     );
-    const prices = variants.map((v) => v.price_paise);
-    return {
-      productId: p.id,
-      slug: p.slug,
-      name: p.name,
-      brand: p.brand,
-      categoryPath: p.category_path,
-      categoryName: p.category_name,
-      description: p.description,
-      skus: variants.map((v) => v.sku),
-      defaultSku: variants[0]!.sku,
-      band: p.band,
-      minPricePaise: Math.min(...prices),
-      maxPricePaise: Math.max(...prices),
-      inStock: variants.some((v) => (avail.get(v.id) ?? 0) > 0),
-      image: p.images[0] ?? null,
-      customizable: p.customization_schema_id !== null,
-    };
+    const avail = await this.inventory.availability(
+      all.map((v) => v.id),
+      ex,
+    );
+    const byProduct = new Map<string, VariantRow[]>();
+    for (const v of all) {
+      const list = byProduct.get(v.product_id);
+      if (list) list.push(v);
+      else byProduct.set(v.product_id, [v]);
+    }
+    return ps.flatMap((p) => {
+      const variants = byProduct.get(p.id);
+      if (!variants) return [];
+      const prices = variants.map((v) => v.price_paise);
+      return {
+        productId: p.id,
+        slug: p.slug,
+        name: p.name,
+        brand: p.brand,
+        categoryPath: p.category_path,
+        categoryName: p.category_name,
+        description: p.description,
+        skus: variants.map((v) => v.sku),
+        defaultSku: variants[0]!.sku,
+        band: p.band,
+        minPricePaise: Math.min(...prices),
+        maxPricePaise: Math.max(...prices),
+        inStock: variants.some((v) => (avail.get(v.id) ?? 0) > 0),
+        image: p.images[0] ?? null,
+        customizable: p.customization_schema_id !== null,
+      };
+    });
   }
 
   async productIdForVariant(variantId: string, ex: Executor = this.db): Promise<string | null> {

@@ -3,7 +3,7 @@ import type { Executor } from '../../../shared/db/database.js';
 import type { OutboxEvent, Subscription } from '../../../shared/outbox/outbox.js';
 import { CatalogService } from '../../catalog/index.js';
 import type { EmbeddingsPort } from '../domain/embeddings.js';
-import { documentText, EMBEDDINGS, SEARCH_PORT, type SearchDocument, type SearchPort } from './ports.js';
+import { documentText, EMBEDDINGS, SEARCH_PORT, type SearchPort } from './ports.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const uuidOrNull = (v: unknown): string | null => (typeof v === 'string' && UUID.test(v) ? v : null);
@@ -40,24 +40,23 @@ export class SearchIndexer {
       await this.port.remove(productId, ex);
       return false;
     }
-    const [embedding] = await this.embeddings.embed([documentText(doc)]);
-    await this.port.upsert(doc, embedding!, ex);
+    await this.port.upsert([doc], await this.embeddings.embed([documentText(doc)]), ex);
     return true;
   }
 
   /**
-   * Rebuilds the whole index page by page (used by `cli reindex`). Returns the documents written.
-   * A page is read concurrently, so keep it near the pool size or waiters hit the acquire timeout.
+   * Rebuilds the whole index page by page (used by `cli reindex`): three catalog queries and one
+   * engine write per page, so memory stays bounded at any catalog size. Returns the documents written.
    */
-  async reindexAll(pageSize = 25): Promise<number> {
+  async reindexAll(pageSize = 500, onProgress?: (indexed: number) => void): Promise<number> {
     let indexed = 0;
     for (let after: string | null = null; ; ) {
       const ids = await this.catalog.productIdsPage(after, pageSize);
       if (!ids.length) return indexed;
-      const docs = (await Promise.all(ids.map((id) => this.catalog.searchSource(id)))).filter((d): d is SearchDocument => d !== null);
-      const vectors = await this.embeddings.embed(docs.map(documentText));
-      await Promise.all(docs.map((doc, i) => this.port.upsert(doc, vectors[i]!)));
+      const docs = await this.catalog.searchSources(ids);
+      await this.port.upsert(docs, await this.embeddings.embed(docs.map(documentText)));
       indexed += docs.length;
+      onProgress?.(indexed);
       after = ids[ids.length - 1]!;
     }
   }

@@ -4,7 +4,7 @@ import type { SearchDocument } from '../application/ports.js';
 import { hashEmbed, HashEmbeddings } from '../domain/embeddings.js';
 import { AiServiceEmbeddings } from './ai-service-embeddings.js';
 import { toEngineDoc } from './engine-doc.js';
-import type { FetchLike } from './json-http.js';
+import { JsonHttp, type FetchLike } from './json-http.js';
 import { MeilisearchAdapter } from './meilisearch.adapter.js';
 import { OpenSearchAdapter } from './opensearch.adapter.js';
 
@@ -19,9 +19,17 @@ interface Call {
 function fakeFetch(respond: (url: string, method: string, body: unknown) => { status?: number; json?: unknown } = () => ({})) {
   const calls: Call[] = [];
   const fetch: FetchLike = async (url, init) => {
-    const body: unknown = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
+    const headers = init.headers as Record<string, string>;
+    const text = typeof init.body === 'string' ? init.body : undefined;
+    // NDJSON (bulk) bodies are recorded as the list of their lines.
+    const body: unknown =
+      text === undefined
+        ? undefined
+        : headers['content-type'] === 'application/x-ndjson'
+          ? text.trimEnd().split('\n').map((line) => JSON.parse(line) as unknown)
+          : JSON.parse(text);
     const method = init.method ?? 'GET';
-    calls.push({ url, method, body, headers: init.headers as Record<string, string> });
+    calls.push({ url, method, body, headers });
     const r = respond(url, method, body);
     return new Response(r.json === undefined ? null : JSON.stringify(r.json), { status: r.status ?? 200 });
   };
@@ -78,10 +86,12 @@ describe('@growth Meilisearch adapter (fake fetch)', () => {
     return { ...f, adapter: new MeilisearchAdapter({ url: 'http://meili:7700/', apiKey: 'k3y', fetch: f.fetch }, embeddings) };
   };
 
-  it('configures the index once, then writes documents with their vector', async () => {
+  it('configures the index once, then writes each batch of documents with their vectors in one request', async () => {
     const { adapter, calls } = make();
-    await adapter.upsert(doc, hashEmbed('x'));
-    await adapter.upsert(doc, hashEmbed('x'));
+    await adapter.upsert([], []);
+    expect(calls).toHaveLength(0);
+    await adapter.upsert([doc], [hashEmbed('x')]);
+    await adapter.upsert([doc, { ...doc, productId: 'aaaaaaaa-0000-4000-8000-000000000000' }], [hashEmbed('x'), hashEmbed('y')]);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       'PATCH http://meili:7700/indexes/products/settings',
       'POST http://meili:7700/indexes/products/documents?primaryKey=id',
@@ -89,7 +99,9 @@ describe('@growth Meilisearch adapter (fake fetch)', () => {
     ]);
     expect(calls[0]!.headers.authorization).toBe('Bearer k3y');
     expect(calls[0]!.body).toMatchObject({
-      filterableAttributes: ['category_paths', 'brand_lc', 'min_price_paise', 'max_price_paise', 'in_stock'],
+      // Facet attributes must be filterable too, or Meilisearch rejects every search.
+      filterableAttributes: ['category_paths', 'brand_lc', 'min_price_paise', 'max_price_paise', 'in_stock', 'brand', 'category_top'],
+      pagination: { maxTotalHits: 5050 },
       embedders: { default: { source: 'userProvided', dimensions: 256 } },
     });
     const [written] = calls[1]!.body as Record<string, unknown>[];
@@ -100,29 +112,29 @@ describe('@growth Meilisearch adapter (fake fetch)', () => {
       category_top: 'electronics',
     });
     expect((written!._vectors as { default: number[] }).default).toHaveLength(256);
+    expect((calls[2]!.body as { _vectors: { default: number[] } }[]).map((d) => d._vectors.default)).toEqual([hashEmbed('x'), hashEmbed('y')]);
   });
 
-  it('runs a filtered hybrid search and maps hits, totals and facets', async () => {
+  it('runs a filtered hybrid search with keyword-only totals and facets in one multi-search', async () => {
     const { adapter, calls } = make(() => ({
-      json: { hits: [engineDoc], estimatedTotalHits: 7, facetDistribution: { brand: { Keyvo: 2, Thock: 5 }, category_top: { electronics: 7 } } },
+      json: { results: [{ hits: [engineDoc] }, { hits: [], facetDistribution: { brand: { Keyvo: 2, Thock: 5 }, category_top: { electronics: 7 } } }] },
     }));
     const r = await adapter.search(filtered);
-    expect(calls[0]!.url).toBe('http://meili:7700/indexes/products/search');
-    expect(calls[0]!.body).toMatchObject({
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe('http://meili:7700/multi-search');
+    const filter = ['category_paths = "electronics"', 'brand_lc = "thock"', 'max_price_paise >= 100', 'min_price_paise <= 600000', 'in_stock = true'];
+    const [page, counts] = (calls[0]!.body as { queries: Record<string, unknown>[] }).queries;
+    expect(page).toMatchObject({
+      indexUid: 'products',
       q: 'keyboard',
-      filter: [
-        'category_paths = "electronics"',
-        'brand_lc = "thock"',
-        'max_price_paise >= 100',
-        'min_price_paise <= 600000',
-        'in_stock = true',
-      ],
-      facets: ['brand', 'category_top'],
+      filter,
       limit: 5,
       offset: 0,
       hybrid: { embedder: 'default', semanticRatio: 0.5 },
+      rankingScoreThreshold: 0.65,
     });
-    expect((calls[0]!.body as { vector: number[] }).vector).toEqual(hashEmbed('keyboard'));
+    expect(page!.vector).toEqual(hashEmbed('keyboard'));
+    expect(counts).toEqual({ indexUid: 'products', q: 'keyboard', filter, facets: ['brand', 'category_top'], limit: 0 });
     expect(r.items).toEqual([summary]);
     expect(r.total).toBe(7);
     expect(r.facets).toEqual({
@@ -134,17 +146,23 @@ describe('@growth Meilisearch adapter (fake fetch)', () => {
     });
   });
 
+  it('never reports fewer results than it returned (vector-only hits have no keyword count)', async () => {
+    const { adapter } = make(() => ({ json: { results: [{ hits: [engineDoc, engineDoc] }, { hits: [] }] } }));
+    const r = await adapter.search(SearchQuery.parse({ q: 'keybaord', offset: 12 }));
+    expect(r).toMatchObject({ total: 14, facets: { brands: [], categories: [] } });
+  });
+
   it('browses by name without vectors and escapes quotes in filter values', async () => {
-    const { adapter, calls } = make(() => ({ json: { hits: [], estimatedTotalHits: 0 } }));
-    await adapter.search(SearchQuery.parse({ brand: 'Bob "The" \\ Brand' }));
+    const { adapter, calls } = make(() => ({ json: { results: [{ hits: [] }, { hits: [] }] } }));
+    const r = await adapter.search(SearchQuery.parse({ brand: 'Bob "The" \\ Brand' }));
+    const filter = ['brand_lc = "bob \\"the\\" \\\\ brand"'];
     expect(calls[0]!.body).toEqual({
-      q: '',
-      filter: ['brand_lc = "bob \\"the\\" \\\\ brand"'],
-      facets: ['brand', 'category_top'],
-      limit: 12,
-      offset: 0,
-      sort: ['name:asc'],
+      queries: [
+        { indexUid: 'products', q: '', filter, limit: 12, offset: 0, sort: ['name:asc'] },
+        { indexUid: 'products', q: '', filter, facets: ['brand', 'category_top'], limit: 0 },
+      ],
     });
+    expect(r.total).toBe(0);
   });
 
   it('turns engine errors into 503s and opens the circuit after repeated failures', async () => {
@@ -164,20 +182,43 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
     return { ...f, adapter };
   };
 
-  it('creates the index and collection once, then writes the document to both engines', async () => {
-    const { adapter, calls } = make((url, method) => (method === 'PUT' && url === 'http://os:9200/products' ? { status: 400 } : {}));
-    await adapter.upsert(doc, hashEmbed('x'));
-    await adapter.upsert(doc, hashEmbed('x'));
+  const bulkOk = { json: { errors: false, items: [{ index: { status: 201 } }] } };
+
+  it('creates the index and collection once, then writes each batch to both engines in one request each', async () => {
+    const { adapter, calls } = make((url, method) =>
+      method === 'PUT' && url === 'http://os:9200/products' ? { status: 400 } : url.endsWith('_bulk') ? bulkOk : {},
+    );
+    await adapter.upsert([], []);
+    expect(calls).toHaveLength(0);
+    await adapter.upsert([doc], [hashEmbed('x')]);
+    await adapter.upsert([doc, { ...doc, productId: other.id }], [hashEmbed('x'), hashEmbed('y')]);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       'PUT http://os:9200/products',
       'PUT http://qdrant:6333/collections/products',
-      `PUT http://os:9200/products/_doc/${doc.productId}`,
+      'POST http://os:9200/products/_bulk',
       'PUT http://qdrant:6333/collections/products/points?wait=true',
-      `PUT http://os:9200/products/_doc/${doc.productId}`,
+      'POST http://os:9200/products/_bulk',
       'PUT http://qdrant:6333/collections/products/points?wait=true',
     ]);
     expect(calls[1]!.body).toEqual({ vectors: { size: 256, distance: 'Cosine' } });
+    expect(calls[2]!.headers['content-type']).toBe('application/x-ndjson');
+    expect(calls[2]!.body).toEqual([{ index: { _id: doc.productId } }, engineDoc]);
     expect(calls[3]!.body).toMatchObject({ points: [{ id: doc.productId, payload: { brand_lc: 'thock' } }] });
+    expect((calls[4]!.body as unknown[]).filter((_, i) => i % 2 === 0)).toEqual([{ index: { _id: doc.productId } }, { index: { _id: other.id } }]);
+    expect((calls[5]!.body as { points: { id: string; vector: number[] }[] }).points.map((p) => [p.id, p.vector])).toEqual([
+      [doc.productId, hashEmbed('x')],
+      [other.id, hashEmbed('y')],
+    ]);
+  });
+
+  it('fails the batch, before touching Qdrant, when OpenSearch rejects a document', async () => {
+    const { adapter, calls } = make((url) =>
+      url.endsWith('_bulk')
+        ? { json: { errors: true, items: [{ index: { status: 201 } }, { index: { status: 400, error: { reason: 'mapper_parsing_exception' } } }] } }
+        : {},
+    );
+    await expect(adapter.upsert([doc, doc], [hashEmbed('x'), hashEmbed('x')])).rejects.toThrow(/rejected 1 of 2 documents: mapper_parsing_exception/);
+    expect(calls.some((c) => c.url.endsWith('/points?wait=true'))).toBe(false);
   });
 
   it('fuses keyword and vector rankings with RRF and maps facets', async () => {
@@ -241,6 +282,20 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
       'POST http://qdrant:6333/collections/products/points/delete?wait=true',
     ]);
     expect(calls[1]!.body).toEqual({ points: [doc.productId] });
+  });
+});
+
+describe('@lite JSON over HTTP', () => {
+  const slow: FetchLike = (_url, init) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => resolve(new Response('{"ok":true}')), 60);
+      init.signal?.addEventListener('abort', () => (clearTimeout(timer), reject(new Error('aborted'))));
+    });
+
+  it('gives up at the default timeout unless the call allows longer (index creation, bulk writes)', async () => {
+    const http = new JsonHttp('engine', 'http://engine', { fetch: slow, timeoutMs: 10 });
+    await expect(http.request('GET', '/')).rejects.toThrow(/Timed out after 10 ms/);
+    await expect(http.request('GET', '/', undefined, [], 1000)).resolves.toEqual({ ok: true });
   });
 });
 

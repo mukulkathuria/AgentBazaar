@@ -54,13 +54,17 @@ export class PgSearchAdapter implements SearchPort {
     private readonly embeddings: EmbeddingsPort,
   ) {}
 
-  async upsert(doc: SearchDocument, embedding: readonly number[], ex: Executor = this.db): Promise<void> {
+  async upsert(docs: readonly SearchDocument[], embeddings: readonly (readonly number[])[], ex: Executor = this.db): Promise<void> {
+    if (!docs.length) return;
+    const values = docs.map(
+      (doc, i) => sql`(${doc.productId}, ${doc.slug}, ${doc.name}, ${doc.brand}, ${doc.categoryPath}::ltree, ${doc.categoryName},
+        ${doc.description}, ${doc.skus.join(' ')}, ${doc.defaultSku}, ${doc.band}, ${doc.minPricePaise}, ${doc.maxPricePaise},
+        ${doc.inStock}, ${doc.image}, ${doc.customizable}, ${vectorParam(embeddings[i] ?? [])})`,
+    );
     await ex.execute(sql`
       INSERT INTO search_documents (product_id, slug, name, brand, category_path, category_name, description, sku_text, default_sku,
                                     band, min_price_paise, max_price_paise, in_stock, image, customizable, embedding)
-      VALUES (${doc.productId}, ${doc.slug}, ${doc.name}, ${doc.brand}, ${doc.categoryPath}::ltree, ${doc.categoryName},
-              ${doc.description}, ${doc.skus.join(' ')}, ${doc.defaultSku}, ${doc.band}, ${doc.minPricePaise}, ${doc.maxPricePaise},
-              ${doc.inStock}, ${doc.image}, ${doc.customizable}, ${vectorParam(embedding)})
+      VALUES ${sql.join(values, sql`, `)}
       ON CONFLICT (product_id) DO UPDATE SET slug = EXCLUDED.slug, name = EXCLUDED.name, brand = EXCLUDED.brand,
         category_path = EXCLUDED.category_path, category_name = EXCLUDED.category_name, description = EXCLUDED.description,
         sku_text = EXCLUDED.sku_text, default_sku = EXCLUDED.default_sku, band = EXCLUDED.band,
