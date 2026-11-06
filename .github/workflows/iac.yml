@@ -43,6 +43,18 @@ jobs:
         run: tofu validate
       - name: Test
         run: tofu test
+      # OPA policies on a real plan: `tofu test -json -verbose` prints the plan it made against the mocked providers.
+      - name: OPA policies on the plan (conftest)
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          curl -fsSLo /tmp/conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/v0.71.1/conftest_0.71.1_Linux_x86_64.tar.gz
+          echo "c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985  /tmp/conftest.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/conftest.tar.gz -C /tmp conftest
+          tofu test -json -verbose -filter="tests/$PROFILE.tftest.hcl" > /tmp/test.jsonl
+          jq -c 'select(.type == "test_plan" and .["@testrun"] == "plans_with_defaults") | .test_plan' /tmp/test.jsonl > /tmp/plan.json
+          test -s /tmp/plan.json
+          /tmp/conftest test --policy ../../../policies/terraform /tmp/plan.json
 
   lint:
     name: Format + TFLint
@@ -105,4 +117,15 @@ jobs:
             helm lint . -f "$values"
             helm template agentbazaar . -f "$values" > /dev/null
             echo "::endgroup::"
+          done
+      - name: OPA policies on the rendered chart (conftest)
+        run: |
+          curl -fsSLo /tmp/conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/v0.71.1/conftest_0.71.1_Linux_x86_64.tar.gz
+          echo "c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985  /tmp/conftest.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/conftest.tar.gz -C /tmp conftest
+          /tmp/conftest verify --policy ../../policies/kubernetes
+          /tmp/conftest verify --policy ../../policies/terraform
+          for values in values.yaml values-growth.yaml values-scale.yaml; do
+            helm template agentbazaar . -f "$values" > "/tmp/rendered-$values"
+            /tmp/conftest test --combine --policy ../../policies/kubernetes "/tmp/rendered-$values"
           done
