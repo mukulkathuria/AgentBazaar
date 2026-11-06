@@ -38,6 +38,13 @@ describe('@lite order notifications', () => {
       orderNumber: 'AB-1002',
       customerToken: 'cus_xyz',
     });
-    expect(findPii(lines.join('\n'))).toEqual([]);
+    // Every field except pino's epoch-millisecond `time` (13 digits that can pass the card check).
+    const text = lines
+      .map((line) => {
+        const { time: _time, ...rest } = JSON.parse(line) as Record<string, unknown>;
+        return JSON.stringify(rest);
+      })
+      .join('\n');
+    expect(findPii(text)).toEqual([]);
   });
 });
