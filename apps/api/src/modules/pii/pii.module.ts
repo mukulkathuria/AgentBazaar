@@ -14,7 +14,7 @@ import { OpenBaoKeyWrapper } from './infrastructure/openbao-wrapper.js';
       inject: [CONFIG, KEYS],
       useFactory: (config: AppConfig, keys: KeyRing) =>
         config.adapters.secrets === 'openbao'
-          ? new OpenBaoKeyWrapper(config.env.OPENBAO_ADDR!, config.env.OPENBAO_TOKEN!, config.env.OPENBAO_TRANSIT_KEY)
+          ? new OpenBaoKeyWrapper(config.env.OPENBAO_ADDR!, config.env.OPENBAO_TOKEN!, config.env.OPENBAO_TRANSIT_KEY, config.env.OPENBAO_TRANSIT_MOUNT)
           : new LocalKeyWrapper(keys.piiMasterKey, keys.piiKeyId),
     },
   ],

@@ -8,6 +8,7 @@ import { AccountService, AgentClientService } from '../modules/identity/index.js
 import { SearchIndexer } from '../modules/search/index.js';
 import { generateKeyEnv } from '../shared/crypto/keyring.js';
 import { loadMigrations, migrate } from '../shared/db/migrator.js';
+import { piiRewrap } from './pii-rewrap.js';
 import { seedDemo } from './seed.js';
 
 const USAGE = `Usage: pnpm --filter @agentbazaar/api cli <command> [options]
@@ -18,7 +19,9 @@ const USAGE = `Usage: pnpm --filter @agentbazaar/api cli <command> [options]
   reindex                                      Rebuild the search index
   keys                                         Print fresh secrets as .env lines
   create-admin --email E --password P [--name N]
-  create-agent-client --name N [--scopes "catalog:read quote:create order:create"] [--quota 60]`;
+  create-agent-client --name N [--scopes "catalog:read quote:create order:create"] [--quota 60]
+  pii rewrap [--batch-size 100]                Move customer data keys from PII_MASTER_KEY to OpenBao Transit
+                                               (lite to growth), and re-wrap them after a Transit key rotation`;
 
 const OPTIONS = {
   products: { type: 'string' },
@@ -29,6 +32,7 @@ const OPTIONS = {
   name: { type: 'string' },
   scopes: { type: 'string' },
   quota: { type: 'string' },
+  'batch-size': { type: 'string' },
 } as const;
 
 type Values = ReturnType<typeof parseArgs<{ options: typeof OPTIONS }>>['values'];
@@ -93,7 +97,8 @@ async function createAgentClient(running: RunningApp, v: Values): Promise<void> 
 }
 
 async function main(argv: string[]): Promise<void> {
-  const [command, ...rest] = argv;
+  // `pii rewrap` is the one two-word command.
+  const [command, ...rest] = argv[0] === 'pii' ? [`pii ${argv[1] ?? ''}`, ...argv.slice(2)] : argv;
   const { values } = parseArgs({ args: rest, options: OPTIONS, strict: true });
   switch (command) {
     case 'keys':
@@ -120,6 +125,11 @@ async function main(argv: string[]): Promise<void> {
       return withApp((r) => createAdmin(r, values));
     case 'create-agent-client':
       return withApp((r) => createAgentClient(r, values));
+    case 'pii rewrap': {
+      const batch = z.coerce.number().int().min(1).max(10_000).parse(values['batch-size'] ?? 100);
+      process.exitCode = await piiRewrap(loadConfig(), batch);
+      return;
+    }
     default:
       console.log(USAGE);
       if (command && command !== 'help') process.exitCode = 64; // EX_USAGE

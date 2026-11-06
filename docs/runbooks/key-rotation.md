@@ -17,7 +17,7 @@ Rotate on a schedule you choose ([ROTATION POLICY]) and **immediately** when a k
 | `JWT_PRIVATE_KEY` | Ed25519 (EdDSA) signature on access tokens from the built-in issuer, 15-minute lifetime | Every access token is rejected at once: treat it as a forced sign-out for people and agents | Yes: replace and restart |
 | `PII_BLIND_INDEX_KEY` | HMAC blind indexes for email and phone (`pii.customers.email_bidx`, `phone_bidx`, `users.email_bidx`) | Sign-in and customer lookup fail until every index is recomputed | **No.** Needs a re-index tool (planned) |
 | `PII_MASTER_KEY` (lite) | Wraps each customer's data key with AES-256-GCM; the key id (first 12 hex characters of its SHA-256) is bound into the wrapping | Every customer's wrapped key must be re-wrapped, or all personal data becomes unreadable | **No.** Needs a re-wrap tool (planned) |
-| OpenBao Transit key (growth/scale) | Same role as `PII_MASTER_KEY`, via Transit with derived keys (context = customer token) | None for reads: Transit keeps old key versions for decryption | Yes in OpenBao; a re-wrap job is planned |
+| OpenBao Transit key (growth/scale) | Same role as `PII_MASTER_KEY`, via Transit with derived keys (context = customer token) | None for reads: Transit keeps old key versions for decryption | Yes: rotate in OpenBao, then `cli pii rewrap` |
 
 Missing keys are generated at random on start outside production, with a warning that quotes, sessions and
 encrypted PII will not survive a restart. With `NODE_ENV=production` (and not `DEMO_MODE`) the API refuses to start
@@ -70,9 +70,23 @@ bao read transit/keys/agentbazaar-pii                 # check latest_version and
 ```
 
 New customers get data keys wrapped with the new version. Existing wrapped keys keep working. To retire an old
-version, every stored `pii.customers.wrapped_dek` must first be rewrapped through `transit/rewrap` (with the
-customer token as context); a job for this is **planned**. Only after it has run, raise
+version, re-wrap every stored data key through `transit/rewrap` (the data keys never leave OpenBao). The API can
+keep running; the command works in batches of 100 rows, one transaction each, and can be stopped and re-run:
+
+```bash
+pnpm --filter @agentbazaar/api cli pii rewrap                          # Compose / a checkout
+kubectl -n agentbazaar exec deploy/agentbazaar-api -- node dist/cli/index.js pii rewrap   # Kubernetes
+```
+
+It needs `PII_MASTER_KEY`, `OPENBAO_ADDR` and `OPENBAO_TOKEN` (plus `OPENBAO_TRANSIT_KEY` and
+`OPENBAO_TRANSIT_MOUNT` if not the defaults) and exits 0 once every data key is on the latest version. Then raise
 `min_decryption_version`, and remember that backups taken before the rewrap still need the old version.
+
+**Moving from lite to growth.** The same command moves every data key from `PII_MASTER_KEY` to the Transit key
+(each one is read back from OpenBao before the row is updated; field ciphertext is never touched). Run it while
+the API still uses `SECRETS_ADAPTER=env` (or is stopped), repeat until it exits 0, and only then switch to
+`PROFILE=growth` / `SECRETS_ADAPTER=openbao`: the OpenBao wrapper cannot open data keys still wrapped by the env
+master key.
 
 ## Procedure: `PII_MASTER_KEY` (lite) — planned tooling
 

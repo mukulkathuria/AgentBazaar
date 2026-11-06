@@ -45,6 +45,7 @@ export const EnvSchema = z.object({
   OPENBAO_ADDR: z.url().optional(),
   OPENBAO_TOKEN: optionalString,
   OPENBAO_TRANSIT_KEY: z.string().default('agentbazaar-pii'),
+  OPENBAO_TRANSIT_MOUNT: z.string().default('transit'),
   IDENTITY_PROVIDER: z.enum(['builtin', 'oidc']).default('builtin'),
   OIDC_ISSUER_URL: z.url().optional(),
   OIDC_AUDIENCE: z.string().default('agentbazaar-api'),
