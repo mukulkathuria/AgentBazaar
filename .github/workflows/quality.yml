@@ -6,7 +6,7 @@ name: Quality
 #     domain and application code (nightly, or on demand)
 on:
   push:
-    branches: [main]
+    branches: [main, t2-mutation-trial]
   pull_request:
   schedule:
     - cron: '30 22 * * *' # 04:00 IST, after the security and stack runs
@@ -114,7 +114,7 @@ jobs:
 
   mutation-full:
     name: Mutation gate (all domain and application code, 70%)
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.full-mutation)
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.full-mutation) || github.ref == 'refs/heads/t2-mutation-trial'
     runs-on: ubuntu-latest
     timeout-minutes: 345
     steps:
