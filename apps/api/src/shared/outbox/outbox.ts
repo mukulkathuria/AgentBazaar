@@ -56,12 +56,12 @@ export async function runIdempotent(db: Executor, consumer: string, event: Outbo
   });
 }
 
-/** An aggregate's events on a topic that the relay has not published yet (pending rows are few and indexed). */
+/** An aggregate's events on a topic that the relay has not published yet (outbox_pending_aggregate_idx). */
 export async function pendingEvents(db: Executor, topic: string, aggregateId: string): Promise<OutboxEvent[]> {
   const found = await rows<Row>(
     db,
-    sql`SELECT id, topic, aggregate_id, payload, created_at, attempts FROM outbox_events
-        WHERE published_at IS NULL AND topic = ${topic} AND aggregate_id = ${aggregateId} ORDER BY created_at, id`,
+    sql`SELECT id, topic, aggregate_id, payload, created_at, attempts, seq FROM outbox_events
+        WHERE published_at IS NULL AND aggregate_id = ${aggregateId} AND topic = ${topic} ORDER BY seq`,
   );
   return found.map(toEvent);
 }
