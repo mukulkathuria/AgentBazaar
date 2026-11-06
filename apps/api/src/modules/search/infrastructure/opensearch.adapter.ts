@@ -28,22 +28,35 @@ interface BulkResponse {
   items: { index: { error?: { reason?: string } } }[];
 }
 
-const MAPPINGS = {
-  properties: {
-    name: { type: 'text', fields: { keyword: { type: 'keyword' } } },
-    brand: { type: 'keyword' },
-    brand_lc: { type: 'keyword' },
-    category_path: { type: 'keyword' },
-    category_paths: { type: 'keyword' },
-    category_top: { type: 'keyword' },
-    category_name: { type: 'text' },
-    description: { type: 'text' },
-    skus: { type: 'text' },
-    min_price_paise: { type: 'long' },
-    max_price_paise: { type: 'long' },
-    in_stock: { type: 'boolean' },
+const INDEX = {
+  // A SKU is one lower-case token: split into parts, "CACAOL-CHOCOL-PC-SINGLE" made a chocolate match "pc cases".
+  settings: { analysis: { analyzer: { sku: { type: 'custom', tokenizer: 'keyword', filter: ['lowercase'] } } } },
+  mappings: {
+    properties: {
+      name: { type: 'text', fields: { keyword: { type: 'keyword' } } },
+      brand: { type: 'keyword' },
+      brand_lc: { type: 'keyword' },
+      category_path: { type: 'keyword' },
+      category_paths: { type: 'keyword' },
+      category_top: { type: 'keyword' },
+      category_name: { type: 'text' },
+      description: { type: 'text' },
+      skus: { type: 'text', analyzer: 'sku' },
+      min_price_paise: { type: 'long' },
+      max_price_paise: { type: 'long' },
+      in_stock: { type: 'boolean' },
+    },
   },
 };
+
+/** Qdrant payload indexes for every filtered field, so filtered vector searches need not scan. */
+const PAYLOAD_INDEXES: [string, string][] = [
+  ['category_paths', 'keyword'],
+  ['brand_lc', 'keyword'],
+  ['in_stock', 'bool'],
+  ['min_price_paise', 'integer'],
+  ['max_price_paise', 'integer'],
+];
 
 /** Our filters as an OpenSearch bool filter (price filters overlap the variant price range). */
 export function openSearchFilter(q: SearchQuery): unknown[] {
@@ -124,12 +137,10 @@ export class OpenSearchAdapter implements SearchPort {
     // Both engines rank deep enough to fill the requested page after fusion.
     const depth = Math.max(50, query.offset + query.limit);
     const [vector] = await this.embeddings.embed([q]);
+    // Typos keep their first letter (prefix_length 1), which spares fuzzy matching most of the term dictionary.
+    const match = { query: q, fields: ['name^3', 'category_name^2', 'skus', 'description'], fuzziness: 'AUTO', prefix_length: 1 };
     const [kw, vec] = await Promise.all([
-      this.keywords({
-        from: 0,
-        size: depth,
-        query: { bool: { must: [{ multi_match: { query: q, fields: ['name^3', 'category_name^2', 'skus', 'description'], fuzziness: 'AUTO' } }], filter } },
-      }),
+      this.keywords({ from: 0, size: depth, query: { bool: { must: [{ multi_match: match }], filter } } }),
       this.qdrant.request<QdrantResponse>('POST', `${this.points}/points/search`, {
         vector,
         limit: depth,
@@ -170,15 +181,25 @@ export class OpenSearchAdapter implements SearchPort {
     };
   }
 
-  /** Creates the index and collection once; "already exists" answers (400/409) count as success. */
+  /**
+   * Creates the index, the collection and its payload indexes once; "already exists" answers (400/409)
+   * count as success. An index created by an older version keeps its mapping: delete it and reindex.
+   */
   private ensure(): Promise<unknown> {
-    this.ready ??= Promise.all([
-      this.os.request('PUT', this.index, { mappings: MAPPINGS }, [400], WRITE_TIMEOUT_MS),
-      this.qdrant.request('PUT', this.points, { vectors: { size: this.embeddings.dim, distance: 'Cosine' } }, [400, 409], WRITE_TIMEOUT_MS),
-    ]).catch((err: unknown) => {
-      this.ready = undefined;
-      throw err;
-    });
+    this.ready ??= Promise.all([this.os.request('PUT', this.index, INDEX, [400], WRITE_TIMEOUT_MS), this.createCollection()]).catch(
+      (err: unknown) => {
+        this.ready = undefined;
+        throw err;
+      },
+    );
     return this.ready;
+  }
+
+  private async createCollection(): Promise<void> {
+    const vectors = { size: this.embeddings.dim, distance: 'Cosine' };
+    await this.qdrant.request('PUT', this.points, { vectors }, [400, 409], WRITE_TIMEOUT_MS);
+    for (const [field, schema] of PAYLOAD_INDEXES) {
+      await this.qdrant.request('PUT', `${this.points}/index?wait=true`, { field_name: field, field_schema: schema }, [], WRITE_TIMEOUT_MS);
+    }
   }
 }

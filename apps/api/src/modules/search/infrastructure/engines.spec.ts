@@ -193,7 +193,7 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
 
   const bulkOk = { json: { errors: false, items: [{ index: { status: 201 } }] } };
 
-  it('creates the index and collection once, then writes each batch to both engines in one request each', async () => {
+  it('creates the index, collection and payload indexes once, then writes each batch in one request per engine', async () => {
     const { adapter, calls } = make((url, method) =>
       method === 'PUT' && url === 'http://os:9200/products' ? { status: 400 } : url.endsWith('_bulk') ? bulkOk : {},
     );
@@ -201,20 +201,34 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
     expect(calls).toHaveLength(0);
     await adapter.upsert([doc], [hashEmbed('x')]);
     await adapter.upsert([doc, { ...doc, productId: other.id }], [hashEmbed('x'), hashEmbed('y')]);
+    const payloadIndex = 'PUT http://qdrant:6333/collections/products/index?wait=true';
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       'PUT http://os:9200/products',
       'PUT http://qdrant:6333/collections/products',
+      ...Array<string>(5).fill(payloadIndex),
       'POST http://os:9200/products/_bulk',
       'PUT http://qdrant:6333/collections/products/points?wait=true',
       'POST http://os:9200/products/_bulk',
       'PUT http://qdrant:6333/collections/products/points?wait=true',
     ]);
+    // SKUs are whole tokens, so a SKU fragment ("PC" in CACAOL-CHOCOL-PC-SINGLE) never matches a word.
+    expect(calls[0]!.body).toMatchObject({
+      settings: { analysis: { analyzer: { sku: { tokenizer: 'keyword', filter: ['lowercase'] } } } },
+      mappings: { properties: { skus: { type: 'text', analyzer: 'sku' } } },
+    });
     expect(calls[1]!.body).toEqual({ vectors: { size: 256, distance: 'Cosine' } });
-    expect(calls[2]!.headers['content-type']).toBe('application/x-ndjson');
-    expect(calls[2]!.body).toEqual([{ index: { _id: doc.productId } }, engineDoc]);
-    expect(calls[3]!.body).toMatchObject({ points: [{ id: doc.productId, payload: { brand_lc: 'thock' } }] });
-    expect((calls[4]!.body as unknown[]).filter((_, i) => i % 2 === 0)).toEqual([{ index: { _id: doc.productId } }, { index: { _id: other.id } }]);
-    expect((calls[5]!.body as { points: { id: string; vector: number[] }[] }).points.map((p) => [p.id, p.vector])).toEqual([
+    expect(calls.slice(2, 7).map((c) => c.body)).toEqual([
+      { field_name: 'category_paths', field_schema: 'keyword' },
+      { field_name: 'brand_lc', field_schema: 'keyword' },
+      { field_name: 'in_stock', field_schema: 'bool' },
+      { field_name: 'min_price_paise', field_schema: 'integer' },
+      { field_name: 'max_price_paise', field_schema: 'integer' },
+    ]);
+    expect(calls[7]!.headers['content-type']).toBe('application/x-ndjson');
+    expect(calls[7]!.body).toEqual([{ index: { _id: doc.productId } }, engineDoc]);
+    expect(calls[8]!.body).toMatchObject({ points: [{ id: doc.productId, payload: { brand_lc: 'thock' } }] });
+    expect((calls[9]!.body as unknown[]).filter((_, i) => i % 2 === 0)).toEqual([{ index: { _id: doc.productId } }, { index: { _id: other.id } }]);
+    expect((calls[10]!.body as { points: { id: string; vector: number[] }[] }).points.map((p) => [p.id, p.vector])).toEqual([
       [doc.productId, hashEmbed('x')],
       [other.id, hashEmbed('y')],
     ]);
@@ -249,7 +263,7 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
       track_total_hits: true,
       query: {
         bool: {
-          must: [{ multi_match: { query: 'keyboard', fuzziness: 'AUTO' } }],
+          must: [{ multi_match: { query: 'keyboard', fuzziness: 'AUTO', prefix_length: 1 } }],
           filter: [
             { term: { category_paths: 'electronics' } },
             { term: { brand_lc: 'thock' } },
