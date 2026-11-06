@@ -7,8 +7,7 @@ locals {
   alb_name  = trimsuffix(substr(var.name, 0, 32), "-")
   tg_prefix = trimsuffix(substr(var.name, 0, 28), "-")
 
-  waf             = var.enable_alb && var.enable_waf
-  waf_rule_groups = ["AWSManagedRulesCommonRuleSet", "AWSManagedRulesKnownBadInputsRuleSet", "AWSManagedRulesAmazonIpReputationList"]
+  waf = var.enable_alb && var.enable_waf
 }
 
 data "aws_route53_zone" "this" {
@@ -82,7 +81,7 @@ resource "aws_route53_record" "host" {
   records  = [var.host_ip]
 }
 
-# ---------------------------------------------------------------- growth/scale: ALB + WAF
+# ---------------------------------------------------------------- growth/scale: ALB + WAF (modules/waf)
 
 resource "aws_lb" "this" {
   count                      = var.enable_alb ? 1 : 0
@@ -185,87 +184,31 @@ resource "aws_lb_listener_rule" "api" {
   }
 }
 
-resource "aws_wafv2_web_acl" "this" {
-  count = local.waf ? 1 : 0
-  name  = var.name
-  scope = "REGIONAL"
-
-  default_action {
-    allow {}
-  }
-
-  dynamic "rule" {
-    for_each = var.waf_rate_limit > 0 ? [var.waf_rate_limit] : []
-    content {
-      name     = "RateLimitPerIp"
-      priority = 0
-
-      action {
-        block {}
-      }
-
-      statement {
-        rate_based_statement {
-          limit              = rule.value
-          aggregate_key_type = "IP"
-        }
-      }
-
-      visibility_config {
-        cloudwatch_metrics_enabled = true
-        metric_name                = "RateLimitPerIp"
-        sampled_requests_enabled   = true
-      }
-    }
-  }
-
-  dynamic "rule" {
-    for_each = local.waf_rule_groups
-    content {
-      name     = rule.value
-      priority = rule.key + 1
-
-      override_action {
-        none {}
-      }
-
-      statement {
-        managed_rule_group_statement {
-          name        = rule.value
-          vendor_name = "AWS"
-
-          dynamic "rule_action_override" {
-            for_each = rule.value == "AWSManagedRulesCommonRuleSet" ? var.waf_count_only_rules : []
-            content {
-              name = rule_action_override.value
-
-              action_to_use {
-                count {}
-              }
-            }
-          }
-        }
-      }
-
-      visibility_config {
-        cloudwatch_metrics_enabled = true
-        metric_name                = rule.value
-        sampled_requests_enabled   = true
-      }
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = var.name
-    sampled_requests_enabled   = true
-  }
+module "waf" {
+  source                  = "../waf"
+  count                   = local.waf ? 1 : 0
+  name                    = var.name
+  domain_name             = var.domain_name
+  alb_arn                 = aws_lb.this[0].arn
+  rate_limit              = var.waf_rate_limit
+  count_only_rules        = var.waf_count_only_rules
+  sign_in_rate_limit      = var.waf_sign_in_rate_limit
+  token_rate_limit        = var.waf_token_rate_limit
+  verified_agent_cidrs    = var.waf_verified_agent_cidrs
+  bot_control_level       = var.waf_bot_control_level
+  bot_control_count_rules = var.waf_bot_control_count_rules
+  bot_rate_limit          = var.waf_bot_rate_limit
 }
 
-resource "aws_wafv2_web_acl_association" "this" {
-  count        = local.waf ? 1 : 0
-  resource_arn = aws_lb.this[0].arn
-  web_acl_arn  = aws_wafv2_web_acl.this[0].arn
+# The web ACL used to live in this module.
+moved {
+  from = aws_wafv2_web_acl.this[0]
+  to   = module.waf[0].aws_wafv2_web_acl.this
+}
+
+moved {
+  from = aws_wafv2_web_acl_association.this[0]
+  to   = module.waf[0].aws_wafv2_web_acl_association.this
 }
 
 resource "aws_route53_record" "alb" {

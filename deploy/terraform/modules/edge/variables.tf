@@ -80,6 +80,42 @@ variable "waf_count_only_rules" {
   default     = ["SizeRestrictions_BODY"]
 }
 
+variable "waf_sign_in_rate_limit" {
+  description = "Requests per 5 minutes per client IP to /api/v1/auth/login and /oauth/token before WAF answers 429 (0 disables)."
+  type        = number
+  default     = 100
+}
+
+variable "waf_token_rate_limit" {
+  description = "Requests per 5 minutes per bearer token before WAF answers 429 (0 disables). Keep it above 5x the largest agent quota_per_minute (10,000)."
+  type        = number
+  default     = 60000
+}
+
+variable "waf_verified_agent_cidrs" {
+  description = "IPv4 CIDRs of verified partner agents: exempt from the per-IP rate limit, still subject to every other rule."
+  type        = list(string)
+  default     = []
+}
+
+variable "waf_bot_control_level" {
+  description = "AWS WAF Bot Control inspection level on the storefront host: COMMON or TARGETED (null: off). Priced per request."
+  type        = string
+  default     = null
+}
+
+variable "waf_bot_control_count_rules" {
+  description = "Bot Control rules switched to count (then throttled by waf_bot_rate_limit): AI crawlers and agents' HTTP clients are customers here."
+  type        = list(string)
+  default     = ["CategoryAI", "CategoryHttpLibrary", "SignalNonBrowserUserAgent", "SignalKnownBotDataCenter"]
+}
+
+variable "waf_bot_rate_limit" {
+  description = "Requests per 5 minutes per unverified bot name and client IP before WAF answers 429 (0 disables). Needs Bot Control."
+  type        = number
+  default     = 600
+}
+
 variable "enable_shield_advanced" {
   description = "Add Shield Advanced protections. Requires an active Shield Advanced subscription (a paid annual commitment you start yourself)."
   type        = bool

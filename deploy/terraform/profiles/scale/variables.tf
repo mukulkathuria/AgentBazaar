@@ -193,6 +193,30 @@ variable "enable_waf" {
   default     = true
 }
 
+variable "waf_bot_control_level" {
+  description = "AWS WAF Bot Control on the storefront host: COMMON, TARGETED or null (off). Priced per request; see the README."
+  type        = string
+  default     = "COMMON"
+}
+
+variable "waf_verified_agent_cidrs" {
+  description = "IPv4 CIDRs of verified partner agents, exempt from the WAF's per-IP rate limit."
+  type        = list(string)
+  default     = []
+}
+
+variable "enable_zone_failure_drill" {
+  description = "Create the AWS FIS zone-failure experiment template (free until started; see docs/runbooks/scale-load-and-zone-drill.md)."
+  type        = bool
+  default     = false
+}
+
+variable "zone_drill_az" {
+  description = "Availability zone the drill takes down (null: the VPC's first zone)."
+  type        = string
+  default     = null
+}
+
 variable "enable_cloudtrail" {
   description = "Create a multi-region CloudTrail trail."
   type        = bool

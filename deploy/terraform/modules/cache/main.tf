@@ -135,3 +135,8 @@ output "security_group_id" {
   description = "Cache security group."
   value       = aws_security_group.this.id
 }
+
+output "arn" {
+  description = "Replication group ARN (zone-failure drill target)."
+  value       = aws_elasticache_replication_group.this.arn
+}

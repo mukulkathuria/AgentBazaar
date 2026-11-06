@@ -27,8 +27,13 @@ mock_provider "aws" {
   mock_resource "aws_launch_template" { defaults = { id = "lt-0123456789abcdef0" } }
   mock_resource "aws_msk_configuration" { defaults = { arn = "arn:aws:kafka:ap-south-1:123456789012:configuration/mock/00000000-0000-0000-0000-000000000000-1" } }
   mock_resource "aws_backup_vault" { defaults = { arn = "arn:aws:backup:ap-south-1:123456789012:backup-vault:mock" } }
+  mock_resource "aws_elasticache_replication_group" { defaults = { arn = "arn:aws:elasticache:ap-south-1:123456789012:replicationgroup:mock" } }
+  mock_resource "aws_cloudwatch_metric_alarm" { defaults = { arn = "arn:aws:cloudwatch:ap-south-1:123456789012:alarm:mock" } }
   mock_resource "aws_db_instance" {
-    defaults = { master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:mock", kms_key_id = "", secret_status = "active" }] }
+    defaults = {
+      arn                = "arn:aws:rds:ap-south-1:123456789012:db:mock"
+      master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:mock", kms_key_id = "", secret_status = "active" }]
+    }
   }
   mock_resource "aws_rds_cluster" {
     defaults = { master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:mock", kms_key_id = "", secret_status = "active" }] }
@@ -234,4 +239,33 @@ run "rejects_another_profile" {
   }
 
   expect_failures = [var.profile]
+}
+
+# Bot management and the zone-failure drill (S5); their details are tested in waf-bots and zone-drill.tftest.hcl.
+run "bot_control_on_and_zone_drill_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = contains(module.edge.waf_managed_rule_groups, "AWSManagedRulesBotControlRuleSet")
+    error_message = "Scale runs AWS WAF Bot Control on the storefront by default."
+  }
+
+  assert {
+    condition     = output.zone_drill == null
+    error_message = "The zone-failure drill template must be opt-in."
+  }
+}
+
+run "zone_drill_targets_the_chosen_zone" {
+  command = plan
+
+  variables {
+    enable_zone_failure_drill = true
+    zone_drill_az             = "xx-test-1b"
+  }
+
+  assert {
+    condition     = output.zone_drill.az == "xx-test-1b"
+    error_message = "The drill must take down the chosen zone."
+  }
 }

@@ -65,6 +65,8 @@ module "edge" {
   alb_security_group_id             = module.network.web_security_group_id
   deletion_protection               = local.protect
   enable_waf                        = var.enable_waf
+  waf_bot_control_level             = var.waf_bot_control_level
+  waf_verified_agent_cidrs          = var.waf_verified_agent_cidrs
   enable_shield_advanced            = var.enable_shield_advanced
   enable_cdn                        = var.enable_cdn
   media_bucket_regional_domain_name = module.storage.bucket_regional_domain_names["media"]

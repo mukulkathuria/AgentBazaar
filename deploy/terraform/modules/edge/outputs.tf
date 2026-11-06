@@ -30,12 +30,12 @@ output "target_group_arns" {
 
 output "waf_web_acl_arn" {
   description = "WAF web ACL ARN, or null."
-  value       = one(aws_wafv2_web_acl.this[*].arn)
+  value       = one(module.waf[*].web_acl_arn)
 }
 
 output "waf_managed_rule_groups" {
   description = "AWS managed rule groups in the ALB's web ACL (empty without WAF); tune them with waf_count_only_rules."
-  value       = local.waf ? local.waf_rule_groups : []
+  value       = local.waf ? module.waf[0].managed_rule_groups : []
 }
 
 output "cdn_distribution_arn" {
