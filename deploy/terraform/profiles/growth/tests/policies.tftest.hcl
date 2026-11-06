@@ -12,6 +12,17 @@ mock_provider "aws" {
   mock_data "aws_iam_policy_document" {
     defaults = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
+  # OpenTofu fills computed attributes with random strings at plan time (Terraform leaves them unknown), and the
+  # AWS provider rejects those where it validates an ARN or ID: give the ones other resources reference real shapes.
+  mock_resource "aws_iam_role" { defaults = { arn = "arn:aws:iam::123456789012:role/mock" } }
+  mock_resource "aws_sqs_queue" { defaults = { arn = "arn:aws:sqs:ap-south-1:123456789012:mock" } }
+  mock_resource "aws_launch_template" { defaults = { id = "lt-0123456789abcdef0" } }
+  mock_resource "aws_db_instance" {
+    defaults = { master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:mock", kms_key_id = "", secret_status = "active" }] }
+  }
+  mock_resource "aws_rds_cluster" {
+    defaults = { master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:mock", kms_key_id = "", secret_status = "active" }] }
+  }
 }
 
 variables {

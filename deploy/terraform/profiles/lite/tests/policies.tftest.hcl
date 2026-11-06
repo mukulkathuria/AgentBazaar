@@ -14,6 +14,10 @@ mock_provider "aws" {
   mock_data "aws_availability_zones" {
     defaults = { names = ["xx-test-1a", "xx-test-1b", "xx-test-1c"] }
   }
+  # OpenTofu fills computed attributes with random strings at plan time (Terraform leaves them unknown), and the
+  # AWS provider rejects those where it validates an ARN or ID: give the ones other resources reference real shapes.
+  mock_resource "aws_kms_key" { defaults = { arn = "arn:aws:kms:ap-south-1:123456789012:key/00000000-0000-0000-0000-000000000000" } }
+  mock_resource "aws_iam_role" { defaults = { arn = "arn:aws:iam::123456789012:role/mock" } }
 }
 
 run "lite_network_exposes_only_web_and_admin_ssh" {

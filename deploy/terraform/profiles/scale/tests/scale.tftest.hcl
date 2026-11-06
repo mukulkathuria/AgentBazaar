@@ -14,10 +14,46 @@ mock_provider "aws" {
   mock_data "aws_iam_policy_document" {
     defaults = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
+  # OpenTofu fills computed attributes with random strings at plan time (Terraform leaves them unknown), and the
+  # AWS provider rejects those where it validates an ARN or ID: give the ones other resources reference real shapes.
+  mock_resource "aws_kms_key" { defaults = { arn = "arn:aws:kms:ap-south-1:123456789012:key/00000000-0000-0000-0000-000000000000" } }
+  mock_resource "aws_iam_role" { defaults = { arn = "arn:aws:iam::123456789012:role/mock" } }
+  mock_resource "aws_sns_topic" { defaults = { arn = "arn:aws:sns:ap-south-1:123456789012:mock" } }
+  mock_resource "aws_sqs_queue" { defaults = { arn = "arn:aws:sqs:ap-south-1:123456789012:mock" } }
+  mock_resource "aws_lb" { defaults = { arn = "arn:aws:elasticloadbalancing:ap-south-1:123456789012:loadbalancer/app/mock/0123456789abcdef" } }
+  mock_resource "aws_lb_listener" { defaults = { arn = "arn:aws:elasticloadbalancing:ap-south-1:123456789012:listener/app/mock/0123456789abcdef/0123456789abcdef" } }
+  mock_resource "aws_lb_target_group" { defaults = { arn = "arn:aws:elasticloadbalancing:ap-south-1:123456789012:targetgroup/mock/0123456789abcdef" } }
+  mock_resource "aws_wafv2_web_acl" { defaults = { arn = "arn:aws:wafv2:ap-south-1:123456789012:regional/webacl/mock/00000000-0000-0000-0000-000000000000" } }
+  mock_resource "aws_launch_template" { defaults = { id = "lt-0123456789abcdef0" } }
+  mock_resource "aws_msk_configuration" { defaults = { arn = "arn:aws:kafka:ap-south-1:123456789012:configuration/mock/00000000-0000-0000-0000-000000000000-1" } }
+  mock_resource "aws_backup_vault" { defaults = { arn = "arn:aws:backup:ap-south-1:123456789012:backup-vault:mock" } }
+  mock_resource "aws_db_instance" {
+    defaults = { master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:mock", kms_key_id = "", secret_status = "active" }] }
+  }
+  mock_resource "aws_rds_cluster" {
+    defaults = { master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:mock", kms_key_id = "", secret_status = "active" }] }
+  }
+  mock_resource "aws_acm_certificate" {
+    defaults = {
+      arn = "arn:aws:acm:ap-south-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+      domain_validation_options = [
+        { domain_name = "shop.example.com", resource_record_name = "_a.shop.example.com.", resource_record_type = "CNAME", resource_record_value = "_a.acm-validations.aws." },
+        { domain_name = "api.shop.example.com", resource_record_name = "_b.api.shop.example.com.", resource_record_type = "CNAME", resource_record_value = "_b.acm-validations.aws." },
+      ]
+    }
+  }
 }
 
 mock_provider "aws" {
   alias = "us_east_1"
+  mock_resource "aws_acm_certificate" {
+    defaults = {
+      arn = "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+      domain_validation_options = [
+        { domain_name = "media.shop.example.com", resource_record_name = "_c.media.shop.example.com.", resource_record_type = "CNAME", resource_record_value = "_c.acm-validations.aws." },
+      ]
+    }
+  }
 }
 
 mock_provider "aws" {
@@ -31,6 +67,8 @@ mock_provider "aws" {
   mock_data "aws_iam_policy_document" {
     defaults = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
+  mock_resource "aws_kms_key" { defaults = { arn = "arn:aws:kms:ap-southeast-1:123456789012:key/00000000-0000-0000-0000-000000000000" } }
+  mock_resource "aws_backup_vault" { defaults = { arn = "arn:aws:backup:ap-southeast-1:123456789012:backup-vault:mock" } }
 }
 
 variables {
