@@ -90,18 +90,29 @@ resource "aws_db_instance" "this" {
 }
 
 resource "aws_db_instance" "replica" {
-  count                      = local.rds ? var.read_replicas : 0
-  identifier                 = "${local.id}-replica-${count.index + 1}"
-  replicate_source_db        = aws_db_instance.this[0].identifier
-  instance_class             = var.instance_class
-  storage_encrypted          = true # same-region replicas always use the source's KMS key
-  vpc_security_group_ids     = [aws_security_group.this[0].id]
-  parameter_group_name       = aws_db_parameter_group.this[0].name
-  publicly_accessible        = false
-  skip_final_snapshot        = true
-  auto_minor_version_upgrade = true
-  deletion_protection        = var.deletion_protection
-  apply_immediately          = var.apply_immediately
+  count                           = local.rds ? var.read_replicas : 0
+  identifier                      = "${local.id}-replica-${count.index + 1}"
+  replicate_source_db             = aws_db_instance.this[0].identifier
+  instance_class                  = var.instance_class
+  storage_encrypted               = true # same-region replicas always use the source's KMS key
+  vpc_security_group_ids          = [aws_security_group.this[0].id]
+  parameter_group_name            = aws_db_parameter_group.this[0].name
+  publicly_accessible             = false
+  skip_final_snapshot             = true
+  auto_minor_version_upgrade      = true
+  deletion_protection             = var.deletion_protection
+  enabled_cloudwatch_logs_exports = ["postgresql"]
+  apply_immediately               = var.apply_immediately
+
+  depends_on = [aws_cloudwatch_log_group.replica]
+}
+
+# Created up front, like the primary's, so replica logs get the same retention and KMS key.
+resource "aws_cloudwatch_log_group" "replica" {
+  count             = local.rds ? var.read_replicas : 0
+  name              = "/aws/rds/instance/${local.id}-replica-${count.index + 1}/postgresql"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
 }
 
 # ---------------------------------------------------------------- Aurora PostgreSQL
