@@ -41,13 +41,18 @@ export interface ShopOptions {
   clock?: Clock;
   logger?: Logger;
   poolMax?: number;
+  /** Real Postgres only: a short statement timeout keeps failure-injection suites fast. */
+  statementTimeoutMs?: number;
 }
 
 /** A seeded test app (hero products, GST rates, an MFA admin, a demo agent client). PGlite unless TEST_DATABASE_URL is set. */
 export async function createShopApp(opts: ShopOptions = {}): Promise<ShopApp> {
   // Small pools by default: each new Postgres connection costs a process spawn, and parallel suites
   // opening dozens at once can outlast the pool's 5 s connect timeout on slower hosts.
-  const testDb = await createTestDb({ poolMax: opts.poolMax ?? 6 });
+  const testDb = await createTestDb({
+    poolMax: opts.poolMax ?? 6,
+    ...(opts.statementTimeoutMs ? { statementTimeoutMs: opts.statementTimeoutMs } : {}),
+  });
   const config = loadConfig({
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
