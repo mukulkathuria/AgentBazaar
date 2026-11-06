@@ -4,10 +4,11 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-BACKENDS = {
+CHOICES = {
     "CLASSIFIER_BACKEND": ("rules", "hf"),
     "EMBEDDINGS_BACKEND": ("hash", "sentence-transformers"),
     "REDACT_BACKEND": ("regex", "presidio"),
+    "AI_DEVICE": ("cpu", "cuda"),
 }
 
 
@@ -19,9 +20,10 @@ class Settings:
     embeddings_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     redact_backend: str = "regex"
     service_token: str = ""  # empty disables bearer auth
+    ai_device: str = "cpu"  # where the optional hf and sentence-transformers models run
 
     def __post_init__(self) -> None:
-        for env_name, allowed in BACKENDS.items():
+        for env_name, allowed in CHOICES.items():
             value = getattr(self, env_name.lower())
             if value not in allowed:
                 raise ValueError(f"{env_name}={value!r} is not one of: {', '.join(allowed)}")
@@ -41,4 +43,5 @@ class Settings:
             embeddings_model=get("EMBEDDINGS_MODEL", defaults.embeddings_model),
             redact_backend=get("REDACT_BACKEND", defaults.redact_backend),
             service_token=get("AI_SERVICE_TOKEN", defaults.service_token),
+            ai_device=get("AI_DEVICE", defaults.ai_device),
         )

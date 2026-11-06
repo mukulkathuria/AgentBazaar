@@ -12,6 +12,7 @@ from agentbazaar_ai.config import Settings
 
 # Hermetic: agentbazaar_ai.app builds a module-level app from the environment when imported.
 for _name in (
+    "AI_DEVICE",
     "AI_SERVICE_TOKEN",
     "CLASSIFIER_BACKEND",
     "CLASSIFIER_MODEL",
@@ -42,12 +43,32 @@ def client(make_client: Callable[..., TestClient]) -> TestClient:
 
 @pytest.fixture
 def fake_transformers(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    """Stub `transformers`; tests set the label the fake pipeline returns. Nothing is downloaded."""
+    """Stub `transformers`; tests set the label the fake pipeline returns. Nothing is downloaded.
+
+    The devices pipelines were loaded on are kept in ``transformers.devices``.
+    """
     prediction = [{"label": "MAKE_OFFER", "score": 0.91}]
     module = types.ModuleType("transformers")
-    module.pipeline = lambda task, model: lambda text, truncation: prediction  # type: ignore[attr-defined]
+    devices: list[str] = []
+
+    def pipeline(task: str, model: str, device: str) -> Callable[..., list[dict[str, Any]]]:
+        devices.append(device)
+        return lambda text, truncation: prediction
+
+    module.pipeline = pipeline  # type: ignore[attr-defined]
+    module.devices = devices  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "transformers", module)
     return prediction
+
+
+@pytest.fixture
+def fake_torch(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
+    """Stub `torch` with a CUDA device; tests set ``available`` to hide it."""
+    gpu = types.SimpleNamespace(available=True)
+    module = types.ModuleType("torch")
+    module.cuda = types.SimpleNamespace(is_available=lambda: gpu.available)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "torch", module)
+    return gpu
 
 
 @pytest.fixture
@@ -57,8 +78,11 @@ def fake_sentence_transformers(monkeypatch: pytest.MonkeyPatch) -> None:
             return list(self)
 
     class SentenceTransformer:
-        def __init__(self, model_id: str) -> None:
+        devices: list[str] = []  # noqa: RUF012  # the devices models were loaded on, for assertions
+
+        def __init__(self, model_id: str, device: str) -> None:
             self.model_id = model_id
+            self.devices.append(device)
 
         def encode(self, texts: list[str], normalize_embeddings: bool) -> Vectors:
             assert normalize_embeddings

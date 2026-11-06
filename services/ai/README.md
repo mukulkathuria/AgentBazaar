@@ -37,6 +37,13 @@ All variables are optional.
 | `EMBEDDINGS_BACKEND` | `hash`                                   | `hash` or `sentence-transformers`. |
 | `EMBEDDINGS_MODEL`   | `sentence-transformers/all-MiniLM-L6-v2` | Model id for `sentence-transformers`. |
 | `REDACT_BACKEND`     | `regex`                                  | `regex` or `presidio`. |
+| `AI_DEVICE`          | `cpu`                                    | `cpu` or `cuda`: where the optional `hf` and `sentence-transformers` models run. |
+
+`AI_DEVICE` matters only for the optional model backends; the default rules classifier and hash
+embeddings run no model. `cuda` needs a CUDA build of PyTorch (install the `ml` extra with one) and a
+visible GPU. Without either, the service logs a warning, runs the models on the CPU and shows
+`{"device": "cpu", "requested_device": "cuda"}` for those backends in `/readyz`. The published image
+is CPU-only.
 
 An unknown backend name fails at startup. An optional backend that cannot load (extra not
 installed, model missing, download failure) falls back to the default and shows up in `/readyz` as

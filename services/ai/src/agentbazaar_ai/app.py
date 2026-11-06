@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from .classifier import RULES_MODEL, Classifier, HFClassifier, classify_rules
 from .config import Settings
+from .device import resolve_device
 from .embeddings import Embedder, HashEmbedder, SentenceTransformerEmbedder
 from .redaction import PresidioRedactor, Redactor, redact
 from .schemas import (
@@ -50,12 +51,13 @@ def _request_id(request: Request) -> str:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     status: Status = {}
+    device = resolve_device(settings.ai_device)
     classify: Classifier = _load(
         "classifier",
         settings.classifier_backend,
         "rules",
         classify_rules,
-        lambda: HFClassifier(settings.classifier_model),
+        lambda: HFClassifier(settings.classifier_model, device),
         status,
     )
     hash_embedder: Embedder = HashEmbedder()
@@ -64,7 +66,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.embeddings_backend,
         "hash",
         hash_embedder,
-        lambda: SentenceTransformerEmbedder(settings.embeddings_model),
+        lambda: SentenceTransformerEmbedder(settings.embeddings_model, device),
         status,
     )
     redactor: Redactor = _load(
@@ -72,6 +74,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     status["classifier"]["model"] = getattr(classify, "model", RULES_MODEL)
     status["embeddings"] |= {"model": embedder.model, "dim": embedder.dim}
+    # Only model-backed backends have a device; a CUDA request that fell back shows here too.
+    placed = {"device": device} | (
+        {"requested_device": settings.ai_device} if device != settings.ai_device else {}
+    )
+    if classify is not classify_rules:
+        status["classifier"] |= placed
+    if embedder is not hash_embedder:
+        status["embeddings"] |= placed
     readiness = {
         "status": "degraded" if any("error" in s for s in status.values()) else "ok",
         "backends": status,

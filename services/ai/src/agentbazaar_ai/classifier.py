@@ -1045,12 +1045,12 @@ def classify_rules(text: str, language_hint: LanguageHint | None = None) -> Clas
 class HFClassifier:
     """Optional ``ml`` extra: a text-classification checkpoint whose labels are intent names."""
 
-    def __init__(self, model_id: str) -> None:
+    def __init__(self, model_id: str, device: str = "cpu") -> None:
         if not model_id:
             raise ValueError("CLASSIFIER_MODEL is required when CLASSIFIER_BACKEND=hf")
         from transformers import pipeline
 
-        self._pipe = pipeline("text-classification", model=model_id)
+        self._pipe = pipeline("text-classification", model=model_id, device=device)
         self.model = model_id
 
     def __call__(self, text: str, language_hint: LanguageHint | None = None) -> ClassifyResponse:

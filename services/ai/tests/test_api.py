@@ -195,8 +195,13 @@ def test_optional_backends_serve_when_available(make_client: MakeClient) -> None
     assert client.get("/readyz").json() == {
         "status": "ok",
         "backends": {
-            "classifier": {"backend": "hf", "model": "acme/laya-intent"},
-            "embeddings": {"backend": "sentence-transformers", "model": "acme/minilm", "dim": 3},
+            "classifier": {"backend": "hf", "model": "acme/laya-intent", "device": "cpu"},
+            "embeddings": {
+                "backend": "sentence-transformers",
+                "model": "acme/minilm",
+                "dim": 3,
+                "device": "cpu",
+            },
             "redaction": {"backend": "presidio"},
         },
     }

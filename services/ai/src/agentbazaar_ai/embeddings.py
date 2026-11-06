@@ -61,10 +61,10 @@ class HashEmbedder:
 class SentenceTransformerEmbedder:
     """Optional ``ml`` extra. Loads (and may download) the model at startup, never per request."""
 
-    def __init__(self, model_id: str) -> None:
+    def __init__(self, model_id: str, device: str = "cpu") -> None:
         from sentence_transformers import SentenceTransformer
 
-        self._model = SentenceTransformer(model_id)
+        self._model = SentenceTransformer(model_id, device=device)
         self.model = model_id
         self.dim = len(self.embed(["warm-up"])[0])  # also proves the model works before we serve
 
