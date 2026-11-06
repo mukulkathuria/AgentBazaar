@@ -37,7 +37,8 @@ export interface ShopApp extends TestApp {
 }
 
 export interface ShopOptions {
-  env?: Record<string, string>;
+  /** Extra environment; a function receives the test database URL (null on PGlite). */
+  env?: Record<string, string> | ((databaseUrl: string | null) => Record<string, string>);
   clock?: Clock;
   logger?: Logger;
   poolMax?: number;
@@ -61,7 +62,7 @@ export async function createShopApp(opts: ShopOptions = {}): Promise<ShopApp> {
     RATE_LIMIT_PER_MINUTE: '100000',
     PUBLIC_API_URL: 'http://api.test',
     PUBLIC_WEB_URL: 'http://web.test',
-    ...opts.env,
+    ...(typeof opts.env === 'function' ? opts.env(testDb.url) : opts.env),
   });
   const running = await createApp(config, {
     database: testDb.database,

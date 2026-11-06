@@ -1,0 +1,53 @@
+name: Data tier
+
+# Growth data tier (G3) on tests/infra/data-tier.yml: the integration and e2e suites through PgBouncer in
+# transaction-pooling mode, read-your-writes against a primary plus a streaming replica, and the failover
+# drill (synchronous standby, kill -9 of the primary, promotion, PgBouncer repoint, zero acknowledged-write loss).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data-tier-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  data-tier:
+    name: PgBouncer suites, read-your-writes and failover drill (@growth)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATA_TIER: '1'
+      VITEST_MAX_WORKERS: '4'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Start the data tier
+        run: docker compose -f tests/infra/data-tier.yml up -d --wait --wait-timeout 300 --quiet-pull
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@agentbazaar/api^...
+      - name: Integration and e2e suites through PgBouncer
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:56433/postgres
+        run: |
+          pnpm --filter @agentbazaar/api test:int
+          pnpm --filter @agentbazaar/api test:e2e
+      - name: Read-your-writes, lag ejection and replica fallback
+        run: pnpm --filter @agentbazaar/api test:services -- data-tier.spec
+      # Destructive (kills the primary), so it runs last.
+      - name: Failover drill
+        run: pnpm --filter @agentbazaar/api test:services -- failover-drill
+      - name: Service logs
+        if: failure()
+        run: docker compose -f tests/infra/data-tier.yml logs --tail=200
+      - if: always()
+        run: docker compose -f tests/infra/data-tier.yml down -v

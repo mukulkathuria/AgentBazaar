@@ -1,0 +1,61 @@
+# Growth data tier for apps/api/test/services/data-tier.spec.ts, the failover drill
+# (apps/api/test/services/failover-drill.spec.ts) and the integration and e2e suites run through PgBouncer
+# (.github/workflows/data-tier.yml). A primary, PgBouncer in transaction-pooling mode, an asynchronous read
+# replica and a standby the drill makes synchronous, kills the primary under and promotes.
+#   docker compose -f tests/infra/data-tier.yml up -d --wait
+# Throwaway test infrastructure: nothing here is for production, and `down -v` deletes all data.
+name: ab-dt
+
+x-postgres: &postgres
+  image: pgvector/pgvector:pg18
+  # An init reaps orphaned healthcheck processes. Without it they are reparented to the postmaster (PID 1),
+  # which treats a timed-out pg_isready exiting as a crashed backend and restarts the whole server.
+  init: true
+  environment: { POSTGRES_PASSWORD: postgres, PGPASSWORD: postgres }
+  volumes: ['./data-tier/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro']
+  healthcheck: { test: ['CMD-SHELL', 'pg_isready -U postgres'], interval: 2s, timeout: 3s, retries: 90 }
+
+x-standby: &standby
+  <<: *postgres
+  user: postgres
+  volumes:
+    - './data-tier/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro'
+    - './data-tier/standby.sh:/standby.sh:ro'
+  depends_on: { primary: { condition: service_healthy } }
+
+services:
+  primary:
+    <<: *postgres
+    command:
+      ['postgres', '-c', 'hba_file=/etc/postgresql/pg_hba.conf', '-c', 'max_connections=300', '-c', 'wal_keep_size=512MB']
+    ports: ['56432:5432']
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.26.1-p0
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@primary:5432
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: '1000'
+      DEFAULT_POOL_SIZE: '20'
+      # node-postgres sends statement_timeout at startup; PgBouncer cannot track it per client, so it is ignored
+      # here and set server-side instead (ALTER ROLE ... SET statement_timeout, see docs/runbooks/database-failover.md).
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,statement_timeout
+      # Retry a failed server login after 1 s instead of 15 s, so a repointed pool recovers quickly.
+      SERVER_LOGIN_RETRY: '1'
+      ADMIN_USERS: postgres
+    ports: ['56433:5432']
+    depends_on: { primary: { condition: service_healthy } }
+    healthcheck: { test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-p', '5432'], interval: 2s, timeout: 3s, retries: 30 }
+
+  # Asynchronous hot standby that serves reads (DATABASE_REPLICA_URLS); the suites pause its replay to create lag.
+  replica:
+    <<: *standby
+    command: ['sh', '/standby.sh', 'dt_replica']
+    ports: ['56434:5432']
+
+  # Hot standby that the failover drill makes synchronous and then promotes.
+  standby:
+    <<: *standby
+    command: ['sh', '/standby.sh', 'dt_standby']
+    ports: ['56435:5432']
