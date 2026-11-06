@@ -42,10 +42,25 @@ describe('@lite archive moves old partitions to gzip JSON lines', () => {
   const q = <T>(text: string, params?: unknown[]) => t.database.query<T>(text, params);
   const exists = async (name: string) => (await q<{ r: string | null }>('SELECT to_regclass($1)::text AS r', [name]))[0]!.r !== null;
 
-  it('refuses a malformed month, the current month, and tables that are not partitioned', async () => {
+  it('refuses a malformed month, the current month, both or neither cutoffs, and tables that are not partitioned', async () => {
     await expect(archivePartitions(t.database, { before: '2025-1', dir })).rejects.toThrow(/YYYY-MM/);
     await expect(archivePartitions(t.database, { before: monthFromNow(1), dir })).rejects.toThrow(/current month/);
+    await expect(archivePartitions(t.database, { dir })).rejects.toThrow(/either/);
+    await expect(archivePartitions(t.database, { before: '2025-03', olderThanMonths: 12, dir })).rejects.toThrow(/either/);
     await expect(archivePartitions(t.database, { before: '2025-03', dir, tables: ['orders'] })).rejects.toThrow(/orders/);
+  });
+
+  it('turns --older-than into the first month to keep, counted back from the current month', async () => {
+    await q(`SELECT ensure_month_partitions('webhook_events', 0, '2025-01-01')`);
+    // On 2025-05-20, keeping 3 whole months before May keeps February onwards: only January goes.
+    const done = await archivePartitions(t.database, {
+      olderThanMonths: 3,
+      dir,
+      tables: ['webhook_events'],
+      now: new Date('2025-05-20T00:00:00Z'),
+    });
+    expect(done.map((d) => d.partition)).toEqual(['webhook_events_p202501']);
+    expect(await exists('webhook_events_p202502')).toBe(true);
   });
 
   it('archives earlier months, checks each file against its table, drops it, and skips unpublished outbox events', async () => {

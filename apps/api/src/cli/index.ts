@@ -114,6 +114,11 @@ async function migrateDatabase(): Promise<void> {
   }
 }
 
+async function rewrap(v: Values): Promise<void> {
+  const batch = z.coerce.number().int().min(1).max(10_000).parse(v['batch-size'] ?? 100);
+  process.exitCode = await piiRewrap(loadConfig(), batch);
+}
+
 /** `--older-than N` keeps N whole months before the current one, so a schedule (the Helm CronJob) needs no date. */
 async function archive(v: Values): Promise<void> {
   const config = loadConfig();
@@ -172,11 +177,8 @@ async function main(argv: string[]): Promise<void> {
       return withApp((r) => createAdmin(r, values));
     case 'create-agent-client':
       return withApp((r) => createAgentClient(r, values));
-    case 'pii rewrap': {
-      const batch = z.coerce.number().int().min(1).max(10_000).parse(values['batch-size'] ?? 100);
-      process.exitCode = await piiRewrap(loadConfig(), batch);
-      return;
-    }
+    case 'pii rewrap':
+      return rewrap(values);
     case 'archive':
       return archive(values);
     default:

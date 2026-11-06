@@ -40,13 +40,8 @@ const BLOCKS_PER_QUERY = 1024; // 8 MB of heap
 
 const lineChecksum = (line: string): bigint => BigInt(`0x${createHash('sha256').update(line).digest('hex').slice(0, 15)}`);
 
-/**
- * Archives every partition of a month before `before`: detach it, write its rows as gzip JSON lines, check the
- * file's row count and checksum against the table, then drop the table. Rows are copied as stored; personal data
- * lives only in the pii schema, so event rows carry tokens, never names or contact details. Re-running is safe:
- * finished partitions are gone, and a partition left detached by an interrupted run is picked up again.
- */
-export async function archivePartitions(db: Database, opts: ArchiveOptions): Promise<ArchivedPartition[]> {
+/** The first month to keep, as YYYYMM. Never later than the current month, which is still being written. */
+function cutoffMonth(opts: ArchiveOptions): string {
   const now = opts.now ?? new Date();
   if ((opts.before === undefined) === (opts.olderThanMonths === undefined)) {
     throw new Error('Give either --before YYYY-MM or --older-than MONTHS');
@@ -55,9 +50,21 @@ export async function archivePartitions(db: Database, opts: ArchiveOptions): Pro
     opts.before ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - opts.olderThanMonths!, 1)).toISOString().slice(0, 7);
   const m = MONTH.exec(before);
   if (!m) throw new Error(`--before must be a month as YYYY-MM, got "${before}"`);
-  const cutoff = `${m[1]}${m[2]}`;
   const thisMonth = now.toISOString().slice(0, 7);
-  if (cutoff > thisMonth.replace('-', '')) throw new Error(`--before ${before} would archive the current month; use ${thisMonth} or earlier`);
+  if (`${m[1]}${m[2]}` > thisMonth.replace('-', '')) {
+    throw new Error(`--before ${before} would archive the current month; use ${thisMonth} or earlier`);
+  }
+  return `${m[1]}${m[2]}`;
+}
+
+/**
+ * Archives every partition of a month before the cutoff: detach it, write its rows as gzip JSON lines, check the
+ * file's row count and checksum against the table, then drop the table. Rows are copied as stored; personal data
+ * lives only in the pii schema, so event rows carry tokens, never names or contact details. Re-running is safe:
+ * finished partitions are gone, and a partition left detached by an interrupted run is picked up again.
+ */
+export async function archivePartitions(db: Database, opts: ArchiveOptions): Promise<ArchivedPartition[]> {
+  const cutoff = cutoffMonth(opts);
   const tables = opts.tables ?? PARTITIONED_TABLES;
   const unknown = tables.filter((t) => !(PARTITIONED_TABLES as readonly string[]).includes(t));
   if (unknown.length) throw new Error(`Not a partitioned table: ${unknown.join(', ')}`);

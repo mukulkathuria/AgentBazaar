@@ -85,12 +85,13 @@ describe('@lite event logs are partitioned by UTC month', () => {
   });
 });
 
-describe('@lite migration 0051 converts event logs that already hold rows', () => {
+// The hard case: a database that tracks main already ran later migrations (0060, 0080) before these arrive.
+describe('@lite migration 0051 converts event logs that already hold rows, after later migrations ran', () => {
   const all = loadMigrations(MIGRATIONS_DIR);
   let t: TestDb;
   const orderId = randomUUID();
   beforeAll(async () => {
-    t = await createTestDb({ migrations: all.filter((m) => m.version < '0050') });
+    t = await createTestDb({ migrations: all.filter((m) => !['0050', '0051', '0052'].includes(m.version)) });
     const q = (text: string, params: unknown[] = []) => t.database.query(text, params);
     await q(
       `INSERT INTO orders (id, number, status, payment_method, subject, customer_token, address_token, place_of_supply,
@@ -161,5 +162,16 @@ describe('@lite migration 0051 converts event logs that already hold rows', () =
     ).rejects.toThrow(/foreign key/);
     const [pending] = await q<{ n: number }>(`SELECT count(*)::int AS n FROM outbox_events WHERE published_at IS NULL`);
     expect(pending!.n).toBe(1);
+  });
+
+  it("keeps 0080's outbox order (identity seq and its index) and 0060's trace kind check", async () => {
+    expect((await q<{ seq: number }>(`SELECT seq FROM outbox_events ORDER BY seq`)).map((r) => r.seq)).toEqual([1, 2]);
+    const [next] = await q<{ seq: number }>(`INSERT INTO outbox_events (topic, aggregate_id) VALUES ('t', 'a') RETURNING seq`);
+    expect(next!.seq).toBe(3);
+    const [idx] = await q<{ kind: string }>(`SELECT relkind::text AS kind FROM pg_class WHERE relname = 'outbox_pending_aggregate_idx'`);
+    expect(idx?.kind).toBe('I'); // a partitioned index, on every partition
+    await expect(
+      q(`INSERT INTO llm_traces (channel, tier, model, intent, input_redacted, output_redacted, kind) VALUES ('chat', 0, 'm', 'i', 'a', 'b', 'bogus')`),
+    ).rejects.toThrow(/check constraint/);
   });
 });

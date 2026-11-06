@@ -369,7 +369,9 @@ gateway:
 archive:
   enabled: false
   schedule: '30 2 * * *'
-  command: ['node', 'dist/cli/index.js', 'archive']
+  # Keeps 13 whole months of event logs in Postgres and moves older monthly partitions to gzip JSON lines
+  # (docs/runbooks/archive.md); add --tables to give tables different windows.
+  command: ['node', 'dist/cli/index.js', 'archive', '--older-than', '13']
   dir: /archive
   # Required when enabled: a volume source, e.g. { persistentVolumeClaim: { claimName: agentbazaar-archive } }.
   volume: {}
