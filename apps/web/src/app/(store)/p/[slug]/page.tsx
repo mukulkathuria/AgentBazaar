@@ -110,6 +110,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
 
   return (
     <article>
+      {/* JSON-LD, not HTML: serializeJsonLd escapes <, >, & and U+2028/9, so nothing can close the script tag. */}
+      {/* nosemgrep: typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(productJsonLd(p, SITE_URL)) }} />
       <Breadcrumbs items={crumbs} label={t.common.breadcrumb} />
       <div className="grid gap-8 md:grid-cols-2">

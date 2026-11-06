@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { one, type Executor } from '../db/database.js';
-import { sha256Hex } from '../crypto/primitives.js';
+import { safeEqual, sha256Hex } from '../crypto/primitives.js';
 import { AppError } from '../kernel/errors.js';
 
 const KEY_FORMAT = /^[A-Za-z0-9_-]{8,128}$/;
@@ -44,7 +44,7 @@ export async function withIdempotencyKey<T>(
       sql`SELECT request_hash, status, response_status, response_body FROM idempotency_keys WHERE scope = ${scope} AND key = ${key}`,
     );
     if (!existing) return withIdempotencyKey(db, scope, key, request, fn);
-    if (existing.request_hash !== hash) {
+    if (!safeEqual(existing.request_hash, hash)) {
       throw new AppError('idempotency_conflict', 'This Idempotency-Key was already used with a different request');
     }
     if (existing.status === 'in_progress') throw new AppError('conflict', 'A request with this Idempotency-Key is in progress');

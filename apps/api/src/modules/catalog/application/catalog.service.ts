@@ -180,7 +180,8 @@ export class CatalogService {
   }
 
   async findVariant(skuOrId: string, ex: Executor = this.db): Promise<VariantRef | null> {
-    const isUuid = /^[0-9a-f-]{36}$/i.test(skuOrId);
+    // A fixed-length character class runs in linear time; njsscan mistakes (skuOrId, ex) for (req, res).
+    const isUuid = /^[0-9a-f-]{36}$/i.test(skuOrId); // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
     const r = await one<VariantRow & ProductRow & { variant_id: string }>(
       ex,
       sql`SELECT v.id AS variant_id, v.sku, v.title, v.price_paise, v.mrp_paise, p.id, p.slug, p.name, p.product_type, p.band,

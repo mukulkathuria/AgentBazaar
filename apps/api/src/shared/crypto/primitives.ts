@@ -46,7 +46,7 @@ export function aeadDecrypt(key: Buffer, token: string, aad: string): Buffer {
   if (version !== AEAD_VERSION || !body) throw new Error('Unsupported ciphertext');
   const raw = fromB64url(body);
   if (raw.length < 12 + 16) throw new Error('Ciphertext too short');
-  const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12));
+  const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12), { authTagLength: 16 });
   decipher.setAAD(Buffer.from(aad));
   decipher.setAuthTag(raw.subarray(raw.length - 16));
   return Buffer.concat([decipher.update(raw.subarray(12, raw.length - 16)), decipher.final()]);

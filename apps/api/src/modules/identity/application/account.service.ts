@@ -222,7 +222,8 @@ export class AccountService {
   async mfaVerify(who: CustomerPrincipal, code: string): Promise<void> {
     const u = await this.userOf(who);
     const secret = this.mfaSecret(u);
-    if (secret === null) throw new AppError('conflict', 'Start two-factor setup first');
+    // A null check, not a comparison of secret values (the TOTP check below is constant-time).
+    if (secret === null) throw new AppError('conflict', 'Start two-factor setup first'); // nosemgrep: ajinabraham.njsscan.crypto.timing_attack_node.node_timing_attack
     if (!verifyTotp(secret, code, this.clock.now())) {
       throw new AppError(
         'validation_failed',

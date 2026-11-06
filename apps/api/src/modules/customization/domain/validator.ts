@@ -44,15 +44,19 @@ export function skeleton(s: string): string {
 
 const containsWord = (sk: string, words: readonly string[]): string | undefined => words.find((w) => sk.includes(w));
 
+// The nosemgrep lines below: these regexes are single character classes or anchored [...]* (linear time, no
+// backtracking); njsscan's regex_dos rule mistakes a two-argument (v, f) callback for an Express (req, res) handler.
 const SPECS: Spec[] = [
   { check: (v) => (CONTROL.test(v) ? { code: 'control_chars', severity: 'reject', message: 'Remove control characters' } : null) },
   { check: (v) => (BIDI.test(v) ? { code: 'bidi_override', severity: 'reject', message: 'Text direction override characters are not allowed' } : null) },
   {
     check: (v, f) =>
+      // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
       ZERO_WIDTH.test(v) || (JOINERS.test(v) && !(f.script === 'latin_devanagari' && DEVANAGARI.test(v)))
         ? { code: 'zero_width', severity: 'reject', message: 'Invisible characters are not allowed' }
         : null,
   },
+  // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
   { check: (v, f) => (!f.allowEmoji && EMOJI.test(v) ? { code: 'emoji', severity: 'reject', message: 'Emoji cannot be printed on this item' } : null) },
   {
     check: (v) =>
@@ -63,6 +67,7 @@ const SPECS: Spec[] = [
   { check: (v) => (MARKUP.test(v) ? { code: 'markup', severity: 'reject', message: 'Markup and code are not allowed' } : null) },
   {
     check: (v, f) =>
+      // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
       !(f.script === 'latin' ? LATIN_ALLOWED : LATIN_DEVANAGARI_ALLOWED).test(v)
         ? { code: 'charset', severity: 'reject', message: f.script === 'latin' ? 'Use English letters, digits and basic punctuation' : 'Use English or Hindi letters, digits and basic punctuation' }
         : null,

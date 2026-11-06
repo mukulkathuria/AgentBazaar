@@ -41,7 +41,8 @@ export async function retry<T>(fn: (attempt: number) => Promise<T>, opts: RetryO
       return await fn(attempt);
     } catch (err) {
       if (attempt >= opts.retries || (opts.shouldRetry && !opts.shouldRetry(err))) throw err;
-      await sleep(Math.random() * Math.min(opts.maxMs, opts.baseMs * 2 ** attempt));
+      // Backoff jitter only spreads retries out; it guards nothing, so it needs no CSPRNG.
+      await sleep(Math.random() * Math.min(opts.maxMs, opts.baseMs * 2 ** attempt)); // nosemgrep: ajinabraham.njsscan.crypto.crypto_node.node_insecure_random_generator
     }
   }
 }

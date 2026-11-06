@@ -9,7 +9,8 @@ export const PRODUCTS = {
   chocolate: 'kokoa-mini-milk-chocolate-13g',
 } as const;
 
-export const uniqueEmail = (tag: string) => `e2e-${tag}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
+// Test data only: the random suffix just keeps parallel runs apart.
+export const uniqueEmail = (tag: string) => `e2e-${tag}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`; // nosemgrep: ajinabraham.njsscan.crypto.crypto_node.node_insecure_random_generator
 
 /** Adds a product's default variant to the cart from its page and lands on /cart. */
 export async function addToCart(page: Page, slug: string): Promise<void> {
