@@ -22,7 +22,8 @@ const SPIKE_AT = seconds(__ENV.SPIKE_AT || '4m');
 const SPIKE_FOR = seconds(__ENV.SPIKE_FOR || '2m');
 const RECOVERY = seconds(__ENV.RECOVERY || '5m');
 const RECOVERED_FROM = SPIKE_AT + SPIKE_FOR + RECOVERY;
-if (RECOVERED_FROM + 60 > DURATION) throw new Error('DURATION must leave a minute after SPIKE_AT + SPIKE_FOR + RECOVERY');
+if (RECOVERED_FROM + 60 > DURATION)
+  throw new Error('DURATION must leave a minute after SPIKE_AT + SPIKE_FOR + RECOVERY');
 
 const at = (n) => Math.max(1, Math.round(n * SCALE));
 const SHOPPERS = at(5000);
@@ -80,8 +81,25 @@ export const options = {
   },
 };
 
-const QUERIES = ['keyboard', 'gpu 12gb', 'dark chocolate', 'mug', 'power supply 850w', 'tshirt', 'tea', 'keybaord', 'notebook'];
-const SKUS = ['THOCK-TK87-RED', 'THOCK-TK87-BROWN', 'VOLTEDGE-850G', 'CUBIX-AIRFLOW-BLK', 'MITTI-MUG-WHITE', 'KOKOA-MINI-13G'];
+const QUERIES = [
+  'keyboard',
+  'gpu 12gb',
+  'dark chocolate',
+  'mug',
+  'power supply 850w',
+  'tshirt',
+  'tea',
+  'keybaord',
+  'notebook',
+];
+const SKUS = [
+  'THOCK-TK87-RED',
+  'THOCK-TK87-BROWN',
+  'VOLTEDGE-850G',
+  'CUBIX-AIRFLOW-BLK',
+  'MITTI-MUG-WHITE',
+  'KOKOA-MINI-13G',
+];
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const DISPLAY_CAP = 50;
 const phase = () => {
@@ -95,17 +113,24 @@ const phase = () => {
 export function setup() {
   const skus = [];
   for (let offset = 0; offset < 1000 && skus.length < 60; offset += 50) {
-    const res = http.get(`${BASE}/api/v1/products?inStockOnly=true&limit=50&offset=${offset}`, { tags: { name: 'setup' } });
+    const res = http.get(`${BASE}/api/v1/products?inStockOnly=true&limit=50&offset=${offset}`, {
+      tags: { name: 'setup' },
+    });
     const items = res.status === 200 ? res.json('items') : [];
     for (const p of items) {
       if (p.customizable || p.band === 'premium') continue;
-      const a = http.get(`${BASE}/api/v1/availability/${encodeURIComponent(p.defaultSku)}?quantity=1`, { tags: { name: 'setup' } });
+      const a = http.get(`${BASE}/api/v1/availability/${encodeURIComponent(p.defaultSku)}?quantity=1`, {
+        tags: { name: 'setup' },
+      });
       if (a.status === 200 && a.json('availableQty') >= DISPLAY_CAP) skus.push(p.defaultSku);
     }
     if (items.length < 50) break;
   }
-  if (!skus.length) throw new Error(`No SKU with ${DISPLAY_CAP}+ units at ${BASE}; raise stock first (see the runbook)`);
-  console.log(`orders spread over ${skus.length} SKUs; ${SHOPPERS} shoppers, ${AGENTS} agents, SCALE=${SCALE}`);
+  if (!skus.length)
+    throw new Error(`No SKU with ${DISPLAY_CAP}+ units at ${BASE}; raise stock first (see the runbook)`);
+  console.log(
+    `orders spread over ${skus.length} SKUs; ${SHOPPERS} shoppers, ${AGENTS} agents, SCALE=${SCALE}`,
+  );
   return { skus };
 }
 
@@ -114,9 +139,18 @@ export function shop() {
     const tags = { phase: phase() };
     const r = Math.random();
     let res;
-    if (r < 0.5) res = http.get(`${BASE}/api/v1/products?q=${encodeURIComponent(pick(QUERIES))}&limit=12`, { tags: { ...tags, name: 'search' } });
-    else if (r < 0.8) res = http.get(`${BASE}/api/v1/products/thock-tk87-mechanical-keyboard`, { tags: { ...tags, name: 'product' } });
-    else if (r < 0.95) res = http.get(`${BASE}/api/v1/availability/${pick(SKUS)}?quantity=1`, { tags: { ...tags, name: 'availability' } });
+    if (r < 0.5)
+      res = http.get(`${BASE}/api/v1/products?q=${encodeURIComponent(pick(QUERIES))}&limit=12`, {
+        tags: { ...tags, name: 'search' },
+      });
+    else if (r < 0.8)
+      res = http.get(`${BASE}/api/v1/products/thock-tk87-mechanical-keyboard`, {
+        tags: { ...tags, name: 'product' },
+      });
+    else if (r < 0.95)
+      res = http.get(`${BASE}/api/v1/availability/${pick(SKUS)}?quantity=1`, {
+        tags: { ...tags, name: 'availability' },
+      });
     else res = http.get(`${BASE}/api/v1/categories`, { tags: { ...tags, name: 'categories' } });
     readLatency.add(res.timings.duration);
     if (tags.phase === 'recovered') recoveredReadLatency.add(res.timings.duration);
@@ -128,7 +162,12 @@ export function shop() {
 function mcp(name, args, tags) {
   const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
   if (TOKENS.length) headers.authorization = `Bearer ${TOKENS[__VU % TOKENS.length]}`;
-  const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
+  const body = JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name, arguments: args },
+  });
   const res = http.post(`${BASE}/mcp`, body, { headers, tags: { ...tags, name: `mcp ${name}` } });
   agentLatency.add(res.timings.duration);
   check(res, { 'mcp 200': (x) => x.status === 200 && !String(x.body).includes('"isError":true') });
@@ -142,7 +181,8 @@ export function agent() {
     const quote = mcp('request_quote', { sku: pick(SKUS), quantity: 1 }, tags);
     const nid = /negotiation_id[\\"=: ]+([0-9a-f]{8}-[0-9a-f-]{27})/.exec(quote);
     const unit = /unit_price_inr[\\": ]+(\d+)/.exec(quote);
-    if (nid && unit) mcp('make_offer', { negotiation_id: nid[1], unit_price_inr: Math.floor(Number(unit[1]) * 0.9) }, tags);
+    if (nid && unit)
+      mcp('make_offer', { negotiation_id: nid[1], unit_price_inr: Math.floor(Number(unit[1]) * 0.9) }, tags);
   });
   sleep(4 + Math.random() * 2);
 }
@@ -154,7 +194,11 @@ export function checkout(data) {
     const cart = http.post(`${BASE}/api/v1/carts`, '{}', json);
     if (!check(cart, { 'cart 201': (x) => x.status === 201 })) return;
     const cartId = cart.json('cartId');
-    http.post(`${BASE}/api/v1/carts/${cartId}/lines`, JSON.stringify({ sku: pick(data.skus), quantity: 1 }), json);
+    http.post(
+      `${BASE}/api/v1/carts/${cartId}/lines`,
+      JSON.stringify({ sku: pick(data.skus), quantity: 1 }),
+      json,
+    );
     const key = `k6-scale-${__VU}-${__ITER}-${Date.now()}`;
     const t0 = Date.now();
     const session = http.post(`${BASE}/api/v1/checkout/sessions`, JSON.stringify({ cartId }), {
@@ -166,7 +210,14 @@ export function checkout(data) {
       `${BASE}/api/v1/checkout/sessions/${session.json('sessionId')}/complete?t=${encodeURIComponent(session.json('token'))}`,
       JSON.stringify({
         email: `load+${__VU}-${__ITER}@example.com`,
-        address: { name: 'Load Test', phone: '9876543210', line1: '1 Test Street', city: 'Delhi', stateCode: 'DL', pincode: '110001' },
+        address: {
+          name: 'Load Test',
+          phone: '9876543210',
+          line1: '1 Test Street',
+          city: 'Delhi',
+          stateCode: 'DL',
+          pincode: '110001',
+        },
         paymentMethod: 'cod',
         acceptTerms: true,
       }),
