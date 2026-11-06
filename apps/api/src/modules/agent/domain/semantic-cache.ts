@@ -33,27 +33,41 @@ export function templateShape(template: string): TemplateShape {
   return { skeleton, numbers };
 }
 
-/**
- * The reply with each number turned into the slot of the template number it repeats, or null when
- * that is not certain: a number the template does not contain, a value the template holds twice, or
- * any digit left over. Uncertain replies are simply not cached.
- */
-export function toSlots(reply: string, numbers: readonly string[]): string | null {
-  if (numbers.length > MAX_SLOTS) return null;
-  const values = numbers.map(valueOf);
-  let unsure = false;
-  const slotted = reply.replace(NUMBER, (n) => {
-    const at = values.flatMap((v, i) => (v === valueOf(n) ? [i] : []));
-    if (at.length !== 1) unsure = true;
-    return String.fromCharCode(SLOT_BASE + (at[0] ?? 0));
-  });
-  return unsure || /\p{Nd}/u.test(slotted) ? null : slotted;
+export interface Slotted {
+  /** The reply with every number replaced by a template slot. */
+  text: string;
+  /**
+   * Template slots that held the same value when a reply number matched them all (a quote's unit
+   * price and total for one item). A later template must hold equal values in each group to reuse it.
+   */
+  same: number[][];
 }
 
-/** Fills a slotted reply with the current template's numbers; null if a slot has no number. */
-export function fillSlots(slotted: string, numbers: readonly string[]): string | null {
+/**
+ * The reply with each number turned into the slot of the template number it repeats, or null when a
+ * number is not in the template at all, or a digit is left over. Such replies are simply not cached.
+ */
+export function toSlots(reply: string, numbers: readonly string[]): Slotted | null {
+  if (numbers.length > MAX_SLOTS) return null;
+  const values = numbers.map(valueOf);
+  const same: number[][] = [];
+  let unknown = false;
+  // NUMBER runs in linear time (digit runs split by fixed "," and "." delimiters); njsscan reads (reply, numbers) as (req, res).
+  const text = reply.replace(NUMBER, (n) => { // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
+    const at = values.flatMap((v, i) => (v === valueOf(n) ? [i] : []));
+    if (!at.length) unknown = true;
+    if (at.length > 1) same.push(at);
+    return String.fromCharCode(SLOT_BASE + (at[0] ?? 0));
+  });
+  return unknown || /\p{Nd}/u.test(text) ? null : { text, same };
+}
+
+/** Fills a slotted reply with the current template's numbers; null if a slot is missing or a group differs. */
+export function fillSlots(slotted: Slotted, numbers: readonly string[]): string | null {
+  const values = numbers.map(valueOf);
+  if (slotted.same.some((g) => g.some((i) => values[i] === undefined || values[i] !== values[g[0]!]))) return null;
   let missing = false;
-  const text = slotted.replace(SLOT, (s) => {
+  const text = slotted.text.replace(SLOT, (s) => {
     const n = numbers[s.charCodeAt(0) - SLOT_BASE];
     if (n === undefined) missing = true;
     return n ?? '';

@@ -80,12 +80,21 @@ describe('semantic cache', () => {
     expect((await outcomes()).rejected).toBe(1);
   });
 
-  it('skips replies whose numbers cannot be traced to exactly one template number', async () => {
+  it('skips replies with a number the template does not contain', async () => {
     const { cache, outcomes } = setup();
     await seed(cache, A, 'Sure! I can offer ₹5,199 each, so ₹10,398 for 2.');
-    const mug = { ...A, fallback: '1 × Mug: ₹449 each. 1 round left.' };
-    await seed(cache, mug, 'Sure, 1 mug for ₹449.');
-    expect((await outcomes()).skipped).toBe(2);
+    expect((await outcomes()).skipped).toBe(1);
+  });
+
+  it('reuses a reply whose number matched several equal template numbers only where they are equal again', async () => {
+    const { cache } = setup();
+    const quote = (unit: string, total: string): ComposeRequest => ({ ...A, intent: 'ask_price', fallback: `1 × Mug: ₹${unit} each (₹${total} total).` });
+    await seed(cache, quote('449', '449'), 'Sure! One mug is ₹449.');
+    const single = quote('429', '429');
+    expect((await cache.lookup(single, allowed(single))).text).toBe('Sure! One mug is ₹429.');
+    // The same wording with a unit price and total that differ: "₹449" could have meant either.
+    const differ = quote('429', '858');
+    expect((await cache.lookup(differ, allowed(differ))).text).toBeNull();
   });
 
   it('is off without a store and treats a store outage as a miss', async () => {
@@ -112,15 +121,19 @@ describe('semantic cache rules', () => {
     expect(skeleton).toBe('# × Mug: ₹# each (₹# total). Valid until #:# pm.');
     expect(numbers).toEqual(['2', '449', '898', '03', '45']);
     const slotted = toSlots('Two mugs at ₹449 each, ₹898 in all, until 3:45 pm.', numbers)!;
-    expect(slotted).not.toMatch(/\p{Nd}/u);
+    expect(slotted.text).not.toMatch(/\p{Nd}/u);
+    expect(slotted.same).toEqual([]);
     expect(fillSlots(slotted, ['3', '429', '1,287', '04', '10'])).toBe('Two mugs at ₹429 each, ₹1,287 in all, until 04:10 pm.');
     expect(fillSlots(slotted, ['3'])).toBeNull();
   });
 
-  it('refuses numbers the template lacks or holds twice', () => {
+  it('refuses numbers the template lacks and ties numbers it holds twice to equal values', () => {
     expect(toSlots('₹450 each', ['449'])).toBeNull();
-    expect(toSlots('1 left', ['1', '449', '1'])).toBeNull();
     expect(toSlots('1.5 lakh', ['150000'])).toBeNull();
+    const tied = toSlots('1 left', ['1', '449', '01'])!;
+    expect(tied.same).toEqual([[0, 2]]);
+    expect(fillSlots(tied, ['2', '449', '02'])).toBe('2 left');
+    expect(fillSlots(tied, ['1', '449', '02'])).toBeNull();
   });
 
   it('spots replies that repeat a buyer word the template and facts do not contain', () => {

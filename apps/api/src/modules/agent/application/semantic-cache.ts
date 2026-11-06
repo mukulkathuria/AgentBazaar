@@ -4,13 +4,13 @@ import type { Metrics } from '../../../shared/observability/metrics.js';
 import type { EmbeddingsPort } from '../../search/index.js';
 import { checkReply } from '../domain/guard.js';
 import type { ComposeRequest } from '../domain/ports.js';
-import { cacheContext, cosine, echoesBuyer, fillSlots, templateShape, toSlots } from '../domain/semantic-cache.js';
+import { cacheContext, cosine, echoesBuyer, fillSlots, type Slotted, templateShape, toSlots } from '../domain/semantic-cache.js';
 
 interface Entry {
   /** Embedding of the buyer's redacted, number-masked message. */
   v: number[];
   /** Model wording with every number replaced by a slot of its template. */
-  reply: string;
+  reply: Slotted;
 }
 
 export interface CacheLookup {
