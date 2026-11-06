@@ -138,7 +138,8 @@ export class OpenSearchAdapter implements SearchPort {
     const depth = Math.max(50, query.offset + query.limit);
     const [vector] = await this.embeddings.embed([q]);
     // Typos keep their first letter (prefix_length 1), which spares fuzzy matching most of the term dictionary.
-    const match = { query: q, fields: ['name^3', 'category_name^2', 'skus', 'description'], fuzziness: 'AUTO', prefix_length: 1 };
+    // A whole-SKU match outweighs a brand word in a name (best_fields keeps one field's score per document).
+    const match = { query: q, fields: ['name^3', 'category_name^2', 'skus^10', 'description'], fuzziness: 'AUTO', prefix_length: 1 };
     const [kw, vec] = await Promise.all([
       this.keywords({ from: 0, size: depth, query: { bool: { must: [{ multi_match: match }], filter } } }),
       this.qdrant.request<QdrantResponse>('POST', `${this.points}/points/search`, {

@@ -1,0 +1,66 @@
+name: Search benchmark
+
+# The 100,000-product search benchmark of docs/benchmarks/search.md: golden-set relevance and SearchService
+# latency on Postgres (lite), Meilisearch (growth) and OpenSearch + Qdrant (scale), every product with all
+# its variants. Runs when search code changes, and nightly. The Services workflow runs the same suite at
+# 10,000 products on every push.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/search/**'
+      - 'apps/api/src/modules/catalog/application/catalog.service.ts'
+      - 'apps/api/test/services/search-golden.spec.ts'
+      - 'apps/api/test/services/real-engines.ts'
+      - 'apps/api/test/support/search-golden.ts'
+      - 'apps/api/test/support/search-workload.ts'
+      - 'packages/testkit/src/**'
+      - 'tests/infra/docker-compose.yml'
+      - '.github/workflows/search-benchmark.yml'
+  schedule:
+    - cron: '30 2 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: search-benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    name: Search at 100,000 products
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Runner hardware
+        run: |
+          echo "cpus=$(nproc)"
+          lscpu | grep -E '^(Model name|Thread|Core|Socket)'
+          free -h
+      - name: Start Postgres, Meilisearch, OpenSearch and Qdrant
+        run: |
+          sudo sysctl -w vm.max_map_count=262144
+          docker compose -f tests/infra/docker-compose.yml up -d --wait --wait-timeout 300 --quiet-pull \
+            postgres meilisearch opensearch qdrant
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@agentbazaar/api^...
+      - name: Benchmark at 100,000 products
+        env:
+          SEARCH_BENCH_PRODUCTS: '100000'
+          VITEST_MAX_WORKERS: '1'
+        run: pnpm --filter @agentbazaar/api exec vitest run --project services test/services/search-golden.spec.ts
+      - name: Engine memory after the run
+        if: always()
+        run: docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'
+      - name: Service logs
+        if: failure()
+        run: docker compose -f tests/infra/docker-compose.yml logs --tail=150 meilisearch opensearch qdrant
+      - if: always()
+        run: docker compose -f tests/infra/docker-compose.yml down -v

@@ -263,7 +263,11 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
       track_total_hits: true,
       query: {
         bool: {
-          must: [{ multi_match: { query: 'keyboard', fuzziness: 'AUTO', prefix_length: 1 } }],
+          must: [
+            {
+              multi_match: { query: 'keyboard', fields: ['name^3', 'category_name^2', 'skus^10', 'description'], fuzziness: 'AUTO', prefix_length: 1 },
+            },
+          ],
           filter: [
             { term: { category_paths: 'electronics' } },
             { term: { brand_lc: 'thock' } },
