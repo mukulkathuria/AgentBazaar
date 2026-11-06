@@ -3,7 +3,8 @@
 #   Lite store (one VPS):      cp .env.example .env  # fill in secrets, then
 #                              docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile lite up -d --build
 #   Growth services:           add --profile growth   (Meilisearch, NATS JetStream, OpenBao, Keycloak)
-#   Scale services:            add --profile scale    (Kafka, OpenSearch, Qdrant)
+#   Scale services:            add --profile scale    (Kafka, OpenSearch, Qdrant, Temporal and the checkout saga
+#                              worker; set WORKFLOW_ENGINE=temporal and TEMPORAL_ADDRESS=temporal:7233 in .env)
 #   Metrics:                   add --profile observability (Prometheus, Grafana)
 name: agentbazaar
 
@@ -132,6 +133,29 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.15.0
     profiles: [scale]
+  # Single-node Temporal keeping its state in a volume; larger installs use Temporal Cloud or its Helm chart.
+  temporal:
+    image: temporalio/temporal:1.10.0
+    profiles: [scale]
+    restart: unless-stopped
+    command: ['server', 'start-dev', '--ip', '0.0.0.0', '--headless', '--db-filename', '/home/temporal/temporal.db']
+    volumes: [temporal:/home/temporal]
+    healthcheck: { test: ['CMD', 'temporal', 'operator', 'cluster', 'health'], interval: 5s, timeout: 5s, retries: 30 }
+  workflow-worker:
+    <<: *api
+    build: { context: ../.., dockerfile: apps/api/Dockerfile, target: workflow-worker }
+    image: ghcr.io/mukulkathuria/agentbazaar-worker:${APP_VERSION:-latest}
+    profiles: [scale]
+    env_file: [../../.env]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://agentbazaar:${POSTGRES_PASSWORD}@postgres:5432/agentbazaar
+      VALKEY_URL: redis://valkey:6379
+      WORKFLOW_ENGINE: temporal
+      TEMPORAL_ADDRESS: temporal:7233
+    depends_on:
+      postgres: { condition: service_healthy }
+      temporal: { condition: service_healthy }
 
   # ---------- observability ----------
   prometheus:
@@ -143,4 +167,4 @@ services:
     profiles: [observability]
     ports: ['3001:3000']
 
-volumes: { pgdata: {}, caddy_data: {}, meili: {}, nats: {} }
+volumes: { pgdata: {}, caddy_data: {}, meili: {}, nats: {}, temporal: {} }
