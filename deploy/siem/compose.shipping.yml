@@ -1,0 +1,29 @@
+# Ships the API's security log lines to a Wazuh manager you run separately (Wazuh is GPL-2.0: AgentBazaar ships
+# only configuration for it). Overlay on the lite stack:
+#   WAZUH_MANAGER=wazuh.internal docker compose -f deploy/compose/docker-compose.yml \
+#     -f deploy/siem/compose.shipping.yml --profile lite up -d
+# Paths resolve from deploy/compose, the first file's directory.
+services:
+  api:
+    logging:
+      # dockerd connects from the host, hence the loopback-only published port below; async so the API starts
+      # even before the shipper. `docker logs` keeps working (dual logging).
+      driver: fluentd
+      options:
+        fluentd-address: 127.0.0.1:24224
+        fluentd-async: 'true'
+        tag: agentbazaar-api
+
+  log-shipper:
+    image: fluent/fluent-bit:4.2.8
+    profiles: [lite, growth, scale]
+    restart: unless-stopped
+    ports: ['127.0.0.1:24224:24224']
+    environment:
+      WAZUH_MANAGER: '${WAZUH_MANAGER:?set WAZUH_MANAGER to the Wazuh manager host}'
+      WAZUH_SYSLOG_PORT: '${WAZUH_SYSLOG_PORT:-514}'
+      HOSTNAME: '${SITE_DOMAIN:-agentbazaar}'
+    volumes: ['../siem/fluent-bit/fluent-bit.yaml:/fluent-bit/etc/fluent-bit.yaml:ro']
+    command: ['/fluent-bit/bin/fluent-bit', '-c', '/fluent-bit/etc/fluent-bit.yaml']
+    read_only: true
+    security_opt: [no-new-privileges:true]

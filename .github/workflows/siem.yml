@@ -1,0 +1,58 @@
+name: SIEM (Wazuh rules)
+
+# Generates real API log lines by exercising every security event (apps/api/test/e2e/siem-events.e2e.spec.ts), then
+# runs deploy/siem's Wazuh decoders and rules over them with wazuh-logtest in a pinned wazuh-manager container.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/siem/**'
+      - '.github/workflows/siem.yml'
+      - 'apps/api/test/e2e/siem-events.e2e.spec.ts'
+      - 'apps/api/src/shared/http/error.filter.ts'
+      - 'apps/api/src/shared/http/auth.ts'
+      - 'apps/api/src/modules/audit/audit.module.ts'
+      - 'apps/api/src/modules/agent/application/chat.service.ts'
+      - 'apps/api/src/modules/pricing/application/negotiation.service.ts'
+  pull_request:
+    paths:
+      - 'deploy/siem/**'
+      - '.github/workflows/siem.yml'
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: siem-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  logtest:
+    name: wazuh-logtest on fresh API log lines
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@agentbazaar/api^...
+      - name: Exercise the API and keep its security log lines
+        run: pnpm --filter @agentbazaar/api exec vitest run --project e2e test/e2e/siem-events.e2e.spec.ts
+        env:
+          SIEM_SAMPLES_OUT: ${{ github.workspace }}/siem-samples.jsonl
+      - name: Decoders and rules through wazuh-logtest
+        run: bash deploy/siem/test/logtest.sh "$GITHUB_WORKSPACE/siem-samples.jsonl"
+      - name: Shipping example parses (compose overlay and Fluent Bit config)
+        run: |
+          touch .env
+          WAZUH_MANAGER=wazuh.example docker compose -f deploy/compose/docker-compose.yml -f deploy/siem/compose.shipping.yml --profile lite config -q
+          docker run --rm -e WAZUH_MANAGER=wazuh.example -e WAZUH_SYSLOG_PORT=514 -e HOSTNAME=shop \
+            -v "$PWD/deploy/siem/fluent-bit/fluent-bit.yaml:/fluent-bit/etc/fluent-bit.yaml:ro" \
+            fluent/fluent-bit:4.2.8 -c /fluent-bit/etc/fluent-bit.yaml --dry-run

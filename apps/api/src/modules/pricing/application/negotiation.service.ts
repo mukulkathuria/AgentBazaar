@@ -351,6 +351,8 @@ export class NegotiationService {
       const { decision, state } = DECISION[d.kind]!;
       guarded(() => transition(s.state, state));
       await this.recordOffer(tx, s.id, 'buyer', input.unitPricePaise, qty, 'offer', [], input.message ? redact(input.message).slice(0, 500) : null);
+      // Far below the floor: the audit row and its SIEM line (deploy/siem) feed the floor-probing alert.
+      if (d.reasonCodes.includes('lowball')) await this.audit.record(tx, subject, 'pricing.lowball_offer', s.id, { round: d.round });
       const { quote, expiresAt } = await this.persistDecision(tx, s, { d, decision, state, quantity: qty, askUnit: pos.currentAskUnit, policy, ladder });
       const alternatives = d.kind === 'counter' || d.kind === 'reject' ? volumeAlternatives(policy, lin, d.round, d.unitPaise) : [];
       return {

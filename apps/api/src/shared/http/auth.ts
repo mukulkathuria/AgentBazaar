@@ -123,9 +123,10 @@ export class AuthGuard implements CanActivate {
       this.reflector.getAllAndOverride<AuthRequirement | undefined>(AUTH_KEY, [ctx.getHandler(), ctx.getClass()]) ?? 'public';
     const req = ctx.switchToHttp().getRequest<FastifyRequest>();
     const principal = await resolvePrincipal(req, this.verifier, this.opts);
+    // Set before the checks, so a refusal is logged with the caller it refused (logRefusal).
+    req.principal = principal;
     assertRequirement(principal, requirement);
     await enforceAgentQuota(principal, this.cache, Date.now());
-    req.principal = principal;
     return true;
   }
 }

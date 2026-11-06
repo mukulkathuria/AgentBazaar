@@ -45,6 +45,30 @@ export function toErrorResponse(err: unknown, requestId?: string): { status: num
   return { ...withId(500, 'internal', 'Something went wrong. Please try again.'), internal: true };
 }
 
+const WATCHED = new Set([401, 403, 429]);
+
+/**
+ * One `sec` line per refused request for the SIEM (deploy/siem): failed sign-ins and tokens, bad webhook
+ * signatures, missing scopes or admin MFA, per-IP and per-agent quota breaches. Messages are the client's own.
+ */
+export function logRefusal(logger: Logger, req: FastifyRequest | undefined, status: number, body: ErrorBody): void {
+  if (!req || !WATCHED.has(status)) return;
+  logger.warn(
+    {
+      sec: 'http.refused',
+      status,
+      code: body.error.code,
+      reason: body.error.message,
+      method: req.method,
+      route: req.routeOptions?.url ?? 'unmatched',
+      srcip: req.ip,
+      subject: req.principal?.subject,
+      reqId: req.id,
+    },
+    'request refused',
+  );
+}
+
 @Catch()
 export class ErrorFilter implements ExceptionFilter {
   constructor(private readonly logger: Logger) {}
@@ -55,6 +79,7 @@ export class ErrorFilter implements ExceptionFilter {
     const reply = ctx.getResponse<FastifyReply>();
     const { status, body, internal } = toErrorResponse(exception, req?.id);
     if (internal) this.logger.error({ err: exception, reqId: req?.id, route: req?.url }, 'unhandled error');
+    logRefusal(this.logger, req, status, body);
     if (reply.sent) return;
     void reply.status(status).header('cache-control', 'no-store').send(body);
   }

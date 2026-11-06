@@ -1,8 +1,9 @@
 import { Global, Inject, Injectable, Module } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import type { Logger } from 'pino';
 import type { Executor } from '../../shared/db/database.js';
 import { json } from '../../shared/db/sql-helpers.js';
-import { DB } from '../../shared/kernel/tokens.js';
+import { DB, LOGGER } from '../../shared/kernel/tokens.js';
 import { redact, redactDeep } from '../../shared/observability/redact.js';
 
 export interface LlmTrace {
@@ -27,12 +28,18 @@ export interface LlmTrace {
 /** Append-only audit trail and LLM traces. Everything is PII-redacted before it is stored. */
 @Injectable()
 export class AuditService {
-  constructor(@Inject(DB) private readonly db: Executor) {}
+  constructor(
+    @Inject(DB) private readonly db: Executor,
+    @Inject(LOGGER) private readonly logger: Logger,
+  ) {}
 
   async record(ex: Executor | null, actor: string, action: string, target: string | null, data: Record<string, unknown> = {}): Promise<void> {
     await (ex ?? this.db).execute(
       sql`INSERT INTO audit_log (actor, action, target, data) VALUES (${actor}, ${action}, ${target}, ${json(redactDeep(data))})`,
     );
+    // The SIEM's copy (deploy/siem): who did what to which id, never the data. Inside a transaction it is
+    // written before the commit, so a rolled-back action can still appear here.
+    this.logger.info({ sec: `audit.${action}`, actor, target }, 'audit');
   }
 
   async trace(t: LlmTrace): Promise<void> {

@@ -3,7 +3,8 @@ import type { Logger } from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { AppError, forbidden, notFound } from '../kernel/errors.js';
-import { ErrorFilter, toErrorResponse } from './error.filter.js';
+import type { FastifyRequest } from 'fastify';
+import { ErrorFilter, logRefusal, toErrorResponse } from './error.filter.js';
 
 const withCode = (message: string, code: string) => Object.assign(new Error(message), { code });
 
@@ -151,5 +152,41 @@ describe('@lite error filter', () => {
     expect(log.error).toHaveBeenCalledTimes(1);
     expect(reply.status).not.toHaveBeenCalled();
     expect(reply.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('@scale refusal log for the SIEM', () => {
+  const req = { id: 'req-8', method: 'GET', ip: '203.0.113.9', routeOptions: { url: '/api/v1/admin/approvals' } } as unknown as FastifyRequest;
+
+  it('logs 401, 403 and 429 with the code, route, source address and caller', () => {
+    const warn = vi.fn();
+    const withCaller = { ...req, principal: { subject: 'customer:cus_x' } } as unknown as FastifyRequest;
+    const refused = [new AppError('unauthorized', 'No'), new AppError('forbidden', 'Admin access needs a session verified with MFA'), new AppError('rate_limited', 'Slow down')];
+    for (const err of refused) {
+      const { status, body } = toErrorResponse(err);
+      logRefusal({ warn } as unknown as Logger, withCaller, status, body);
+    }
+    expect(warn).toHaveBeenCalledTimes(3);
+    expect(warn.mock.calls[1]![0]).toEqual({
+      sec: 'http.refused',
+      status: 403,
+      code: 'forbidden',
+      reason: 'Admin access needs a session verified with MFA',
+      method: 'GET',
+      route: '/api/v1/admin/approvals',
+      srcip: '203.0.113.9',
+      subject: 'customer:cus_x',
+      reqId: 'req-8',
+    });
+  });
+
+  it('ignores every other status, and requests without context', () => {
+    const warn = vi.fn();
+    for (const err of [new AppError('conflict', 'Busy'), new Error('boom'), new AppError('validation_failed', 'Bad')]) {
+      const { status, body } = toErrorResponse(err);
+      logRefusal({ warn } as unknown as Logger, req, status, body);
+    }
+    logRefusal({ warn } as unknown as Logger, undefined, 401, toErrorResponse(new AppError('unauthorized', 'No')).body);
+    expect(warn).not.toHaveBeenCalled();
   });
 });

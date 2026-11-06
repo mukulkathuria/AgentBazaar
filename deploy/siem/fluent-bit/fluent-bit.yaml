@@ -1,0 +1,23 @@
+# Ships the API's JSON log lines to a Wazuh manager as syslog messages from "agentbazaar-api", the program name the
+# agentbazaar-api decoder (deploy/siem/wazuh/decoders) keys on. Used by deploy/siem/compose.shipping.yml.
+service:
+  flush: 1
+  log_level: warn
+
+pipeline:
+  inputs:
+    # Docker's fluentd logging driver on the API container sends every stdout line here as {"log": "<line>", ...}.
+    - name: forward
+      listen: 0.0.0.0
+      port: 24224
+
+  outputs:
+    - name: syslog
+      match: 'agentbazaar-api'
+      host: ${WAZUH_MANAGER}
+      port: ${WAZUH_SYSLOG_PORT}
+      mode: tcp
+      syslog_format: rfc3164
+      syslog_hostname_preset: ${HOSTNAME}
+      syslog_appname_preset: agentbazaar-api
+      syslog_message_key: log

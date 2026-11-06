@@ -8,7 +8,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import type { AppConfig } from '@agentbazaar/config';
 import { AppModule } from '../app.module.js';
 import { safeEqual } from '../shared/crypto/primitives.js';
-import { ErrorFilter, toErrorResponse } from '../shared/http/error.filter.js';
+import { ErrorFilter, logRefusal, toErrorResponse } from '../shared/http/error.filter.js';
 import { NestPinoLogger } from '../shared/observability/logger.js';
 import { createInfra, type Infra, type InfraOverrides } from './infra.js';
 
@@ -49,6 +49,7 @@ export async function createApp(config: AppConfig, opts: CreateAppOptions = {}):
   fastify.setErrorHandler((err, req, reply) => {
     const { status, body, internal } = toErrorResponse(err, req.id);
     if (internal) infra.logger.error({ err, reqId: req.id }, 'unhandled error');
+    logRefusal(infra.logger, req, status, body);
     void reply.status(status).send(body);
   });
   await app.register(helmet, {

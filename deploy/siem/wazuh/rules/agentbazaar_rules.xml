@@ -1,0 +1,192 @@
+<!--
+  AgentBazaar security events (deploy/siem/README.md). Install as /var/ossec/etc/rules/agentbazaar_rules.xml with
+  deploy/siem/wazuh/decoders/agentbazaar_decoders.xml. Custom rule ids 100200-100299.
+
+  The API logs facts (a refused request, a flagged message, an audit record); patterns over time (brute force,
+  floor probing, runaway agents) are frequency rules here, so thresholds change without a release.
+-->
+<group name="agentbazaar,">
+
+  <!-- Every API line: shipped over syslog (agentbazaar-api decoder) or read from a JSON file (built-in json decoder). -->
+  <rule id="100200" level="0">
+    <decoded_as>agentbazaar-api</decoded_as>
+    <description>AgentBazaar API log line.</description>
+  </rule>
+
+  <rule id="100201" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="service" type="pcre2">^agentbazaar-api$</field>
+    <description>AgentBazaar API log line.</description>
+  </rule>
+
+  <!-- Sign-in and tokens -->
+  <rule id="100210" level="5">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^http\.refused$</field>
+    <field name="code" type="pcre2">^unauthorized$</field>
+    <field name="route" type="pcre2">^/(api/v1/auth/login|oauth/token)$</field>
+    <description>AgentBazaar: failed sign-in from $(srcip).</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100211" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100210</if_matched_sid>
+    <same_srcip />
+    <description>AgentBazaar: sign-in brute force from $(srcip) (5 failures within 2 minutes).</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failures,pci_dss_11.4,</group>
+  </rule>
+
+  <rule id="100212" level="4">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^http\.refused$</field>
+    <field name="code" type="pcre2">^unauthorized$</field>
+    <description>AgentBazaar: missing, expired or invalid token on $(route) from $(srcip).</description>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <rule id="100213" level="10" frequency="10" timeframe="60">
+    <if_matched_sid>100212</if_matched_sid>
+    <same_srcip />
+    <description>AgentBazaar: 10 invalid tokens within a minute from $(srcip) (token guessing or replay).</description>
+    <mitre>
+      <id>T1550</id>
+    </mitre>
+    <group>authentication_failures,</group>
+  </rule>
+
+  <!-- Payment webhooks -->
+  <rule id="100215" level="8">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^http\.refused$</field>
+    <field name="code" type="pcre2">^invalid_signature$</field>
+    <description>AgentBazaar: payment webhook with a bad signature from $(srcip) (forged notification or a wrong secret).</description>
+    <group>payment_webhook,</group>
+  </rule>
+
+  <rule id="100216" level="12" frequency="3" timeframe="600">
+    <if_matched_sid>100215</if_matched_sid>
+    <same_srcip />
+    <description>AgentBazaar: repeated forged payment webhooks from $(srcip).</description>
+    <group>payment_webhook,</group>
+  </rule>
+
+  <!-- Roles, scopes and admin MFA -->
+  <rule id="100220" level="10">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^http\.refused$</field>
+    <field name="code" type="pcre2">^forbidden$</field>
+    <field name="reason" type="pcre2">MFA</field>
+    <description>AgentBazaar: admin route refused to a session without MFA ($(subject) from $(srcip)).</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>admin_mfa,pci_dss_8.3,</group>
+  </rule>
+
+  <rule id="100221" level="5">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^http\.refused$</field>
+    <field name="code" type="pcre2">^forbidden$</field>
+    <description>AgentBazaar: $(subject) refused on $(route): missing scope or role.</description>
+    <group>access_denied,</group>
+  </rule>
+
+  <!-- Quotas and rate limits -->
+  <rule id="100230" level="6">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^http\.refused$</field>
+    <field name="code" type="pcre2">^rate_limited$</field>
+    <field name="subject" type="pcre2">^agent:</field>
+    <description>AgentBazaar: agent $(subject) went over its per-minute quota.</description>
+    <group>quota_breach,</group>
+  </rule>
+
+  <rule id="100231" level="5">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^http\.refused$</field>
+    <field name="code" type="pcre2">^(rate_limited|budget_exceeded)$</field>
+    <description>AgentBazaar: rate limit or budget reached by $(srcip) on $(route).</description>
+    <group>quota_breach,</group>
+  </rule>
+
+  <rule id="100232" level="10" frequency="20" timeframe="120">
+    <if_matched_sid>100230</if_matched_sid>
+    <same_field>subject</same_field>
+    <description>AgentBazaar: agent $(subject) keeps going over its quota (runaway or abusive client).</description>
+    <group>quota_breach,</group>
+  </rule>
+
+  <!-- The seller agent -->
+  <rule id="100240" level="6">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^agent\.injection$</field>
+    <description>AgentBazaar: prompt injection flagged in $(channel) session $(sessionId).</description>
+    <group>prompt_injection,</group>
+  </rule>
+
+  <rule id="100241" level="10">
+    <if_sid>100240</if_sid>
+    <field name="injections" type="pcre2">^([2-9]|\d{2,})$</field>
+    <description>AgentBazaar: repeated prompt injection in session $(sessionId); the router hands it to a human.</description>
+    <group>prompt_injection,</group>
+  </rule>
+
+  <rule id="100245" level="4">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^audit\.pricing\.lowball_offer$</field>
+    <description>AgentBazaar: far-below-floor offer by $(actor) in negotiation $(target).</description>
+    <group>floor_probing,</group>
+  </rule>
+
+  <rule id="100246" level="10" frequency="5" timeframe="600">
+    <if_matched_sid>100245</if_matched_sid>
+    <same_field>actor</same_field>
+    <description>AgentBazaar: floor probing by $(actor) (5 lowball offers within 10 minutes).</description>
+    <group>floor_probing,</group>
+  </rule>
+
+  <!-- Audit trail -->
+  <rule id="100250" level="5">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^audit\.identity\.erased$</field>
+    <description>AgentBazaar: personal data erased on request (customer $(target)).</description>
+    <group>pii_erasure,</group>
+  </rule>
+
+  <rule id="100251" level="10" frequency="10" timeframe="600">
+    <if_matched_sid>100250</if_matched_sid>
+    <description>AgentBazaar: 10 erasures within 10 minutes: check for account takeover or misuse.</description>
+    <group>pii_erasure,</group>
+  </rule>
+
+  <rule id="100252" level="12">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^audit\.identity\.refresh_token_reused$</field>
+    <description>AgentBazaar: a refresh token was used twice and the session revoked (stolen token?).</description>
+    <mitre>
+      <id>T1550</id>
+    </mitre>
+    <group>session_hijack,</group>
+  </rule>
+
+  <rule id="100253" level="6">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^audit\.(identity\.(admin_created|agent_client_created|mfa_enabled)|pricing\.policy_updated)$</field>
+    <description>AgentBazaar: privileged change $(sec) by $(actor).</description>
+    <group>privileged_change,</group>
+  </rule>
+
+  <rule id="100254" level="3">
+    <if_sid>100200, 100201</if_sid>
+    <field name="sec" type="pcre2">^audit\.</field>
+    <description>AgentBazaar: audit event $(sec) by $(actor).</description>
+    <group>audit,</group>
+  </rule>
+
+</group>

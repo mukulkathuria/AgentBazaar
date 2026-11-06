@@ -169,7 +169,11 @@ export class ChatService {
     const c = await this.classifier.classify(text, state.language);
     // Switch to Hindi when the buyer writes it; mixed text (SKUs, Hinglish) keeps the chosen language.
     if (c.language === 'hi') state.language = 'hi';
-    if (c.intent === 'injection_attempt') state.injections = (state.injections ?? 0) + 1;
+    if (c.intent === 'injection_attempt') {
+      state.injections = (state.injections ?? 0) + 1;
+      // For the SIEM (deploy/siem): never the text itself, only that this session tried again.
+      this.logger.warn({ sec: 'agent.injection', sessionId: session.id, channel: session.channel, injections: state.injections }, 'prompt injection flagged');
+    }
     if (c.intent === 'complaint') state.complaints = (state.complaints ?? 0) + 1;
     const t: Turn = { session, state, text, c, sku: null, ...(scopes ? { scopes } : {}) };
     const rulesAnswer = await this.rulesAnswer(t);

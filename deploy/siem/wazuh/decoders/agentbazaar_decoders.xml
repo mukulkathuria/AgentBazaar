@@ -1,0 +1,12 @@
+<!--
+  AgentBazaar API logs: pino JSON, one object per line, every security event carrying a "sec" field
+  (deploy/siem/README.md). Install as /var/ossec/etc/decoders/agentbazaar_decoders.xml.
+
+  Shipped over syslog with the program name agentbazaar-api (Fluent Bit or Docker's syslog driver), lines decode here.
+  Lines a Wazuh agent reads from a JSON file (log_format json) decode with Wazuh's built-in "json" decoder instead;
+  the rules accept both.
+-->
+<decoder name="agentbazaar-api">
+  <program_name>^agentbazaar-api$</program_name>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
