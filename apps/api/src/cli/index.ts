@@ -9,6 +9,7 @@ import { CheckoutSagaSteps, loadSagaWorker } from '../modules/orders/index.js';
 import { SearchIndexer } from '../modules/search/index.js';
 import { generateKeyEnv } from '../shared/crypto/keyring.js';
 import { loadMigrations, migrate } from '../shared/db/migrator.js';
+import { archivePartitions } from '../shared/partitions/archive.js';
 import { piiRewrap } from './pii-rewrap.js';
 import { seedDemo } from './seed.js';
 
@@ -23,7 +24,9 @@ const USAGE = `Usage: pnpm --filter @agentbazaar/api cli <command> [options]
   create-admin --email E --password P [--name N]
   create-agent-client --name N [--scopes "catalog:read quote:create order:create"] [--quota 60]
   pii rewrap [--batch-size 100]                Move customer data keys from PII_MASTER_KEY to OpenBao Transit
-                                               (lite to growth), and re-wrap them after a Transit key rotation`;
+                                               (lite to growth), and re-wrap them after a Transit key rotation
+  archive (--older-than MONTHS | --before YYYY-MM) [--tables order_events,audit_log]
+                                               Move event-log partitions of earlier months to ARCHIVE_DIR (gzip JSONL)`;
 
 const OPTIONS = {
   products: { type: 'string' },
@@ -35,6 +38,9 @@ const OPTIONS = {
   scopes: { type: 'string' },
   quota: { type: 'string' },
   'batch-size': { type: 'string' },
+  before: { type: 'string' },
+  'older-than': { type: 'string' },
+  tables: { type: 'string' },
 } as const;
 
 type Values = ReturnType<typeof parseArgs<{ options: typeof OPTIONS }>>['values'];
@@ -108,6 +114,27 @@ async function migrateDatabase(): Promise<void> {
   }
 }
 
+/** `--older-than N` keeps N whole months before the current one, so a schedule (the Helm CronJob) needs no date. */
+async function archive(v: Values): Promise<void> {
+  const config = loadConfig();
+  const dir = config.env.ARCHIVE_DIR;
+  if (!dir) throw new ConfigError(['archive needs ARCHIVE_DIR: the directory that receives the archives']);
+  const opts = {
+    dir,
+    ...(v.before ? { before: v.before } : {}),
+    ...(v['older-than'] ? { olderThanMonths: z.coerce.number().int().min(1).max(1200).parse(v['older-than']) } : {}),
+    ...(v.tables ? { tables: v.tables.split(',').map((t) => t.trim()) } : {}),
+    log: (line: string) => console.log(line),
+  };
+  const database = await createDatabase(config);
+  try {
+    const done = await archivePartitions(database, opts);
+    console.log(done.length ? `Archived ${done.length} partitions to ${dir}.` : 'Nothing to archive.');
+  } finally {
+    await database.close();
+  }
+}
+
 /** Runs until SIGINT or SIGTERM; the worker drains its running steps, then the app closes. */
 async function runWorkflowWorker(running: RunningApp): Promise<void> {
   const env = running.infra.config.env;
@@ -150,6 +177,8 @@ async function main(argv: string[]): Promise<void> {
       process.exitCode = await piiRewrap(loadConfig(), batch);
       return;
     }
+    case 'archive':
+      return archive(values);
     default:
       console.log(USAGE);
       if (command && command !== 'help') process.exitCode = 64; // EX_USAGE

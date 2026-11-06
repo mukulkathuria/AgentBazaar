@@ -32,6 +32,8 @@ export const EnvSchema = z.object({
   DATABASE_REPLICA_MAX_LAG_MS: z.coerce.number().int().min(500).max(3_600_000).default(5_000),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(500).default(20),
   PGLITE_DATA_DIR: optionalString,
+  /** Where `cli archive` writes old event-log partitions (gzip JSON lines). */
+  ARCHIVE_DIR: optionalString,
 
   SEARCH_ADAPTER: z.enum(['postgres', 'meilisearch', 'opensearch']).optional(),
   MEILISEARCH_URL: z.url().optional(),

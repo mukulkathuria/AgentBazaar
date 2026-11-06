@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPgliteDatabase, createPostgresDatabase, type Database } from '../../src/shared/db/database.js';
-import { loadMigrations, migrate } from '../../src/shared/db/migrator.js';
+import { loadMigrations, migrate, type Migration } from '../../src/shared/db/migrator.js';
 
 export const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../migrations');
 
@@ -16,11 +16,14 @@ export interface TestDb {
  * PGlite in memory by default (no setup needed). When TEST_DATABASE_URL points at a real
  * Postgres, each test file gets its own freshly migrated database that is dropped afterwards.
  */
-export async function createTestDb(opts: { poolMax?: number; statementTimeoutMs?: number } = {}): Promise<TestDb> {
+export async function createTestDb(
+  opts: { poolMax?: number; statementTimeoutMs?: number; migrations?: Migration[] } = {},
+): Promise<TestDb> {
   const adminUrl = process.env.TEST_DATABASE_URL;
+  const migrations = opts.migrations ?? loadMigrations(MIGRATIONS_DIR);
   if (!adminUrl) {
     const database = await createPgliteDatabase();
-    await migrate(database, loadMigrations(MIGRATIONS_DIR));
+    await migrate(database, migrations);
     // The app may already have closed it; closing twice is harmless here.
     return { database, url: null, cleanup: () => database.close().catch(() => undefined) };
   }
@@ -34,7 +37,7 @@ export async function createTestDb(opts: { poolMax?: number; statementTimeoutMs?
     poolMax: opts.poolMax ?? 20,
     ...(opts.statementTimeoutMs ? { statementTimeoutMs: opts.statementTimeoutMs } : {}),
   });
-  await migrate(database, loadMigrations(MIGRATIONS_DIR));
+  await migrate(database, migrations);
   return {
     database,
     url: url.toString(),

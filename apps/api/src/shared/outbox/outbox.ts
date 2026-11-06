@@ -45,10 +45,14 @@ export interface EventBus {
  */
 export async function runIdempotent(db: Executor, consumer: string, event: OutboxEvent, handler: EventHandler): Promise<boolean> {
   return inTransaction(db, async (tx) => {
+    // processed_events is partitioned by month, so (consumer, event_id) cannot be a unique key; a lock on the
+    // pair, taken before the check, makes check-then-insert atomic instead (ADR 0013).
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('processed_events'), hashtext(${`${consumer}:${event.id}`}))`);
     const claimed = await one<{ event_id: string }>(
       tx,
-      sql`INSERT INTO processed_events (consumer, event_id) VALUES (${consumer}, ${event.id})
-          ON CONFLICT DO NOTHING RETURNING event_id`,
+      sql`INSERT INTO processed_events (consumer, event_id) SELECT ${consumer}, ${event.id}::uuid
+          WHERE NOT EXISTS (SELECT 1 FROM processed_events WHERE consumer = ${consumer} AND event_id = ${event.id}::uuid)
+          RETURNING event_id`,
     );
     if (!claimed) return false;
     await handler(event, tx);
@@ -103,6 +107,8 @@ interface Row {
   aggregate_id: string;
   payload: Record<string, unknown>;
   created_at: Date;
+  /** created_at as text: exact to the microsecond (a Date is not), so updates can name the row's partition. */
+  created_key: string;
   attempts: number;
   seq: number;
 }
@@ -152,24 +158,25 @@ export class OutboxRelay {
     const claimed = await rows<Row>(
       this.db,
       sql`UPDATE outbox_events SET next_attempt_at = now() + interval '30 seconds'
-          WHERE id IN (
-            SELECT e.id FROM outbox_events e WHERE e.published_at IS NULL AND e.next_attempt_at <= now()
+          WHERE (id, created_at) IN (
+            SELECT e.id, e.created_at FROM outbox_events e WHERE e.published_at IS NULL AND e.next_attempt_at <= now()
               AND NOT EXISTS (SELECT 1 FROM outbox_events p
                               WHERE p.aggregate_id = e.aggregate_id AND p.published_at IS NULL AND p.seq < e.seq)
             ORDER BY e.seq LIMIT ${batch} FOR UPDATE SKIP LOCKED)
-          RETURNING id, topic, aggregate_id, payload, created_at, attempts, seq`,
+          RETURNING id, topic, aggregate_id, payload, created_at, created_at::text AS created_key, attempts, seq`,
     );
     claimed.sort((a, b) => a.seq - b.seq);
     for (const r of claimed) {
       const event = toEvent(r);
+      const row = sql`id = ${r.id} AND created_at = ${r.created_key}::timestamptz`;
       try {
         await this.bus.publish([event]);
-        await this.db.execute(sql`UPDATE outbox_events SET published_at = now(), last_error = NULL WHERE id = ${r.id}`);
+        await this.db.execute(sql`UPDATE outbox_events SET published_at = now(), last_error = NULL WHERE ${row}`);
       } catch (err) {
         const backoffMs = Math.min(this.opts.maxBackoffMs ?? 60_000, 250 * 2 ** r.attempts);
         await this.db.execute(
           sql`UPDATE outbox_events SET attempts = attempts + 1, last_error = ${String((err as Error).message).slice(0, 500)},
-              next_attempt_at = now() + (${backoffMs} * interval '1 millisecond') WHERE id = ${r.id}`,
+              next_attempt_at = now() + (${backoffMs} * interval '1 millisecond') WHERE ${row}`,
         );
         this.opts.onError?.(err);
       }

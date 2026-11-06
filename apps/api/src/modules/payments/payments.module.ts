@@ -127,11 +127,15 @@ export class PaymentsService {
       throw e;
     }
     return inTransaction(this.db, async (tx) => {
+      // webhook_events is partitioned by month, so (provider, event_id) cannot be a unique key: a lock on the pair
+      // makes check-then-insert atomic instead (ADR 0013).
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('webhook_events'), hashtext(${`${provider}:${ev.eventId}`}))`);
       const fresh = await one<{ event_id: string }>(
         tx,
         sql`INSERT INTO webhook_events (provider, event_id, payload)
-            VALUES (${provider}, ${ev.eventId}, ${json({ kind: ev.kind, providerOrderId: ev.providerOrderId, amountPaise: ev.amountPaise })})
-            ON CONFLICT DO NOTHING RETURNING event_id`,
+            SELECT ${provider}, ${ev.eventId}, ${json({ kind: ev.kind, providerOrderId: ev.providerOrderId, amountPaise: ev.amountPaise })}
+            WHERE NOT EXISTS (SELECT 1 FROM webhook_events WHERE provider = ${provider} AND event_id = ${ev.eventId})
+            RETURNING event_id`,
       );
       if (!fresh) return 'duplicate';
       const outcome = async (o: WebhookResult) => {

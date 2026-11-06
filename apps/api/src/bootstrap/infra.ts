@@ -13,6 +13,7 @@ import { systemClock, type Clock } from '../shared/kernel/clock.js';
 import { createLogger } from '../shared/observability/logger.js';
 import { createMetrics, type Metrics } from '../shared/observability/metrics.js';
 import { InProcessEventBus, OutboxRelay, type EventBus } from '../shared/outbox/outbox.js';
+import { partitionMaintenanceJob } from '../shared/partitions/partitions.js';
 
 export const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../migrations');
 
@@ -86,6 +87,8 @@ export async function createInfra(config: AppConfig, overrides: InfraOverrides =
       : undefined;
   const bus = await createBus(config, db, logger);
   const relay = new OutboxRelay(db, bus, { onError: (err) => logger.warn({ err }, 'outbox delivery failed; will retry') });
+  const scheduler = new Scheduler(db, logger);
+  scheduler.register(partitionMaintenanceJob);
   return {
     config,
     database,
@@ -99,7 +102,7 @@ export async function createInfra(config: AppConfig, overrides: InfraOverrides =
     cache,
     bus,
     relay,
-    scheduler: new Scheduler(db, logger),
+    scheduler,
     anonymousScopes: config.env.DEMO_MODE ? ALL_AGENT_SCOPES : ['catalog:read'],
   };
 }

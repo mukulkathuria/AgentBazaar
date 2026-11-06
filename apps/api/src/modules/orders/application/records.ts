@@ -126,9 +126,12 @@ export async function orderViews(ex: Executor, where: SQL, page = sql``): Promis
   if (!os.length) return [];
   const ids = os.map((o) => o.id);
   const lines = await linesOf(ex, ids);
+  // No event predates its order (a day of slack for clock steps), so partitions older than the oldest order are skipped.
   const events = await rows<EventRow>(
     ex,
-    sql`SELECT order_id, to_status, note, created_at FROM order_events WHERE order_id = ANY(${pgArray(ids, 'uuid')}) ORDER BY id`,
+    sql`SELECT order_id, to_status, note, created_at FROM order_events WHERE order_id = ANY(${pgArray(ids, 'uuid')})
+          AND created_at >= (SELECT min(created_at) - interval '1 day' FROM orders WHERE id = ANY(${pgArray(ids, 'uuid')}))
+        ORDER BY id`,
   );
   return os.map((o) => ({
     orderId: o.id,
