@@ -1,0 +1,79 @@
+name: Soak
+
+# Lite soak (docs/benchmarks/soak-lite.md): the k6 lite profile (100 sessions, ~30 req/s, 2 orders/s) against
+# a production build on real Postgres, sampling memory, connections and the outbox every minute. GitHub-hosted
+# jobs stop at 6 hours, so this runs 5 hours; the plan's 8-hour soak runs locally or on a self-hosted runner
+# with the same scripts and DURATION=8h.
+on:
+  schedule:
+    - cron: '0 20 * * 6'
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: k6 duration, at most 5h on GitHub-hosted runners
+        default: 5h
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soak
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    name: Lite soak (k6 + minute sampler)
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/agentbazaar_soak
+      BASE_URL: http://localhost:4000
+      DURATION: ${{ inputs.duration || '5h' }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@agentbazaar/api...
+      - run: node --test tests/load/soak-monitor.test.mjs
+      - name: Create, seed and stock the soak database
+        run: |
+          psql postgres://postgres:postgres@localhost:5432/postgres -c 'CREATE DATABASE agentbazaar_soak'
+          # Throwaway keys for this run; never printed.
+          node apps/api/dist/cli/index.js keys > "$RUNNER_TEMP/keys.env"
+          node --env-file="$RUNNER_TEMP/keys.env" apps/api/dist/cli/index.js seed --products 1000 | grep '^Catalog'
+          # A load-test database only: enough stock for 2 orders/s over 40 SKUs (docs/benchmarks/lite.md).
+          psql "$DATABASE_URL" -c 'UPDATE stock_levels SET on_hand = on_hand + 2000'
+      - name: Start the API (production build) and the minute sampler
+        run: |
+          mkdir -p tests/load/results
+          NODE_ENV=production LOG_LEVEL=warn RATE_LIMIT_PER_MINUTE=100000 \
+            nohup node --env-file="$RUNNER_TEMP/keys.env" apps/api/dist/main.js > tests/load/results/api.log 2>&1 &
+          for i in $(seq 1 60); do curl -fs "$BASE_URL/readyz" > /dev/null && break; sleep 2; done
+          curl -fs "$BASE_URL/readyz"
+          nohup node tests/load/soak-monitor.mjs tests/load/results/soak.csv > tests/load/results/monitor.log 2>&1 &
+      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
+      - name: k6 lite profile for ${{ env.DURATION }}
+        run: k6 run -q -e BASE_URL="$BASE_URL" -e DURATION="$DURATION" --summary-export=tests/load/results/soak.json tests/load/lite.js
+      - name: No growth of memory, handles, connections or the outbox after warm-up
+        if: ${{ !cancelled() }}
+        run: |
+          sleep 65
+          pkill -f soak-monitor.mjs || true
+          node tests/load/soak-monitor.mjs --check tests/load/results/soak.csv
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ !cancelled() }}
+        with:
+          name: soak-lite
+          path: tests/load/results/
