@@ -1,0 +1,3 @@
+# pytest-cov output (the root .gitignore covers .venv and the tool caches)
+.coverage
+htmlcov/

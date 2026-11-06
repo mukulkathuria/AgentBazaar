@@ -1,0 +1,60 @@
+[project]
+name = "agentbazaar-ai"
+version = "0.1.0"
+description = "Optional AI microservice for AgentBazaar: intent classification, embeddings and PII redaction."
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+# Heavy, opt-in backends. Never needed for the defaults or the tests.
+ml = ["transformers>=4.44", "sentence-transformers>=3.0"]
+presidio = ["presidio-analyzer>=2.2"]
+
+[dependency-groups]
+dev = [
+  "httpx2>=2.16",  # transport for starlette.testclient
+  "hypothesis>=6.100",
+  "jsonschema>=4.22",
+  "mypy>=1.11",
+  "pytest>=8.2",
+  "pytest-cov>=5.0",
+  "ruff>=0.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+source = ["agentbazaar_ai"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "S", "SIM", "C4", "PT", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]  # asserts and fake tokens are fine in tests
+
+[tool.mypy]
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["transformers", "sentence_transformers", "presidio_analyzer"]
+ignore_missing_imports = true
