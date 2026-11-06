@@ -1,0 +1,129 @@
+{{- $root := . -}}
+{{- range $component := splitList "," (include "agentbazaar.components" $root) }}
+{{- $c := index $root.Values $component }}
+{{- $selector := include "agentbazaar.selectorLabels" (dict "root" $root "component" $component) | fromYaml }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentbazaar.fullname" $root }}-{{ $component }}
+  labels:
+    {{- include "agentbazaar.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  {{- if not $c.autoscaling.enabled }}
+  replicas: {{ $c.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- toYaml $selector | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "agentbazaar.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $component }}
+      annotations:
+        checksum/config: {{ include "agentbazaar.config" $root | sha256sum }}
+        {{- with $c.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "agentbazaar.serviceAccountName" $root }}
+      automountServiceAccountToken: false
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml (merge (deepCopy (default dict $c.podSecurityContext)) $root.Values.podSecurityContext) | nindent 8 }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "agentbazaar.image" (dict "root" $root "component" $c) | quote }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          {{- with $c.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $c.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ $c.port | quote }}
+            {{- if eq $component "web" }}
+            # Server-side calls stay inside the cluster; Kubernetes sets HOSTNAME, which Next.js binds to.
+            - name: API_URL
+              value: {{ printf "http://%s-api:%v" (include "agentbazaar.fullname" $root) $root.Values.api.port | quote }}
+            - name: HOSTNAME
+              value: 0.0.0.0
+            {{- end }}
+            {{- if and (eq $component "api") $root.Values.migrations.enabled }}
+            # The pre-install/pre-upgrade Job has already migrated the schema.
+            - name: SKIP_MIGRATIONS
+              value: "true"
+            {{- end }}
+            {{- with $c.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "agentbazaar.fullname" $root }}-config
+            - secretRef:
+                name: {{ include "agentbazaar.secretName" $root }}
+          startupProbe:
+            httpGet:
+              path: {{ $c.livenessPath }}
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: {{ $c.livenessPath }}
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: {{ $c.readinessPath }}
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml $c.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml $root.Values.securityContext | nindent 12 }}
+          volumeMounts:
+            {{- range $i, $path := $c.writablePaths }}
+            - name: writable-{{ $i }}
+              mountPath: {{ $path }}
+            {{- end }}
+      volumes:
+        {{- range $i, $path := $c.writablePaths }}
+        - name: writable-{{ $i }}
+          emptyDir: {}
+        {{- end }}
+      {{- with $c.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $c.topologySpreadConstraints }}
+      {{- $constraints := list }}
+      {{- range $c.topologySpreadConstraints }}
+      {{- $constraints = append $constraints (merge (deepCopy .) (dict "labelSelector" (dict "matchLabels" $selector))) }}
+      {{- end }}
+      topologySpreadConstraints:
+        {{- toYaml $constraints | nindent 8 }}
+      {{- end }}
+{{- end }}

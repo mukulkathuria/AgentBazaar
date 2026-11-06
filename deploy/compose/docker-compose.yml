@@ -1,0 +1,145 @@
+# AgentBazaar on Docker Compose.
+#   60-second demo, no keys:  docker compose -f deploy/compose/docker-compose.yml --profile demo up --build
+#   Lite store (one VPS):      cp .env.example .env  # fill in secrets, then
+#                              docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile lite up -d --build
+#   Growth services:           add --profile growth   (Meilisearch, NATS JetStream, OpenBao, Keycloak)
+#   Scale services:            add --profile scale    (Kafka, OpenSearch, Qdrant)
+#   Metrics:                   add --profile observability (Prometheus, Grafana)
+name: agentbazaar
+
+x-api: &api
+  build: { context: ../.., dockerfile: apps/api/Dockerfile }
+  image: ghcr.io/mukulkathuria/agentbazaar-api:${APP_VERSION:-latest}
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: [no-new-privileges:true]
+
+x-web: &web
+  build: { context: ../.., dockerfile: apps/web/Dockerfile }
+  image: ghcr.io/mukulkathuria/agentbazaar-web:${APP_VERSION:-latest}
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+
+services:
+  # ---------- demo: two containers, embedded Postgres (PGlite), mock payments, no keys ----------
+  demo-api:
+    <<: *api
+    profiles: [demo]
+    environment:
+      NODE_ENV: production
+      DEMO_MODE: 'true'
+      SEED_ON_BOOT: 'true'
+      DATABASE_DRIVER: pglite
+      PUBLIC_API_URL: http://localhost:4000
+      PUBLIC_WEB_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+    ports: ['4000:4000']
+  demo-web:
+    <<: *web
+    profiles: [demo]
+    environment: { API_URL: 'http://demo-api:4000', NEXT_PUBLIC_API_URL: 'http://localhost:4000', NEXT_PUBLIC_SITE_URL: 'http://localhost:3000' }
+    ports: ['3000:3000']
+    depends_on: [demo-api]
+
+  # ---------- lite: one VPS ----------
+  postgres:
+    image: pgvector/pgvector:pg18
+    profiles: [lite, growth, scale]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agentbazaar
+      POSTGRES_USER: agentbazaar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ['CMD-SHELL', 'pg_isready -U agentbazaar'], interval: 5s, timeout: 5s, retries: 20 }
+  valkey:
+    image: valkey/valkey:8-alpine
+    profiles: [lite, growth, scale]
+    restart: unless-stopped
+    command: ['valkey-server', '--save', '', '--appendonly', 'no', '--maxmemory', '256mb', '--maxmemory-policy', 'allkeys-lru']
+    healthcheck: { test: ['CMD', 'valkey-cli', 'ping'], interval: 5s, timeout: 3s, retries: 20 }
+  api:
+    <<: *api
+    profiles: [lite, growth, scale]
+    env_file: [../../.env]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://agentbazaar:${POSTGRES_PASSWORD}@postgres:5432/agentbazaar
+      VALKEY_URL: redis://valkey:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+  web:
+    <<: *web
+    profiles: [lite, growth, scale]
+    env_file: [../../.env]
+    environment: { API_URL: 'http://api:4000' }
+    depends_on: [api]
+  caddy:
+    image: caddy:2-alpine
+    profiles: [lite, growth, scale]
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    environment: { SITE_DOMAIN: '${SITE_DOMAIN:-localhost}', API_DOMAIN: '${API_DOMAIN:-api.localhost}' }
+    volumes: ['./Caddyfile:/etc/caddy/Caddyfile:ro', 'caddy_data:/data']
+    depends_on: [api, web]
+  ai:
+    build: { context: ../../services/ai }
+    image: ghcr.io/mukulkathuria/agentbazaar-ai:${APP_VERSION:-latest}
+    profiles: [ai]
+    restart: unless-stopped
+
+  # ---------- growth ----------
+  meilisearch:
+    image: getmeili/meilisearch:v1.15
+    profiles: [growth]
+    environment: { MEILI_MASTER_KEY: '${MEILISEARCH_API_KEY:?Set MEILISEARCH_API_KEY}', MEILI_ENV: production }
+    volumes: [meili:/meili_data]
+  nats:
+    image: nats:2-alpine
+    profiles: [growth]
+    command: ['-js', '-sd', '/data']
+    volumes: [nats:/data]
+  openbao:
+    image: openbao/openbao:2
+    profiles: [growth]
+    cap_add: [IPC_LOCK]
+    environment: { BAO_DEV_ROOT_TOKEN_ID: '${OPENBAO_TOKEN:?Set OPENBAO_TOKEN}' }
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    profiles: [growth]
+    command: ['start-dev']
+    environment: { KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: '${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD}' }
+
+  # ---------- scale ----------
+  kafka:
+    image: apache/kafka:3.9.1
+    profiles: [scale]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    profiles: [scale]
+    environment: { discovery.type: single-node, DISABLE_SECURITY_PLUGIN: 'true', OPENSEARCH_JAVA_OPTS: '-Xms512m -Xmx512m' }
+  qdrant:
+    image: qdrant/qdrant:v1.15.0
+    profiles: [scale]
+
+  # ---------- observability ----------
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [observability]
+    volumes: ['./prometheus.yml:/etc/prometheus/prometheus.yml:ro']
+  grafana:
+    image: grafana/grafana-oss:12.1.0
+    profiles: [observability]
+    ports: ['3001:3000']
+
+volumes: { pgdata: {}, caddy_data: {}, meili: {}, nats: {} }

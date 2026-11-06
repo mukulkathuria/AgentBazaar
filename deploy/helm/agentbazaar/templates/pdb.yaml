@@ -1,0 +1,20 @@
+{{- $root := . -}}
+{{- range $component := splitList "," (include "agentbazaar.components" $root) }}
+{{- $c := index $root.Values $component }}
+{{- if $c.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "agentbazaar.fullname" $root }}-{{ $component }}
+  labels:
+    {{- include "agentbazaar.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  {{- /* maxUnavailable never blocks node drains, even at one replica. */}}
+  maxUnavailable: {{ $c.pdb.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "agentbazaar.selectorLabels" (dict "root" $root "component" $component) | nindent 6 }}
+{{- end }}
+{{- end }}

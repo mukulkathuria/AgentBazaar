@@ -1,0 +1,54 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  secrets:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+
+  sast:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v5
+      - run: semgrep scan --config p/typescript --config p/nodejsscan --config p/owasp-top-ten --config p/python --error --exclude '**/*.spec.ts' --exclude 'tests/**'
+
+  dependencies:
+    name: OSV-Scanner and Trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.2.2
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --lockfile=services/ai/uv.lock
+      - uses: aquasecurity/trivy-action@0.33.1
+        with: { scan-type: fs, severity: 'CRITICAL,HIGH', ignore-unfixed: true, exit-code: '1' }
+
+  licenses:
+    name: License gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm license:check

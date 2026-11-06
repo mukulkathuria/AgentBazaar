@@ -1,0 +1,22 @@
+{{- /* Registers pod IPs into the Terraform-managed ALB target groups (needs the AWS Load Balancer Controller). */ -}}
+{{- if .Values.targetGroupBindings.enabled }}
+{{- range $component := list "web" "api" }}
+{{- $arn := (index $.Values.targetGroupBindings $component).targetGroupARN }}
+{{- if $arn }}
+---
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: {{ include "agentbazaar.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "agentbazaar.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  serviceRef:
+    name: {{ include "agentbazaar.fullname" $ }}-{{ $component }}
+    port: http
+  targetGroupARN: {{ $arn | quote }}
+  targetType: ip
+{{- end }}
+{{- end }}
+{{- end }}

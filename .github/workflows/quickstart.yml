@@ -1,0 +1,49 @@
+name: Quickstart
+
+# Runs the README's "Try it in 60 seconds" commands on a clean runner, so the README cannot drift
+# from the code, and checks that the Mermaid diagrams in the docs match their sources.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quickstart-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  demo:
+    name: pnpm demo on a clean runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run the demo and check it ends with a paid order
+        run: |
+          set -o pipefail
+          timeout 600 pnpm demo 2>&1 | tee demo-output.txt
+          grep -q "Order" demo-output.txt || { echo "::error::demo output has no 'Order' line"; exit 1; }
+          grep -q "paid" demo-output.txt || { echo "::error::demo output never reports 'paid'"; exit 1; }
+      - name: Diagrams match their sources
+        run: pnpm docs:check
+      - name: Keep the demo transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-output
+          path: demo-output.txt
+          if-no-files-found: ignore
+          retention-days: 14

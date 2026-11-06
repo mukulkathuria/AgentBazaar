@@ -1,0 +1,54 @@
+name: Feature request
+description: Suggest an improvement, a new adapter or a new capability.
+title: 'feat: '
+labels: [enhancement, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. Large changes (a new module, a profile service, anything touching pricing, payments or personal data) usually need an [ADR](https://github.com/mukulkathuria/AgentBazaar/blob/main/docs/adr/README.md), so it helps to agree on the approach here first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who needs this and what can't they do today?
+      placeholder: As a store operator in Karnataka, I can't ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should happen? Mention the module, port or adapter if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of change
+      options:
+        - New adapter (payment, tax, LLM, search, storage)
+        - Agent surface (MCP, A2A, chat)
+        - Storefront or admin
+        - Pricing and negotiation policy
+        - Compliance (DPDP, GST, consumer rules)
+        - Deployment or profiles
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: policy
+    attributes:
+      label: Policy and security impact
+      description: Could this change a price, a discount, a permission or what personal data is stored or shown? How would that stay enforced in code?
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to work on this myself.

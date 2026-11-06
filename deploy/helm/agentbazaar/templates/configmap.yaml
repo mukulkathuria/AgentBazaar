@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentbazaar.fullname" . }}-config
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+data:
+  {{- include "agentbazaar.config" . | trim | nindent 2 }}

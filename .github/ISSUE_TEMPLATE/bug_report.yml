@@ -1,0 +1,97 @@
+name: Bug report
+description: Something does not work as documented.
+title: 'bug: '
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **Security problems do not belong here.** Report them privately as described in [SECURITY.md](https://github.com/mukulkathuria/AgentBazaar/blob/main/SECURITY.md).
+        Never paste API keys, tokens, quote or checkout tokens, `.env` contents or real customer data.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you saw, and what you expected instead.
+      placeholder: After the third counter-offer over MCP, the seller replied with ... but I expected ...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps. `pnpm demo` or the Docker demo profile is the easiest place to reproduce.
+      placeholder: |
+        1. pnpm demo
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Storefront (web)
+        - Admin console
+        - MCP server
+        - A2A endpoint
+        - Chat widget
+        - Pricing and negotiation
+        - Cart, checkout and orders
+        - Payments
+        - GST and invoices
+        - Search
+        - Customization
+        - Identity and auth
+        - Personal data and DPDP features
+        - AI service (Python)
+        - Deployment (Compose, Helm, Terraform)
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: profile
+    attributes:
+      label: How are you running it?
+      options:
+        - pnpm demo
+        - Docker demo profile
+        - lite profile
+        - growth profile
+        - scale profile
+        - Local development
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.9.0 or a commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: OS, Node.js and pnpm versions, Docker version, PostgreSQL version, adapters in use
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Remove tokens and personal data first. Include the `x-request-id` of the failing request if you have it.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
+        - label: I removed secrets, tokens and personal data from this report.
+          required: true

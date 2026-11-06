@@ -1,0 +1,50 @@
+{{- if .Values.ingress.enabled }}
+{{- $fullname := include "agentbazaar.fullname" . }}
+{{- $webHost := (urlParse (required "config.PUBLIC_WEB_URL is required" .Values.config.PUBLIC_WEB_URL)).host }}
+{{- $apiHost := (urlParse (required "config.PUBLIC_API_URL is required" .Values.config.PUBLIC_API_URL)).host }}
+{{- if eq $webHost $apiHost }}
+{{- fail "PUBLIC_WEB_URL and PUBLIC_API_URL must use different hosts (e.g. shop.example.com and api.shop.example.com)" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "agentbazaar.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $webHost | quote }}
+        - {{ $apiHost | quote }}
+      secretName: {{ default (printf "%s-tls" $fullname) .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ $webHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-web
+                port:
+                  name: http
+    - host: {{ $apiHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-api
+                port:
+                  name: http
+{{- end }}

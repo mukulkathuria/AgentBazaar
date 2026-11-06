@@ -1,0 +1,15 @@
+# Remote state in S3 with S3-native locking (Terraform >= 1.10 / OpenTofu >= 1.10).
+# Copy to backend.tf, fill in your bucket (see "State bootstrap" in deploy/terraform/README.md),
+# then run: terraform init -migrate-state
+terraform {
+  backend "s3" {
+    bucket       = "REPLACE-with-your-state-bucket"
+    key          = "REPLACE-project/REPLACE-environment/scale/terraform.tfstate"
+    region       = "REPLACE-with-your-state-bucket-region"
+    encrypt      = true
+    use_lockfile = true
+
+    # Older setups lock with DynamoDB instead (deprecated in Terraform 1.11+):
+    # dynamodb_table = "REPLACE-with-your-lock-table"
+  }
+}

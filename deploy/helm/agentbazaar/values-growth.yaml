@@ -1,0 +1,49 @@
+# Growth profile on EKS. Layer over values.yaml, then layer Terraform's values on top:
+#   terraform -chdir=deploy/terraform/profiles/growth output -raw helm_values > tf-values.yaml
+#   helm upgrade --install agentbazaar deploy/helm/agentbazaar -n agentbazaar -f values-growth.yaml -f tf-values.yaml
+# Meilisearch, NATS and OpenBao run in the same namespace from their own Helm charts (see README.md).
+
+config:
+  PROFILE: growth
+  SEARCH_ADAPTER: meilisearch
+  EVENT_BUS: nats
+  MEILISEARCH_URL: http://meilisearch:7700
+  NATS_URL: nats://nats:4222
+  OPENBAO_ADDR: http://openbao:8200
+  # VALKEY_URL, PUBLIC_WEB_URL and PUBLIC_API_URL come from Terraform's helm_values.
+
+api:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 384Mi
+    limits:
+      cpu: '1'
+      memory: 768Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+web:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+# The Terraform-managed ALB (with WAF) forwards to the pods through TargetGroupBindings.
+ingress:
+  enabled: false
+
+targetGroupBindings:
+  enabled: true
+
+networkPolicy:
+  # The ALB reaches IP targets from inside the VPC; Terraform's helm_values sets your VPC CIDR.
+  ingressFrom:
+    - ipBlock:
+        cidr: 10.40.0.0/16

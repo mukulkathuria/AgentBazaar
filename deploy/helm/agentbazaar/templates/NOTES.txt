@@ -1,0 +1,16 @@
+AgentBazaar {{ .Chart.AppVersion }} ({{ .Values.config.PROFILE }} profile) is deployed to namespace {{ .Release.Namespace }}.
+
+  Storefront: {{ .Values.config.PUBLIC_WEB_URL }}
+  API:        {{ .Values.config.PUBLIC_API_URL }}
+
+Secrets are read from the Secret "{{ .Values.existingSecret }}". Pods wait in CreateContainerConfigError until it exists.
+{{- if .Values.migrations.enabled }}
+Migrations ran in the pre-install/pre-upgrade Job {{ include "agentbazaar.fullname" . }}-migrate.
+{{- end }}
+{{- if and .Values.targetGroupBindings.enabled (not (and .Values.targetGroupBindings.web.targetGroupARN .Values.targetGroupBindings.api.targetGroupARN)) }}
+
+WARNING: targetGroupBindings.enabled is true but a targetGroupARN is empty, so that component is not
+registered with the load balancer. Add Terraform's values:
+  terraform -chdir=deploy/terraform/profiles/<profile> output -raw helm_values > tf-values.yaml
+  helm upgrade --install {{ .Release.Name }} deploy/helm/agentbazaar -n {{ .Release.Namespace }} -f <profile values> -f tf-values.yaml
+{{- end }}

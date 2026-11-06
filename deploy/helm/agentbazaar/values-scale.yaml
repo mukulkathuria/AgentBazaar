@@ -1,0 +1,73 @@
+# Scale profile on multi-AZ EKS. Layer over values.yaml, then layer Terraform's values on top:
+#   terraform -chdir=deploy/terraform/profiles/scale output -raw helm_values > tf-values.yaml
+#   helm upgrade --install agentbazaar deploy/helm/agentbazaar -n agentbazaar -f values-scale.yaml -f tf-values.yaml
+# Qdrant, Temporal and OpenBao run in the same namespace from their own Helm charts (see README.md).
+
+config:
+  PROFILE: scale
+  SEARCH_ADAPTER: opensearch
+  EVENT_BUS: kafka
+  QDRANT_URL: http://qdrant:6333
+  OPENBAO_ADDR: http://openbao:8200
+  # KAFKA_BROKERS, OPENSEARCH_URL, VALKEY_URL and the public URLs come from Terraform's helm_values.
+
+api:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: '2'
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 65
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+
+web:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 768Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 65
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+
+ai:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+
+ingress:
+  enabled: false
+
+targetGroupBindings:
+  enabled: true
+
+networkPolicy:
+  ingressFrom:
+    - ipBlock:
+        cidr: 10.40.0.0/16

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", "helpers:pinGitHubActionDigests"],
+  "timezone": "Asia/Kolkata",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "minimumReleaseAge": "3 days",
+  "prConcurrentLimit": 10,
+  "postUpdateOptions": ["pnpmDedupe"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies", "security"],
+    "schedule": ["at any time"]
+  },
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "description": "Major upgrades wait for a maintainer on the dependency dashboard.",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "TypeScript 7 (the native compiler) breaks typescript-eslint today; stay on 6 (ADR 0006).",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
+      "description": "Agent protocol SDKs change quickly: one reviewed pull request, never automerged; contract tests must pass.",
+      "matchPackageNames": ["@modelcontextprotocol/sdk", "@a2a-js/sdk"],
+      "groupName": "agent protocol SDKs",
+      "automerge": false
+    },
+    {
+      "matchPackageNames": ["@nestjs/**"],
+      "groupName": "NestJS"
+    },
+    {
+      "matchPackageNames": ["fastify", "@fastify/**"],
+      "groupName": "Fastify"
+    },
+    {
+      "matchPackageNames": ["next", "react", "react-dom", "@types/react", "@types/react-dom"],
+      "groupName": "Next.js and React"
+    },
+    {
+      "matchPackageNames": ["drizzle-orm", "pg", "@types/pg", "@electric-sql/**"],
+      "groupName": "database drivers"
+    },
+    {
+      "matchPackageNames": [
+        "vitest",
+        "@vitest/**",
+        "fast-check",
+        "@playwright/test",
+        "@axe-core/**",
+        "@testing-library/**",
+        "jsdom"
+      ],
+      "groupName": "test tooling"
+    },
+    {
+      "description": "Low-risk tooling updates merge themselves once CI is green.",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "matchManagers": ["pep621"],
+      "groupName": "AI service (Python)"
+    },
+    {
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "groupName": "container images"
+    },
+    {
+      "matchManagers": ["helmv3", "helm-values"],
+      "groupName": "Helm"
+    },
+    {
+      "matchManagers": ["terraform"],
+      "groupName": "Terraform providers and modules"
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+#!/bin/bash
+# AgentBazaar lite host bootstrap. cloud-init runs it once, on first boot.
+# Upgrade later with: sudo agentbazaar-deploy <git-ref>   (SSM Run Command or Session Manager)
+set -euo pipefail
+exec > >(tee -a /var/log/agentbazaar-bootstrap.log) 2>&1
+
+# 1. Persistent data volume: Docker's data-root lives here, so container volumes (Postgres data)
+#    survive instance replacement. mkfs runs only when the volume has no filesystem yet.
+DEV=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${volume_serial}
+for _ in $(seq 1 120); do [ -e "$DEV" ] && break; sleep 5; done
+[ -e "$DEV" ] || { echo "data volume $DEV was never attached" >&2; exit 1; }
+blkid "$DEV" >/dev/null || mkfs.ext4 -q "$DEV"
+UUID=$(blkid -s UUID -o value "$DEV")
+mkdir -p /data
+grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /data ext4 defaults,nofail 0 2" >> /etc/fstab
+mount -a
+
+# Swap so image builds on a small host do not get OOM-killed.
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+swapon -a
+
+# 2. Docker Engine + compose plugin from Docker's apt repository; container logs go to CloudWatch.
+mkdir -p /etc/docker /data/docker /etc/agentbazaar
+cat > /etc/docker/daemon.json <<'JSON'
+{
+  "data-root": "/data/docker",
+  "log-driver": "awslogs",
+  "log-opts": {
+    "awslogs-region": "${region}",
+    "awslogs-group": "${log_group_name}",
+    "mode": "non-blocking",
+    "tag": "{{.Name}}"
+  }
+}
+JSON
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y ca-certificates curl git jq
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  > /etc/apt/sources.list.d/docker.list
+apt-get update -y
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
+command -v aws >/dev/null || snap install aws-cli --classic
+
+# 3. Non-secret settings rendered by Terraform; secrets are read from Secrets Manager at deploy time.
+cat > /etc/agentbazaar/app.env <<'ENV'
+%{ for key, value in app_env ~}
+${key}='${value}'
+%{ endfor ~}
+ENV
+
+cat > /usr/local/bin/agentbazaar-deploy <<'SCRIPT'
+#!/bin/bash
+# Usage: agentbazaar-deploy <git-ref>. Checks out the ref, renders .env, (re)starts the stack.
+set -euo pipefail
+ref="$1"
+[ -d /opt/agentbazaar/.git ] || git clone --depth 1 "${repo_url}" /opt/agentbazaar
+cd /opt/agentbazaar
+git fetch --depth 1 origin "$ref"
+git checkout --force FETCH_HEAD
+umask 077
+cat /etc/agentbazaar/app.env > .env.tmp
+aws secretsmanager get-secret-value --region "${region}" --secret-id "${secret_arn}" \
+  --query SecretString --output text | jq -r 'to_entries[] | "\(.key)=\(.value | @sh)"' >> .env.tmp
+mv .env.tmp .env
+docker compose -f "${compose_file}" --env-file .env --profile "${compose_profile}" up -d --build --remove-orphans
+SCRIPT
+chmod 0755 /usr/local/bin/agentbazaar-deploy
+
+# 4. The secret placeholder is created by Terraform and filled by the operator, possibly after
+#    this host boots: wait for it (up to an hour) before the first deploy.
+for _ in $(seq 1 120); do
+  aws secretsmanager get-secret-value --region "${region}" --secret-id "${secret_arn}" >/dev/null 2>&1 && break
+  echo "waiting for a value in ${secret_arn}"
+  sleep 30
+done
+/usr/local/bin/agentbazaar-deploy "${app_version}"

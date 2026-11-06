@@ -1,0 +1,108 @@
+name: IaC
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - '.github/workflows/iac.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/**'
+      - '.github/workflows/iac.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tofu:
+    name: OpenTofu validate + test (${{ matrix.profile }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [lite, growth, scale]
+    defaults:
+      run:
+        working-directory: deploy/terraform/profiles/${{ matrix.profile }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.10.x
+          tofu_wrapper: false
+      # No backend and no AWS credentials: tests plan against mock_provider "aws".
+      - name: Init
+        run: tofu init -backend=false -input=false
+      - name: Validate
+        run: tofu validate
+      - name: Test
+        run: tofu test
+
+  lint:
+    name: Format + TFLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.10.x
+          tofu_wrapper: false
+      - name: Format
+        run: tofu fmt -check -recursive deploy/terraform
+      - uses: terraform-linters/setup-tflint@v4
+      - name: TFLint
+        working-directory: deploy/terraform
+        run: |
+          tflint --init --config "$PWD/.tflint.hcl"
+          tflint --recursive --config "$PWD/.tflint.hcl" --format compact
+
+  checkov:
+    name: Checkov (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+      # Blocking policy checks live in `tofu test`; Checkov adds broad advisory coverage until its
+      # findings are triaged into a skip list (then set soft_fail: false).
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: deploy
+          framework: terraform,helm
+          soft_fail: true
+          output_format: cli,sarif
+          output_file_path: console,checkov.sarif
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        continue-on-error: true # pull requests from forks cannot upload results
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
+
+  helm:
+    name: Helm lint + render
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: deploy/helm/agentbazaar
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+      - name: Lint and render every values file
+        run: |
+          for values in values.yaml values-growth.yaml values-scale.yaml; do
+            echo "::group::$values"
+            helm lint . -f "$values"
+            helm template agentbazaar . -f "$values" > /dev/null
+            echo "::endgroup::"
+          done

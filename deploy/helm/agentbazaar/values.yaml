@@ -1,0 +1,218 @@
+# Small, single-replica defaults. Layer values-growth.yaml or values-scale.yaml on top for production.
+
+nameOverride: ''
+fullnameOverride: ''
+
+# Existing Secret holding the app's secret environment. This chart never creates or generates secrets.
+# Required keys: DATABASE_URL, QUOTE_SIGNING_KEY, PII_MASTER_KEY, PII_BLIND_INDEX_KEY, JWT_PRIVATE_KEY
+# (builtin identity), plus your payment adapter's keys (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET,
+# RAZORPAY_WEBHOOK_SECRET or YOUPI_API_KEY, YOUPI_WEBHOOK_SECRET) and any service credentials you use
+# (OPENBAO_TOKEN, MEILISEARCH_API_KEY, ANTHROPIC_API_KEY, ...). See README.md.
+existingSecret: agentbazaar-secrets
+
+# Non-secret environment shared by every component (rendered into a ConfigMap). Empty values are left
+# out, so the app falls back to the defaults of its PROFILE. Any other non-secret key may be added.
+# PUBLIC_WEB_URL and PUBLIC_API_URL also give the Ingress its hosts.
+config:
+  PROFILE: lite
+  NODE_ENV: production
+  LOG_LEVEL: info
+  PUBLIC_WEB_URL: https://shop.example.com
+  PUBLIC_API_URL: https://api.shop.example.com
+  SEARCH_ADAPTER: ''
+  EVENT_BUS: ''
+  MEILISEARCH_URL: ''
+  NATS_URL: ''
+  KAFKA_BROKERS: ''
+  OPENSEARCH_URL: ''
+  QDRANT_URL: ''
+  VALKEY_URL: ''
+  OPENBAO_ADDR: ''
+  # Defaults to the in-chart ai Service when ai.enabled is true.
+  AI_SERVICE_URL: ''
+
+image:
+  # Defaults to the chart's appVersion.
+  tag: ''
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ''
+  annotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ['ALL']
+
+api:
+  image:
+    repository: ghcr.io/mukulkathuria/agentbazaar-api
+  replicaCount: 1
+  # Merged over the global podSecurityContext (the api and web images run as node, uid 1000).
+  podSecurityContext: {}
+  port: 4000
+  # Empty: the image's default command.
+  command: []
+  livenessPath: /healthz
+  readinessPath: /readyz
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  # emptyDir mounts: the root filesystem is read-only.
+  writablePaths: ['/tmp']
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Each constraint gets this component's labelSelector unless it sets one.
+  topologySpreadConstraints: []
+
+web:
+  image:
+    repository: ghcr.io/mukulkathuria/agentbazaar-web
+  replicaCount: 1
+  podSecurityContext: {}
+  port: 3000
+  command: []
+  # The storefront's own health route; it does not depend on the API.
+  livenessPath: /api/health
+  readinessPath: /api/health
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  # Next.js standalone writes its image/ISR cache next to the server.
+  writablePaths: ['/tmp', '/app/apps/web/.next/cache']
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+ai:
+  enabled: false
+  image:
+    repository: ghcr.io/mukulkathuria/agentbazaar-ai
+  replicaCount: 1
+  # The ai image runs as the app user, uid 10001.
+  podSecurityContext:
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+  port: 8000
+  command: []
+  livenessPath: /healthz
+  readinessPath: /readyz
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: '2'
+      memory: 2Gi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  writablePaths: ['/tmp']
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+# Pre-install/pre-upgrade hook Job on the api image. The api pods then skip their own migration run.
+migrations:
+  enabled: true
+  command: ['node', 'dist/cli/index.js', 'migrate']
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
+
+# Routes the PUBLIC_WEB_URL host to web and the PUBLIC_API_URL host to api.
+# Block /metrics on the API host at your controller (the Terraform ALB already does).
+ingress:
+  enabled: true
+  className: ''
+  annotations: {}
+  tls:
+    enabled: true
+    # Default: <fullname>-tls (e.g. issued by cert-manager through annotations).
+    secretName: ''
+
+# AWS Load Balancer Controller TargetGroupBindings for the Terraform-managed ALB (growth/scale).
+# `terraform output -raw helm_values` fills in the ARNs.
+targetGroupBindings:
+  enabled: false
+  web:
+    targetGroupARN: ''
+  api:
+    targetGroupARN: ''
+
+networkPolicy:
+  enabled: true
+  # Peers allowed to reach web and api: your ingress controller, or the VPC CIDR for ALB IP targets.
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+  # Peers allowed to scrape the API's /metrics (only rendered when serviceMonitor.enabled).
+  metricsFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+
+# Needs the Prometheus Operator CRDs.
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}

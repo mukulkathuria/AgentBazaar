@@ -1,0 +1,21 @@
+{{- $root := . -}}
+{{- range $component := splitList "," (include "agentbazaar.components" $root) }}
+{{- $c := index $root.Values $component }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentbazaar.fullname" $root }}-{{ $component }}
+  labels:
+    {{- include "agentbazaar.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "agentbazaar.selectorLabels" (dict "root" $root "component" $component) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $c.port }}
+      targetPort: http
+      protocol: TCP
+{{- end }}

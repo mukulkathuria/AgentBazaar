@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/mukulkathuria/AgentBazaar/security/advisories/new
+    about: Please report vulnerabilities privately through GitHub's private vulnerability reporting, never in a public issue. See SECURITY.md.
+  - name: Read the docs first
+    url: https://github.com/mukulkathuria/AgentBazaar#readme
+    about: Quickstart, configuration, payment adapters, profiles and the agent integration guide.

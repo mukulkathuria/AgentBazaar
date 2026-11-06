@@ -1,0 +1,6 @@
+# Provider lock files are generated per tool: Terraform and OpenTofu record different registries.
+# Commit your own lock file in your deployment repository.
+.terraform.lock.hcl
+# Real backend settings and variable files belong to each operator, not to this template.
+backend.tf
+*.auto.tfvars

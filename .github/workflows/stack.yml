@@ -1,0 +1,34 @@
+name: Stack (compose smoke, demo, load)
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  demo:
+    name: Docker demo profile boots and serves MCP
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker compose -f deploy/compose/docker-compose.yml --profile demo up -d --build
+      - name: Wait for API
+        run: for i in $(seq 1 60); do curl -fs http://localhost:4000/readyz && exit 0; sleep 5; done; docker compose -f deploy/compose/docker-compose.yml --profile demo logs; exit 1
+      - name: Smoke
+        run: |
+          curl -fs "http://localhost:4000/api/v1/products?q=keyboard" | grep -qi thock
+          curl -fs http://localhost:4000/.well-known/agent-card.json | grep -q AgentBazaar
+          curl -fs -X POST http://localhost:4000/mcp -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | grep -q search_products
+      - name: Load test (lite profile targets)
+        uses: grafana/run-k6-action@v1
+        env: { BASE_URL: 'http://localhost:4000', DURATION: '2m' }
+        with: { path: tests/load/lite.js }
+      - if: always()
+        run: docker compose -f deploy/compose/docker-compose.yml --profile demo down -v

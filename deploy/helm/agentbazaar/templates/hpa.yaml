@@ -1,0 +1,28 @@
+{{- $root := . -}}
+{{- range $component := splitList "," (include "agentbazaar.components" $root) }}
+{{- $c := index $root.Values $component }}
+{{- if $c.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "agentbazaar.fullname" $root }}-{{ $component }}
+  labels:
+    {{- include "agentbazaar.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "agentbazaar.fullname" $root }}-{{ $component }}
+  minReplicas: {{ $c.autoscaling.minReplicas }}
+  maxReplicas: {{ $c.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $c.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}

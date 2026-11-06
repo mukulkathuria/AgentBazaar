@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { name: api, file: apps/api/Dockerfile, context: . }
+          - { name: web, file: apps/web/Dockerfile, context: . }
+          - { name: ai, file: services/ai/Dockerfile, context: services/ai }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}' }
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          # Graviton (arm64) hosts in the Terraform profiles need arm64 images too.
+          platforms: linux/amd64,linux/arm64
+          provenance: true
+          sbom: true
+          tags: ghcr.io/${{ github.repository_owner }}/agentbazaar-${{ matrix.name }}:${{ github.ref_name }}
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign image (keyless)
+        run: cosign sign --yes ghcr.io/${{ github.repository_owner }}/agentbazaar-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: anchore/sbom-action@v0
+        with: { format: spdx-json, output-file: agentbazaar-sbom.spdx.json }
+      - uses: softprops/action-gh-release@v2
+        with: { files: agentbazaar-sbom.spdx.json, generate_release_notes: true }
