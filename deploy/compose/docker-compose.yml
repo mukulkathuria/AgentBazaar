@@ -50,7 +50,7 @@ services:
     environment:
       POSTGRES_DB: agentbazaar
       POSTGRES_USER: agentbazaar
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck: { test: ['CMD-SHELL', 'pg_isready -U agentbazaar'], interval: 5s, timeout: 5s, retries: 20 }
   valkey:
@@ -94,7 +94,7 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.15
     profiles: [growth]
-    environment: { MEILI_MASTER_KEY: '${MEILISEARCH_API_KEY:?Set MEILISEARCH_API_KEY}', MEILI_ENV: production }
+    environment: { MEILI_MASTER_KEY: '${MEILISEARCH_API_KEY:-}', MEILI_ENV: production }
     volumes: [meili:/meili_data]
   nats:
     image: nats:2-alpine
@@ -105,12 +105,12 @@ services:
     image: openbao/openbao:2
     profiles: [growth]
     cap_add: [IPC_LOCK]
-    environment: { BAO_DEV_ROOT_TOKEN_ID: '${OPENBAO_TOKEN:?Set OPENBAO_TOKEN}' }
+    environment: { BAO_DEV_ROOT_TOKEN_ID: '${OPENBAO_TOKEN:-}' }
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
     profiles: [growth]
     command: ['start-dev']
-    environment: { KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: '${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD}' }
+    environment: { KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: '${KEYCLOAK_ADMIN_PASSWORD:-}' }
 
   # ---------- scale ----------
   kafka:
