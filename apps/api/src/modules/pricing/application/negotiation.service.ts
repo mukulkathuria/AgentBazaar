@@ -336,8 +336,9 @@ export class NegotiationService {
     const result = await inTransaction(this.db, async (tx) => {
       const s = await this.loadForUpdate(tx, negotiationId, subject);
       if (!isTerminal(s.state) && s.expires_at <= this.clock.now()) {
+        // Commit the expiry and report it after the transaction: throwing here would roll it back.
         await this.expire(tx, [s.id]);
-        throw new AppError('quote_expired', 'This negotiation has expired. Request a new quote.');
+        return null;
       }
       if (!acceptsOffers(s.state)) throw new AppError('negotiation_closed', `This negotiation is ${s.state.replace('_', ' ')}; no more offers`);
       const qty = input.quantity ?? s.quantity;
@@ -358,6 +359,7 @@ export class NegotiationService {
         outcome: this.outcome({ s: { ...s, expires_at: expiresAt }, state, decision, unit: d.unitPaise, quantity: qty, quote, alternatives, reasons: d.reasonCodes, ladder, round: d.round, lang }),
       };
     });
+    if (!result) throw new AppError('quote_expired', 'This negotiation has expired. Request a new quote.');
     this.metrics.negotiationDecisions.inc({ band: result.band, decision: result.outcome.decision, channel: result.channel });
     return result.outcome;
   }
