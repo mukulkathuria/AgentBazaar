@@ -18,6 +18,8 @@ jobs:
           - { name: api, file: apps/api/Dockerfile, context: . }
           - { name: web, file: apps/web/Dockerfile, context: . }
           - { name: ai, file: services/ai/Dockerfile, context: services/ai }
+          # Temporal saga worker (scale profile): Debian slim stage, since Temporal ships no musl worker build.
+          - { name: workflow-worker, file: apps/api/Dockerfile, context: ., target: workflow-worker }
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
@@ -29,6 +31,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
           push: true
           # Graviton (arm64) hosts in the Terraform profiles need arm64 images too.
           platforms: linux/amd64,linux/arm64
