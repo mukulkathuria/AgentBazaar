@@ -10,7 +10,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Main moves fast; let each run on main finish so it reports a result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   node:
