@@ -8,8 +8,8 @@ fullnameOverride: ''
 # (builtin identity), plus your payment adapter's keys (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET,
 # RAZORPAY_WEBHOOK_SECRET or YOUPI_API_KEY, YOUPI_WEBHOOK_SECRET) and any service credentials you use
 # (OPENBAO_TOKEN, MEILISEARCH_API_KEY, ANTHROPIC_API_KEY, ...). URLs that carry credentials belong here too:
-# DATABASE_URL (point it at PgBouncer when you run one), DATABASE_REPLICA_URLS, CLICKHOUSE_URL, plus
-# LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY. See README.md.
+# DATABASE_URL (point it at PgBouncer when you run one), PGBOUNCER_DATABASE_URL, DATABASE_REPLICA_URLS and
+# CLICKHOUSE_URL, plus LANGFUSE_SECRET_KEY. See README.md.
 existingSecret: agentbazaar-secrets
 
 # Non-secret environment shared by every component (rendered into a ConfigMap). Empty values are left
@@ -38,10 +38,19 @@ config:
   # OpenTelemetry tracing starts only when the endpoint is set (OTLP/HTTP, e.g. http://otel-collector:4318).
   # Each Deployment sets OTEL_SERVICE_NAME to agentbazaar-<component>.
   OTEL_EXPORTER_OTLP_ENDPOINT: ''
-  # off | memory | valkey
+  # off | memory | valkey; the similarity a cached reply needs (0.5-1, default 0.9).
   SEMANTIC_CACHE: ''
-  # Langfuse traces of LLM calls (keys in the Secret).
+  SEMANTIC_CACHE_THRESHOLD: ''
+  # Langfuse traces of LLM calls: off unless the host, this public key and LANGFUSE_SECRET_KEY (Secret) are set.
   LANGFUSE_HOST: ''
+  LANGFUSE_PUBLIC_KEY: ''
+  # A second model provider (anthropic | openai-compatible) for when LLM_ADAPTER fails, with its two models,
+  # and the output-token caps per router tier (default 350).
+  LLM_FALLBACK_ADAPTER: ''
+  LLM_FALLBACK_SMALL_MODEL: ''
+  LLM_FALLBACK_LARGE_MODEL: ''
+  LLM_TIER2_MAX_TOKENS: ''
+  LLM_TIER3_MAX_TOKENS: ''
   # Temporal sagas (scale): set WORKFLOW_ENGINE=temporal and enable `workflowWorker`.
   WORKFLOW_ENGINE: ''
   TEMPORAL_ADDRESS: ''

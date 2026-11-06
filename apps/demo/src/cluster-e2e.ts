@@ -25,7 +25,8 @@ async function main(): Promise<void> {
     url: `${api}/mcp`,
     token,
     strategy: { query: 'thock tk-87 hot-swap mechanical keyboard' },
-    onEvent: (e) => console.log(JSON.stringify(e)),
+    // The checkout link's token stays out of CI logs.
+    onEvent: (e) => console.log(JSON.stringify(e, (key, value: unknown) => (key === 'url' && typeof value === 'string' ? value.split('?')[0] : value))),
   });
   const result = await buyer.run();
   if (result.outcome !== 'checkout' || !result.checkoutUrl) throw new Error('The buyer agent did not reach checkout');

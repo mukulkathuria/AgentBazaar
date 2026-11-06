@@ -1,6 +1,6 @@
 # Layered over deploy/helm/agentbazaar/values-growth.yaml for the fresh-cluster install test
 # (.github/workflows/cluster.yml): images built in the job and imported into k3d, the services from deps.yaml,
-# k3s's Traefik as the ingress controller in front of the APISIX gateway, and the agent pool on.
+# k3s's Traefik as the ingress controller in front of the APISIX gateway, the agent pool on, and tracing on.
 image:
   tag: ci
 
@@ -16,6 +16,8 @@ config:
   PUBLIC_WEB_URL: http://shop.agentbazaar.test
   PUBLIC_API_URL: http://api.agentbazaar.test
   VALKEY_URL: redis://valkey:6379
+  # Traces go to the test collector in deps.yaml, which the workflow then inspects.
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
 ingress:
   enabled: true

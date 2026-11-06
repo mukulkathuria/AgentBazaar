@@ -109,6 +109,25 @@ jobs:
           api=$(mcp_calls api)
           echo "MCP requests: agent pool $agents, api $api"
           test "$agents" -gt 0 && test "$api" -eq 0
+      - name: Traces reached the collector, with no personal data or tokens
+        run: |
+          for attempt in $(seq 1 30); do
+            kubectl -n "$NS" logs deploy/otel-collector > /tmp/traces.txt
+            grep -q 'http.route: Str(/mcp)' /tmp/traces.txt && break
+            sleep 2
+          done
+          for expected in 'service.name: Str(agentbazaar-agents)' 'service.name: Str(agentbazaar-api)' \
+              'http.route: Str(/mcp)' 'pg.query' 'url.query: Str(t=REDACTED)'; do
+            grep -qF "$expected" /tmp/traces.txt || { echo "not ok - no span carries $expected"; exit 1; }
+            echo "ok - spans carry $expected"
+          done
+          echo "spans exported: $(grep -c 'Span #' /tmp/traces.txt)"
+          # Not the buyer's email or phone from checkout, and no token (JWTs and signed links start with eyJ).
+          if grep -nE 'demo\.buyer@example\.com|9876543210|eyJ' /tmp/traces.txt; then
+            echo "not ok - personal data or a token reached the traces"
+            exit 1
+          fi
+          echo "ok - no personal data or tokens in the traces"
       - name: Diagnostics
         if: failure()
         run: |

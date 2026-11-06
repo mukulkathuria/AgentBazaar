@@ -104,7 +104,17 @@ web:
       topologyKey: kubernetes.io/hostname
       whenUnsatisfiable: ScheduleAnyway
 
+# GPU classifier when `ai.enabled`: the hf backend on CUDA, falling back to the CPU when no GPU is visible (see
+# /readyz). It also needs CLASSIFIER_MODEL (a licence-checked checkpoint, services/ai/MODELS.md) in extraEnv, an
+# image built with the `ml` extra and CUDA PyTorch (the published image is CPU-only), and GPU scheduling, e.g.
+#   nodeSelector: { nvidia.com/gpu.present: 'true' }
+#   tolerations: [{ key: nvidia.com/gpu, operator: Exists, effect: NoSchedule }]
+#   resources: { limits: { nvidia.com/gpu: 1, ... } }
+# Point the API at it with config CLASSIFIER_ADAPTER=ai-service.
 ai:
+  extraEnv:
+    - { name: AI_DEVICE, value: cuda }
+    - { name: CLASSIFIER_BACKEND, value: hf }
   topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: topology.kubernetes.io/zone

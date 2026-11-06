@@ -10,6 +10,11 @@ on, a ConfigMap of non-secret settings, an Ingress (or AWS TargetGroupBindings),
 `node dist/cli/index.js migrate` with the api image. Pods run as non-root with a read-only root
 filesystem, all capabilities dropped and the RuntimeDefault seccomp profile.
 
+Optional components, turned on by the growth and scale values: the APISIX gateway (`gateway`), the agent pool
+for `/mcp`, `/a2a` and `/api/v1/chat` (`agents`), PgBouncer (`pgbouncer`), the Temporal workflow worker
+(`workflowWorker`) and an archival CronJob (`archive`). Their values, the Secret keys they need, tracing and the
+OPA policies every render must pass are described in [docs/operations/kubernetes.md](../../../docs/operations/kubernetes.md).
+
 ## Install
 
 The chart never creates secrets. Create the Secret first (the default name is `agentbazaar-secrets`):
@@ -102,10 +107,17 @@ The authoritative list and the rules per profile live in `packages/config/src/in
 | `networkPolicy.ingressFrom` | namespace `ingress-nginx` | Peers allowed to reach web and api (VPC CIDR for ALB IP targets) |
 | `networkPolicy.metricsFrom` | namespace `monitoring` | Peers allowed to scrape `/metrics` (with `serviceMonitor.enabled`) |
 | `serviceMonitor.enabled` / `interval` / `labels` | `false` / `30s` / `{}` | Needs the Prometheus Operator CRDs |
+| `gateway.*` | off | APISIX in standalone mode: host and path routes, per-token rate limits (`rateLimit`), body limits (`maxBodySize`), `trustedProxies` |
+| `agents.*` | off | Agent pool on the api image; HPA on CPU plus `autoscaling.extraMetrics` |
+| `pgbouncer.*` | off | PgBouncer (transaction pooling) reading the primary's URL from the Secret key `upstreamSecretKey` |
+| `workflowWorker.*` | off | Temporal worker (`agentbazaar-workflow-worker` image), egress limited to `egressPorts` |
+| `archive.*` | off | CronJob writing to `ARCHIVE_DIR` on the volume in `archive.volume` (required when on) |
 
 `values-growth.yaml`: `PROFILE=growth`, Meilisearch/NATS/OpenBao endpoints, api and web at 2+ replicas
-with HPAs, TargetGroupBindings instead of the Ingress. `values-scale.yaml`: `PROFILE=scale`,
-OpenSearch/Kafka/Qdrant, 3+ replicas with HPAs and topology spread across zones (hard) and nodes (soft).
+with HPAs, the gateway, PgBouncer, replica lag 5 s, the Valkey semantic cache, TargetGroupBindings instead of
+the Ingress. `values-scale.yaml`: `PROFILE=scale`, OpenSearch/Kafka/Qdrant, Temporal sagas with the workflow
+worker, ClickHouse analytics, the gateway and the agent pool, 3+ replicas with HPAs and topology spread across
+zones (hard) and nodes (soft).
 
 ## Notes
 

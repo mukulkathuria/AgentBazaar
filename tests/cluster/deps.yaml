@@ -106,3 +106,45 @@ apiVersion: v1
 kind: Service
 metadata: { name: openbao }
 spec: { selector: { app: openbao }, ports: [{ port: 8200 }] }
+---
+# Receives the app's traces (OTLP/HTTP) and prints every span, so the test can check what they contain.
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: otel-collector }
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+    exporters:
+      debug:
+        verbosity: detailed
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          exporters: [debug]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: otel-collector, labels: { app: otel-collector } }
+spec:
+  selector: { matchLabels: { app: otel-collector } }
+  template:
+    metadata: { labels: { app: otel-collector } }
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector:0.164.0
+          args: ['--config=/etc/otelcol/config.yaml']
+          ports: [{ containerPort: 4318 }]
+          readinessProbe: { tcpSocket: { port: 4318 }, periodSeconds: 2 }
+          volumeMounts: [{ name: config, mountPath: /etc/otelcol }]
+      volumes: [{ name: config, configMap: { name: otel-collector } }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: otel-collector }
+spec: { selector: { app: otel-collector }, ports: [{ port: 4318 }] }
