@@ -36,6 +36,11 @@ Anthropic TypeScript SDK (@anthropic-ai/sdk)                       Apache-2.0
 jose                                                               MIT
 pino                                                               MIT
 @prometheus-io/client                                              Apache-2.0
+OpenTelemetry JS (@opentelemetry/api, sdk-node, sdk-trace,         Apache-2.0
+  resources, exporter-trace-otlp-proto, instrumentation-http,
+  instrumentation-pg, instrumentation-undici; with @grpc/grpc-js)
+  (protobufjs, a dependency of the OTLP exporters: BSD-3-Clause)
+@fastify/otel                                                      MIT
 nats.js (nats)                                                     Apache-2.0
 KafkaJS (kafkajs)                                                  MIT
 iovalkey                                                           MIT

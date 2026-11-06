@@ -1,4 +1,5 @@
 import type { LoggerService } from '@nestjs/common';
+import { trace } from '@opentelemetry/api';
 import pino, { type DestinationStream, type Logger } from 'pino';
 import { redact } from './redact.js';
 
@@ -26,6 +27,11 @@ export function createLogger(level: string, destination?: DestinationStream): Lo
       level,
       base: { service: 'agentbazaar-api' },
       redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
+      // Correlates log lines with traces; without a started tracer there is no active span.
+      mixin() {
+        const ctx = trace.getActiveSpan()?.spanContext();
+        return ctx ? { trace_id: ctx.traceId, span_id: ctx.spanId } : {};
+      },
       hooks: {
         // Free-text messages are scrubbed too, so a stray email in an error string is caught.
         logMethod(args, method) {

@@ -5,6 +5,8 @@ packages:
 # Native/postinstall builds we trust. Everything else is blocked by default.
 allowBuilds:
   esbuild: true
+  # OpenTelemetry's OTLP exporters; its postinstall only checks for the optional protobufjs CLI.
+  protobufjs: false
 
 # Supply-chain guards. pnpm also re-checks every lockfile entry against them on install.
 blockExoticSubdeps: true
