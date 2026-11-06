@@ -1,0 +1,6 @@
+# Reviewed exceptions for the OSV-Scanner gate (.github/workflows/security.yml). Each one expires.
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249" # CVE-2026-118764, minimatch glob-pattern amplification (DoS)
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = "Dev-only: minimatch 10 comes from eslint and typescript-eslint, which only match our own lint globs, so no attacker controls a pattern. The fix is minimatch 11 (a major); drop this once eslint moves to it."

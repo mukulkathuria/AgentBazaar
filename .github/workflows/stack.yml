@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - run: docker compose -f deploy/compose/docker-compose.yml --profile demo up -d --build
       - name: Wait for API
         run: for i in $(seq 1 60); do curl -fs http://localhost:4000/readyz && exit 0; sleep 5; done; docker compose -f deploy/compose/docker-compose.yml --profile demo logs; exit 1
@@ -26,8 +26,10 @@ jobs:
           curl -fs http://localhost:4000/.well-known/agent-card.json | grep -q AgentBazaar
           curl -fs -X POST http://localhost:4000/mcp -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
             -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | grep -q search_products
+      # run-k6-action only runs scripts; it needs the k6 binary on PATH.
+      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
       - name: Load test (lite profile targets)
-        uses: grafana/run-k6-action@v1
+        uses: grafana/run-k6-action@4082a08c7e40cf6d65863911077dfb60ae0a4f04 # v1.5.0
         env: { BASE_URL: 'http://localhost:4000', DURATION: '2m' }
         with: { path: tests/load/lite.js }
       - if: always()

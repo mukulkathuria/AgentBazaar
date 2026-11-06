@@ -31,8 +31,8 @@ jobs:
       run:
         working-directory: deploy/terraform/profiles/${{ matrix.profile }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: opentofu/setup-opentofu@v1
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1.0.8
         with:
           tofu_version: 1.10.x
           tofu_wrapper: false
@@ -49,14 +49,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
-      - uses: opentofu/setup-opentofu@v1
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1.0.8
         with:
           tofu_version: 1.10.x
           tofu_wrapper: false
       - name: Format
         run: tofu fmt -check -recursive deploy/terraform
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
       - name: TFLint
         working-directory: deploy/terraform
         run: |
@@ -71,17 +71,17 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # Blocking policy checks live in `tofu test`; Checkov adds broad advisory coverage until its
       # findings are triaged into a skip list (then set soft_fail: false).
-      - uses: bridgecrewio/checkov-action@v12
+      - uses: bridgecrewio/checkov-action@45edc9d8856b664db2ec251f5f8632361f0a67aa # v12.3139.0
         with:
           directory: deploy
           framework: terraform,helm
           soft_fail: true
           output_format: cli,sarif
           output_file_path: console,checkov.sarif
-      - uses: github/codeql-action/upload-sarif@v4
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         if: always()
         continue-on-error: true # pull requests from forks cannot upload results
         with:
@@ -96,8 +96,8 @@ jobs:
       run:
         working-directory: deploy/helm/agentbazaar
     steps:
-      - uses: actions/checkout@v5
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
       - name: Lint and render every values file
         run: |
           for values in values.yaml values-growth.yaml values-scale.yaml; do

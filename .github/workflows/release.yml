@@ -19,13 +19,13 @@ jobs:
           - { name: web, file: apps/web/Dockerfile, context: . }
           - { name: ai, file: services/ai/Dockerfile, context: services/ai }
     steps:
-      - uses: actions/checkout@v5
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with: { registry: ghcr.io, username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}' }
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
@@ -35,14 +35,14 @@ jobs:
           provenance: true
           sbom: true
           tags: ghcr.io/${{ github.repository_owner }}/agentbazaar-${{ matrix.name }}:${{ github.ref_name }}
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
       - name: Sign image (keyless)
         run: cosign sign --yes ghcr.io/${{ github.repository_owner }}/agentbazaar-${{ matrix.name }}@${{ steps.build.outputs.digest }}
   sbom:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: anchore/sbom-action@v0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with: { format: spdx-json, output-file: agentbazaar-sbom.spdx.json }
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with: { files: agentbazaar-sbom.spdx.json, generate_release_notes: true }
