@@ -153,11 +153,12 @@ async function monitor(file) {
   if (!existsSync(file)) appendFileSync(file, `${COLUMNS.join(',')}\n`);
   const startedAt = Date.now();
   let prev;
-  for (let next = startedAt; Date.now() - startedAt <= minutes * 60_000; next += intervalMs) {
+  while (Date.now() - startedAt <= minutes * 60_000) {
     const s = await sample(base, dbUrl, startedAt, prev);
     prev = s.counters;
     appendFileSync(file, `${COLUMNS.map((c) => s.row[c] ?? '').join(',')}\n`);
-    await new Promise((r) => setTimeout(r, Math.max(0, next + intervalMs - Date.now())));
+    // Next interval boundary since the start; a stalled host skips missed samples instead of bursting.
+    await new Promise((r) => setTimeout(r, intervalMs - ((Date.now() - startedAt) % intervalMs)));
   }
 }
 
@@ -166,13 +167,17 @@ const median = (xs) => {
   return s.length ? s[Math.floor((s.length - 1) / 2)] : NaN;
 };
 
-/** Growth rules: median of the last third of the steady state against the first third. */
+/**
+ * Growth rules: median of the last third of the steady state against the first third. Active handles are
+ * reported but not gated: they are mostly k6's keep-alive sockets, so they follow k6's VU count (which
+ * only grows after a slow spell), not the API.
+ */
 const RULES = [
   ['rss_mb', (a, b) => b <= a * 1.25 + 16],
   ['heap_used_mb', (a, b) => b <= a * 1.25 + 8],
-  ['handles', (a, b) => b <= a * 1.25 + 10],
   ['pg_conns', (a, b) => b <= a + 2],
   ['outbox_pending', (a, b) => b <= a + 20],
+  ['handles', () => true],
 ];
 
 export function check(csv, warmupMin) {
@@ -192,8 +197,9 @@ export function check(csv, warmupMin) {
     const b = median(pick(steady.slice(-third), k));
     const pass = Number.isFinite(a) && Number.isFinite(b) && rule(a, b);
     ok &&= pass;
+    const label = k === 'handles' ? 'INFO' : pass ? 'PASS' : 'FAIL';
     report.push(
-      `${pass ? 'PASS' : 'FAIL'} ${k}: first-third median ${a}, last-third median ${b}, max ${Math.max(...pick(steady, k))}`,
+      `${label} ${k}: first-third median ${a}, last-third median ${b}, max ${Math.max(...pick(steady, k))}`,
     );
   }
   const sum = (k) => pick(rows, k).reduce((x, y) => x + y, 0);
@@ -206,16 +212,17 @@ export function check(csv, warmupMin) {
   return { ok, report };
 }
 
-const { values, positionals } = parseArgs({
-  options: { check: { type: 'boolean' }, 'warmup-min': { type: 'string', default: '30' } },
-  allowPositionals: true,
-});
-const file = positionals[0];
-if (!file) throw new Error('usage: soak-monitor.mjs [--check] <file.csv>');
-if (values.check) {
+async function main() {
+  const { values, positionals } = parseArgs({
+    options: { check: { type: 'boolean' }, 'warmup-min': { type: 'string', default: '30' } },
+    allowPositionals: true,
+  });
+  const file = positionals[0];
+  if (!file) throw new Error('usage: soak-monitor.mjs [--check] <file.csv>');
+  if (!values.check) return monitor(file);
   const { ok, report } = check(readFileSync(file, 'utf8'), Number(values['warmup-min']));
   console.log(report.join('\n'));
   process.exitCode = ok ? 0 : 1;
-} else {
-  await monitor(file);
 }
+
+if (import.meta.main) await main();
