@@ -3,26 +3,27 @@ import { PRODUCTS, tabTo } from './helpers';
 
 test.describe('keyboard only', () => {
   test('skip link, search, product and add to cart without a pointer', { tag: '@smoke' }, async ({ page, browserName }) => {
-    // Safari's Tab stops on form controls only; Option+Tab also stops on links, as a keyboard user there would use.
-    const tab = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
+    // WebKit's Tab, like Safari's default, stops on form controls but not on links, so this walk needs Chromium or
+    // Firefox; the dialog test below runs everywhere.
+    test.skip(browserName === 'webkit', 'Tab skips links in WebKit by default');
     await page.goto('/');
-    await page.keyboard.press(tab);
+    await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#main$/);
 
     // From the top of a fresh page, as a keyboard user starts (Tab past the end leaves Firefox's page).
     await page.goto('/');
-    await tabTo(page, page.getByRole('searchbox', { name: 'Search products' }), 40, tab);
+    await tabTo(page, page.getByRole('searchbox', { name: 'Search products' }));
     await page.keyboard.type('thock keyboard');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/search\?q=thock\+keyboard/);
 
-    await tabTo(page, page.locator(`a[href="/p/${PRODUCTS.keyboard}"]`).first(), 40, tab);
+    await tabTo(page, page.locator(`a[href="/p/${PRODUCTS.keyboard}"]`).first());
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`/p/${PRODUCTS.keyboard}$`));
 
-    await tabTo(page, page.getByRole('button', { name: 'Add to cart' }), 40, tab);
+    await tabTo(page, page.getByRole('button', { name: 'Add to cart' }));
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/cart$/);
     await expect(page.getByRole('button', { name: 'Proceed to checkout' })).toBeVisible();

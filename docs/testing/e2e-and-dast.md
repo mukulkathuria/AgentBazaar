@@ -13,7 +13,7 @@ is named) or on the Windows 11 laptop the work was done on (said where).
 | --- | --- | --- | --- | --- | --- |
 | Journeys, smoke | Playwright 1.64 | 17 `@smoke` tests on desktop Chromium (table below) | `web-e2e.yml` | Every push and pull request | A test fails twice (one retry in CI) |
 | Accessibility | `@axe-core/playwright` 4.14 | WCAG 2.0, 2.1 and 2.2 A/AA on 10 page states, English and Hindi, including the chat dialog and the checkout error state | `web-e2e.yml` (part of the smoke run) | Every push and pull request | Any serious or critical violation |
-| Screenshots | Playwright `toHaveScreenshot` | Home, product (personalisable mug), search results, empty cart on Linux Chromium; product grids whose order ties are masked | `web-e2e.yml`, its own step before the journeys | Every push and pull request | More than 1% of pixels differ |
+| Screenshots | Playwright `toHaveScreenshot` | Home, product (personalisable mug), search results, empty cart on Linux Chromium, unmasked: the seeded catalog, product ids included, is the same on every boot | `web-e2e.yml`, its own step before the journeys | Every push and pull request | More than 1% of pixels differ |
 | Journeys, every browser | Playwright | Every journey on Chromium, Firefox, WebKit, Pixel 7 and iPhone 15 | `web-e2e.yml` (`full=true` on dispatch) | Nightly 01:30 UTC | A test fails twice |
 | Performance budgets | Lighthouse CI 0.15.1 (`apps/web/lighthouserc.json`) | Home, category, product and search pages, median of 5 runs, mobile emulation | `web-e2e.yml` | Every push and pull request | Any budget below |
 | API contract fuzzing | Schemathesis 4.33.1 (`tests/dast/schemathesis.toml`) | All 54 REST operations of `packages/contracts/generated/openapi.json`: `not_a_server_error`, `status_code_conformance`, `content_type_conformance`, `response_schema_conformance` | `dast.yml` | Pushes and pull requests replay seed `20261108`; nightly 03:00 UTC and dispatch draw fresh seeds | Any check fails |
@@ -131,9 +131,11 @@ in the commit.
 ### Playwright and axe
 
 On CI (run 42447026108) the 4 screenshots pass in 4.0 seconds and the 17 Chromium smoke tests in 20.2 seconds
-with two workers (that run wrote the two masked baselines, committed afterwards). On the laptop against a local production build (`API_PORT=4101 WEB_PORT=3101`) the same 17
-passed in 2.0 minutes. axe reports no serious or critical violation on any of the ten page states. The
-cross-browser projects run from the nightly schedule.
+with two workers; run 42449226557 then wrote the unmasked product and search baselines that are committed now. On
+the laptop against a local production build (`API_PORT=4101 WEB_PORT=3101`) the 17 smoke tests passed in 2.0
+minutes, and every journey passed on the other projects too: Firefox 17 of 17, WebKit 16 of 16 plus the skipped
+keyboard walk, Pixel 7 17 of 17, iPhone 15 16 of 16 plus the same skip. axe reports no serious or critical
+violation on any of the ten page states.
 
 ### Schemathesis
 
@@ -179,6 +181,8 @@ The API returns only informational cache-classification alerts.
 | Bug | Fix |
 | --- | --- |
 | The admin console's landing page always said "The store is temporarily unavailable": the API never served `GET /api/v1/admin/dashboard`, which the contract and the console use | A read-only admin module composes it from functions each owning module exports (f02d38c); `test/e2e/admin-dashboard.e2e.spec.ts` |
+| The same catalog listed products that tie in search or "bought together" in a different order on every boot: seeded products got random ids, and ties break by id | Seeded products get ids derived from their slugs (`seedProductId`); `test/regression/seed-determinism.e2e.spec.ts` |
+| WebKit (so Safari) dropped every cookie of the plain-HTTP demo on `localhost`, so the cart, sign-in and the language switch did nothing there: cookies were `Secure` whenever `NODE_ENV=production` | Cookies stay `Secure` in production unless the store itself is `http://localhost` or `http://127.0.0.1` (`SECURE_COOKIES`, `session.test.ts`) |
 | Right after paying, the order page could say "Awaiting payment" with a "Complete payment" link: the order follows its payment through the outbox | The page re-renders every 2 s, ten times at most, while the order awaits payment, and the status line is a polite live region (f4730c7) |
 | After the language switch the document briefly had no `<title>`: Next.js streamed metadata, and the re-rendered page waited on it | `htmlLimitedBots: /.*/` makes metadata blocking for every user agent (9e71607) |
 
@@ -187,5 +191,9 @@ The API returns only informational cache-classification alerts.
 - The ZAP job runs the baseline (spider and passive rules). The plan's active API scan from the OpenAPI
   document (`zap-api-scan.py`) is not wired yet.
 - Screenshot baselines exist for desktop Chromium only.
-- WebKit and the iPhone project run nightly against plain-HTTP `localhost` with the production cookie settings
-  (`Secure`); the first nightly results decide whether anything there needs a change.
+- The keyboard walk through links is skipped on WebKit (desktop and iPhone): WebKit's Tab, like Safari's default,
+  does not stop on links. The dialog's focus trap is still checked there.
+- The token used to trigger workflows here cannot dispatch them, so the first cross-browser run in CI is the
+  nightly; the same projects pass on the laptop (see Results).
+- The OpenSearch engine (scale profile) ranks its keyword leg by `_score` without its own tie-break; the fused
+  ranking is a total order, but tied documents at the leg's depth cut-off can differ between replicas.
