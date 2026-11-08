@@ -15,11 +15,11 @@
 
 AgentBazaar is an open-source (MIT) commerce platform where people **and** AI agents shop. Shoppers get a fast, server-rendered storefront; assistants such as Claude, Cursor or your own agent connect over **MCP** or **A2A**, search the catalog and haggle with a seller agent. Every price, discount, stock check and quote expiry is decided by code, behind a price floor that no prompt can talk its way under. The LLM only writes the words. It is built for India first (GST per line, UPI, cash on delivery, money in integer paise, English and Hindi, DPDP Act 2023 data rights), runs on one VPS or with no install at all on embedded Postgres, and moves to bigger infrastructure by switching a profile, not by rewriting code.
 
-> **Status: v0.9, lite release candidate.** Growth and scale adapters are built behind ports but not yet released. The Razorpay adapter is not yet verified against Razorpay's live sandbox, YouPI-PG is experimental, and there has been no independent penetration test. Do not take real money with it yet. See [Legal, compliance and security](#legal-compliance-and-security).
+> **Status: v0.9, lite release candidate, with the growth and scale profiles built.** The Phase 1 release gates (browser journeys, accessibility, Lighthouse budgets, API fuzzing, a ZAP scan, failure injection, LLM evals, coverage and mutation gates, an upgrade test), the growth milestones G1 to G5 and the scale milestones S1 to S6 are built and verified in CI: see [Growth and scale](#growth-and-scale) and [Testing and quality gates](#testing-and-quality-gates). The 8-hour lite soak and the full-scope mutation score are under [Measured results](#measured-results). Two scale runs are written and tested without AWS but have not run: the 10 lakh-user load test and the zone-failure drill need a real scale stack and the owner's approval of the spend. The Razorpay adapter is not yet verified against Razorpay's live sandbox, YouPI-PG is experimental, and there has been no independent penetration test. Do not take real money with it yet. See [Known limits and owner steps](#known-limits-and-owner-steps) and [Legal, compliance and security](#legal-compliance-and-security).
 
 ## Contents
 
-[Try it in 60 seconds](#try-it-in-60-seconds-no-api-keys) · [Connect your own LLM app](#connect-your-own-llm-app) · [The problem](#the-problem) · [Our solution](#our-solution) · [Architecture](#architecture) · [How negotiation works](#how-negotiation-works) · [User flows](#user-flows) · [Installation](#installation) · [Testing and quality gates](#testing-and-quality-gates) · [Diagrams](#how-to-create-user-flow-diagrams) · [ROI example](#worked-roi-example-illustrative) · [Roadmap](#roadmap) · [Contributing](#contributing) · [Legal](#legal-compliance-and-security) · [License](#license)
+[Try it in 60 seconds](#try-it-in-60-seconds-no-api-keys) · [Connect your own LLM app](#connect-your-own-llm-app) · [The problem](#the-problem) · [Our solution](#our-solution) · [Architecture](#architecture) · [How negotiation works](#how-negotiation-works) · [User flows](#user-flows) · [Installation](#installation) · [Growth and scale](#growth-and-scale) · [Testing and quality gates](#testing-and-quality-gates) · [Diagrams](#how-to-create-user-flow-diagrams) · [ROI example](#worked-roi-example-illustrative) · [Roadmap](#roadmap) · [Known limits](#known-limits-and-owner-steps) · [Contributing](#contributing) · [Legal](#legal-compliance-and-security) · [License](#license)
 
 ## Try it in 60 seconds (no API keys)
 
@@ -141,14 +141,15 @@ flowchart LR
 
 | Path | What lives there |
 | --- | --- |
-| `apps/api` | Modules: identity, catalog, search, customization, pricing, inventory, cart, checkout, orders, payments, tax (GST), recommendations (product graph), agent (MCP, A2A, router, chat), pii, audit, analytics, admin |
+| `apps/api` | Modules: identity, catalog, search, customization, pricing, inventory, cart, checkout, orders, payments, tax (GST), recommendations (product graph), agent (MCP, A2A, router, chat), pii, audit, analytics, notifications, admin |
 | `apps/web` | Next.js storefront and admin console: SSR product pages with JSON-LD, chat widget, approval queues, dashboards |
 | `apps/demo` | The `pnpm demo` runner: embedded store, scripted buyer agent, transcript |
 | `services/ai` | Optional FastAPI service: intent classifier, embeddings, PII redaction |
 | `packages/contracts` | Zod schemas for REST, MCP tools, A2A parts and the AI service; generated OpenAPI |
 | `packages/config` | Profile loader with fail-fast validation of adapters and secrets |
 | `packages/testkit` | Deterministic synthetic catalog, scripted and adversarial buyer agents |
-| `deploy/` | Docker Compose (demo, lite, growth, scale, observability profiles), Caddy, Helm, Terraform/OpenTofu for AWS |
+| `deploy/` | Docker Compose (demo, lite, growth, scale, ai, observability profiles), Caddy with the Coraza WAF and CrowdSec, Helm, Terraform/OpenTofu for AWS, OPA policies (`policies/`), Wazuh rules (`siem/`) |
+| `tests/`, `evals/` | k6 load profiles, the real-service test stack (`tests/infra`), fuzzing and ZAP settings, the cluster test, promptfoo and garak evals |
 
 **Ports and adapters.** Every external dependency sits behind a port. The profile picks the defaults; any adapter can be overridden explicitly.
 
@@ -161,12 +162,15 @@ flowchart LR
 
 | Port | Adapters | Variable |
 | --- | --- | --- |
-| Database | `postgres`, or `pglite` for demos and tests (lite only) | `DATABASE_DRIVER` |
+| Database | `postgres`, or `pglite` for demos and tests (lite only); read replicas through `DATABASE_REPLICA_URLS` | `DATABASE_DRIVER` |
 | Identity | Built-in EdDSA token issuer, or any OIDC issuer such as Keycloak | `IDENTITY_PROVIDER` |
 | Payments | `mock` (default), `razorpay`, `youpi-pg` (experimental) | `PAYMENT_ADAPTER` |
-| LLM (words only) | `template` (default, no keys), `anthropic`, `openai-compatible` (e.g. vLLM) | `LLM_ADAPTER` |
+| LLM (words only) | `template` (default, no keys), `anthropic`, `openai-compatible` (e.g. vLLM); a second provider as fallback | `LLM_ADAPTER`, `LLM_FALLBACK_ADAPTER` |
 | Classifier | `rules` (default), `ai-service` | `CLASSIFIER_ADAPTER` |
 | Embeddings | `hash` (256-dim, no model), `ai-service` | `EMBEDDINGS_ADAPTER` |
+| Semantic cache (model wording) | `off` (default), `memory`, `valkey` | `SEMANTIC_CACHE` |
+| Checkout and payment workflow | `inprocess` (default), `temporal` | `WORKFLOW_ENGINE` |
+| Analytics store | `postgres` (default), `clickhouse` | `ANALYTICS_ADAPTER` |
 | Tax | GST (India), the first tax adapter | n/a |
 
 **Profiles.** All three tiers are compiled and tested; `PROFILE` chooses which adapters and services run. Nothing is commented out. Moving up a tier is a configuration change plus a reindex, not a schema change. Details in [docs/profiles.md](docs/profiles.md).
@@ -174,14 +178,14 @@ flowchart LR
 | Capability | Lite (about 10 to 1,000 users) | Growth (about 10k to 1 lakh) | Scale (about 10 lakh) |
 | --- | --- | --- | --- |
 | Deploy | Docker Compose on one VPS | k3s, 3+ nodes | Kubernetes, multi-AZ, autoscaling |
-| Database | One Postgres | Read replicas, PgBouncer | Partitioning, per-module databases, optional Citus |
+| Database | One Postgres; event logs partitioned by month, old months archived | + read replicas, PgBouncer | Same as growth; per-module databases are designed, not built ([ADR 0013](docs/adr/0013-time-partitioned-event-logs.md)) |
 | Search | Postgres full-text + pgvector | Meilisearch | OpenSearch + Qdrant |
 | Events and jobs | Outbox + in-process bus, Postgres-locked scheduler ([ADR 0003](docs/adr/0003-outbox-and-event-bus.md)) | NATS JetStream | Kafka with outbox relay, Temporal sagas |
 | Cache | Valkey | Valkey | Valkey |
-| Edge | Caddy (TLS, headers) | + APISIX gateway | + bot management, per-agent quotas |
-| Secrets | Environment + field encryption | OpenBao | OpenBao + KMS, separate PII vault service |
-| Observability | Prometheus metrics, structured logs | + OpenTelemetry | Full tracing, alerting, SIEM |
-| AI layer | Rules classifier, one LLM tier | + router tiers, semantic cache | Autoscaled agent pool, GPU classifier |
+| Edge | Caddy with the Coraza WAF (OWASP CRS) and CrowdSec | + APISIX gateway | + AWS WAF with Bot Control, per-agent quotas |
+| Secrets | Environment + field encryption | OpenBao Transit | OpenBao Transit |
+| Observability | Prometheus metrics, structured logs | + OpenTelemetry traces, Langfuse for model calls | + Wazuh SIEM rules |
+| AI layer | Rules classifier, one LLM tier | + router tiers, semantic cache, gated observer, provider fallback | + autoscaled agent pool; GPU classifier from an image you build |
 
 ## How negotiation works
 
@@ -420,6 +424,8 @@ The profile loader in [`packages/config`](packages/config/src/index.ts) validate
 - `PAYMENT_ADAPTER=razorpay` needs `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET`; `youpi-pg` needs `YOUPI_BASE_URL` and `YOUPI_WEBHOOK_SECRET`.
 - A payment adapter that serves one payer at a time warns in lite and stops growth and scale from starting unless `PAYMENT_ALLOW_SINGLE_SLOT=true`.
 - `LLM_ADAPTER=anthropic` needs `ANTHROPIC_API_KEY`; `openai-compatible` needs `OPENAI_COMPAT_BASE_URL`; `IDENTITY_PROVIDER=oidc` needs `OIDC_ISSUER_URL`; `SELLER_GSTIN` must be a valid GSTIN.
+- `WORKFLOW_ENGINE=temporal` needs `TEMPORAL_ADDRESS`; `ANALYTICS_ADAPTER=clickhouse` needs `CLICKHOUSE_URL`; `DATABASE_REPLICA_URLS` needs `DATABASE_DRIVER=postgres`.
+- `SEMANTIC_CACHE=valkey` needs the Valkey cache (`VALKEY_URL`); the three `LANGFUSE_*` variables are set together or not at all; `LLM_FALLBACK_ADAPTER` must differ from `LLM_ADAPTER`, cannot back up `template`, and needs `LLM_FALLBACK_SMALL_MODEL`, `LLM_FALLBACK_LARGE_MODEL` and its own credentials.
 
 ### Database
 
@@ -462,22 +468,89 @@ The adapter was written from Razorpay's public documentation and is unit-tested 
 | `anthropic` | `ANTHROPIC_API_KEY` | Small and large tiers via `LLM_SMALL_MODEL` (default `claude-haiku-5-5`) and `LLM_LARGE_MODEL` (default `claude-sonnet-5-5`). |
 | `openai-compatible` | `OPENAI_COMPAT_BASE_URL`, optional `OPENAI_COMPAT_API_KEY` | Any OpenAI-compatible server, such as vLLM serving an open model. |
 
-Whichever you choose, the model only rephrases. If it is slow, down or writes a number the services did not produce, the buyer gets the template wording. Per-session token budgets (`SESSION_TOKEN_BUDGET`) stop anyone using the store as a free chatbot. Model licences and data rules are in [MODELS.md](MODELS.md).
+Whichever you choose, the model only rephrases. If it is slow, down or writes a number the services did not produce, the buyer gets the template wording; `LLM_FALLBACK_ADAPTER` can put a second provider in between ([docs/ai-routing.md](docs/ai-routing.md)). Per-session token budgets (`SESSION_TOKEN_BUDGET`) stop anyone using the store as a free chatbot. Model licences and data rules are in [MODELS.md](MODELS.md).
 
 ### Production: lite on one VPS
 
 ```bash
 cp .env.example .env    # set domains, POSTGRES_PASSWORD, the four keys, seller details
+openssl rand -hex 32    # paste the output into .env as CROWDSEC_BOUNCER_KEY: Caddy will not start without it
 docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile lite up -d --build
 ```
 
-This runs Postgres (with pgvector), Valkey, the API, the storefront and Caddy. Point DNS for `SITE_DOMAIN` and `API_DOMAIN` at the server and Caddy obtains TLS certificates automatically; it also adds security headers and never exposes `/metrics`. Add `--profile ai` for the AI service and `--profile observability` for Prometheus and Grafana (Grafana listens on port 3001, so firewall it). Before you go live, set up backups and a restore drill ([runbook](docs/runbooks/backup-restore.md)) and read the [key rotation runbook](docs/runbooks/key-rotation.md). Recommended VPS size: <!-- METRIC:lite_min_vps -->not measured yet, because the lite profile has so far only been benchmarked on a laptop ([lite benchmark](docs/benchmarks/lite.md))<!-- /METRIC -->.
+This runs Postgres (with pgvector), Valkey, the API, the storefront, Caddy and CrowdSec. Point DNS for `SITE_DOMAIN` and `API_DOMAIN` at the server and Caddy obtains TLS certificates automatically; it also adds security headers and never exposes `/metrics`. Caddy carries the Coraza WAF with the OWASP Core Rule Set in blocking mode, and CrowdSec reads its access log and bans addresses that brute-force sign-in; both share `CROWDSEC_BOUNCER_KEY`, and the tuning for an agent-first store is in [docs/security/edge-waf.md](docs/security/edge-waf.md). Add `--profile ai` for the AI service and `--profile observability` for Prometheus and Grafana (Grafana listens on port 3001, so firewall it). Before you go live, set up backups and a restore drill ([runbook](docs/runbooks/backup-restore.md)) and read the [key rotation runbook](docs/runbooks/key-rotation.md). Recommended VPS size: <!-- METRIC:lite_min_vps -->not measured yet, because the lite profile has so far only been benchmarked on a laptop ([lite benchmark](docs/benchmarks/lite.md))<!-- /METRIC -->.
 
-### Growth and scale
+## Growth and scale
 
-- **Kubernetes:** Helm charts with `values-growth.yaml` and `values-scale.yaml` live in [`deploy/helm`](deploy/helm).
+The growth milestones (G1 to G5) and the scale milestones (S1 to S6) are built behind the same ports as lite and verified in CI against real services. Lite is unchanged: it still runs with no extra services and no API keys. `PROFILE` picks the defaults (see [Configuration](#configuration)), and every feature below can also be turned on by itself.
+
+### What each profile adds, and how to turn it on
+
+| Feature (milestone) | Turn it on | What to know |
+| --- | --- | --- |
+| Read replicas and PgBouncer (G3) | Point `DATABASE_URL` at PgBouncer; list replicas in `DATABASE_REPLICA_URLS`; `DATABASE_REPLICA_MAX_LAG_MS` (default `5000`) | Only safe GET and HEAD reads of the catalog, feed, search, graph and analytics go to replicas; a lagging replica leaves rotation, and every caller reads its own writes ([ADR 0009](docs/adr/0009-replica-routing-and-read-your-writes.md)). PgBouncer drops the client's `statement_timeout`, so set it on the role once: `ALTER ROLE agentbazaar SET statement_timeout = '15s';` |
+| Meilisearch (G1) | `PROFILE=growth` or `SEARCH_ADAPTER=meilisearch`, with `MEILISEARCH_URL` and `MEILISEARCH_API_KEY`, then `pnpm --filter @agentbazaar/api cli reindex` | Fed from the outbox. Queries in Devanagari are read through a reviewed Hindi term map, in every engine |
+| NATS JetStream (G2) | `PROFILE=growth` or `EVENT_BUS=nats`, with `NATS_URL` | Idempotent consumers: killing one mid-message causes no loss and no duplicate effect |
+| OpenBao Transit for PII keys (G4) | `PROFILE=growth` or `SECRETS_ADAPTER=openbao`, with `OPENBAO_ADDR`, `OPENBAO_TOKEN`, `OPENBAO_TRANSIT_KEY` (default `agentbazaar-pii`) and `OPENBAO_TRANSIT_MOUNT` (default `transit`) | Create the Transit key with `derived=true`. A store that already holds customer data runs `pnpm --filter @agentbazaar/api cli pii rewrap` (idempotent and resumable) until it exits 0, then switches ([guide](docs/operations/kubernetes.md#pii-keys-and-openbao)) |
+| Keycloak or any OIDC issuer (G4) | `IDENTITY_PROVIDER=oidc`, `OIDC_ISSUER_URL`, `OIDC_AUDIENCE` (default `agentbazaar-api`) | Realm setup, including the agent scopes and the admin MFA step: [kubernetes.md](docs/operations/kubernetes.md#identity-with-keycloak) |
+| APISIX gateway (G4) | Helm `gateway.enabled` | Per-token rate limits (600 requests a minute on the agent routes, 1,200 elsewhere), body-size limits, access logs without query strings |
+| OpenTelemetry tracing (G4) | `OTEL_EXPORTER_OTLP_ENDPOINT` | Traces only, and the SDK is not even loaded unless this is set. No SQL parameters, bodies or headers; query-string values become `REDACTED`; every attribute passes the same PII redaction as the logs |
+| Model routing, semantic cache, observer gate, Langfuse (G5) | `SEMANTIC_CACHE` (`off`, `memory`, `valkey`) and `SEMANTIC_CACHE_THRESHOLD` (default `0.9`); `LLM_TIER2_MAX_TOKENS` and `LLM_TIER3_MAX_TOKENS` (default `350`); `LLM_FALLBACK_ADAPTER` (`none`, `anthropic`, `openai-compatible`) with `LLM_FALLBACK_SMALL_MODEL` and `LLM_FALLBACK_LARGE_MODEL`; `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`; `AI_DEVICE=cuda` in `services/ai` | Cached replies are stored without numbers, refilled from the current policy and checked by the guard again. The observer's large-model judge runs only on turns that commit to something or carry a risk signal ([ADR 0012](docs/adr/0012-semantic-cache-and-observer-gating.md), [docs/ai-routing.md](docs/ai-routing.md)) |
+| Kafka with the outbox relay (S1) | `PROFILE=scale` or `EVENT_BUS=kafka`, with `KAFKA_BROKERS` | Each aggregate's events keep their commit order, and a consumer can rebuild a read model from the topic |
+| OpenSearch and Qdrant (S2) | `PROFILE=scale` or `SEARCH_ADAPTER=opensearch`, with `OPENSEARCH_URL` and `QDRANT_URL`, then `cli reindex` | An index created before commits `4aa12b7` and `074c55a` keeps its old mapping: delete it and reindex |
+| Partitioned event logs and archival (S3) | Every profile, from migrations 0050 to 0052. Set `ARCHIVE_DIR` and run `cli archive --older-than N` (or `--before YYYY-MM`, optionally with `--tables ...`); the Helm chart has an `archive` CronJob | Seven append-only logs are partitioned by UTC month. Archives are gzip JSON lines, checked by row count and checksum before a month is dropped ([runbook](docs/runbooks/archive.md)) |
+| Temporal sagas for checkout and payment (S4) | `WORKFLOW_ENGINE=temporal` with `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE` (default `default`) and `TEMPORAL_TASK_QUEUE` (default `agentbazaar-checkout`), plus a worker: `cli workflow-worker` (image `agentbazaar-workflow-worker`, Helm `workflowWorker`) | Lite and growth keep the in-process path. No personal data goes into Temporal ([docs/architecture/sagas.md](docs/architecture/sagas.md)) |
+| ClickHouse analytics (S5) | `ANALYTICS_ADAPTER=clickhouse` with `CLICKHOUSE_URL` | Fed from the outbox, monthly partitions, 13-month TTL. Analytics already in Postgres are not backfilled |
+| Edge protection (S5) | Compose: Caddy with Coraza (OWASP CRS 4.25, blocking) and CrowdSec, keyed by `CROWDSEC_BOUNCER_KEY`. AWS: the Terraform `waf` module | AWS WAF's Bot Control covers the storefront host only, because the API serves agents by design ([docs/security/edge-waf.md](docs/security/edge-waf.md)) |
+| Wazuh SIEM (S5) | Ship the API's JSON log lines to Wazuh with the decoders and rules in [`deploy/siem`](deploy/siem/README.md) | Wazuh (GPL-2.0) runs as its own service and is never bundled |
+| Agent pool (S6) | Helm `agents.enabled` (on in `values-scale.yaml`) | `/mcp`, `/a2a` and `/api/v1/chat` run on their own Deployment with their own HPA (3 to 30 replicas in scale, on CPU) |
+
+**Where it runs.**
+
+- **Compose, for evaluation:** `--profile growth` adds PgBouncer, a streaming replica, Meilisearch, NATS JetStream, OpenBao (dev mode, not for production) and Keycloak; `--profile scale` adds Kafka, OpenSearch, Qdrant, a single-node Temporal and the workflow worker. Set `DATABASE_HOST=pgbouncer:6432` and `DATABASE_REPLICA_URLS` in `.env` to use the pooler and the replica.
+- **Kubernetes:** the Helm chart in [`deploy/helm`](deploy/helm) with `values-growth.yaml` (2 to 8 API replicas, the gateway, PgBouncer) or `values-scale.yaml` (zone spread, the agent pool, the workflow worker). Install guide, policies and the fresh-cluster test: [docs/operations/kubernetes.md](docs/operations/kubernetes.md).
 - **AWS:** OpenTofu/Terraform modules in [`deploy/terraform`](deploy/terraform), one root module per profile, with every resource name derived from your `project_name`. Nothing is deployed for you.
-- **Upgrading** from lite to growth to scale, including `pnpm --filter @agentbazaar/api cli reindex`: [docs/profiles.md](docs/profiles.md).
+- **Upgrading** from lite to growth to scale, including `cli reindex` and `cli pii rewrap`: [docs/profiles.md](docs/profiles.md).
+
+### Measured results: growth and scale
+
+Each result links the page that records its run, commit and hardware. CI runs are on GitHub-hosted `ubuntu-latest` runners.
+
+**Search at 100,000 products** with 172,843 variants (G1 and S2), [Search benchmark run 42451009235](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42451009235) on the current code. All 66 golden queries, ten of them in Devanagari, score the same in every engine ([details and earlier runs](docs/benchmarks/search.md)):
+
+| Engine | recall@10 | nDCG@10 | p95 | Target |
+| --- | --- | --- | --- | --- |
+| Postgres (lite, for reference) | 1.000 | 1.000 | 368 ms | none at this size; lite's is p95 < 150 ms at 10,000 products |
+| Meilisearch (growth) | 1.000 | 1.000 | 15.1 ms | recall at least lite's and p95 < 50 ms: met |
+| OpenSearch + Qdrant (scale) | 1.000 | 1.000 | 20.8 ms | parity with growth: met |
+
+**100 million order events** (S3), [Data scale run 42211447035](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42211447035): 20 million orders in a 26.6 GB database, on 4 vCPUs and 16 GB. Every hot query keeps the same plan shape at 1M, 10M and 100M ([details](docs/benchmarks/data-scale.md)):
+
+| Query at 100M order events | Pages touched | p95 | Partitions scanned |
+| --- | --- | --- | --- |
+| Customer order history: orders | 24 | 3.1 ms | not partitioned |
+| Customer order history: events | 268 | 14.2 ms | 24 |
+| Events for one recent order | 13 | 1.8 ms | 6 |
+| Admin feed: recent events by type | 16 | 1.2 ms | 5 (24 pruned) |
+| Outbox relay claim, batch of 100 | 1,760 | 5.2 ms | all 30 |
+
+**AI cost per conversation** (G5), 40 scripted conversations per arm on a laptop with PGlite and a deterministic fake model ([details](docs/benchmarks/ai-cost.md)):
+
+| Arm | Cost per conversation | Against the baseline | Deals | Checkout links | Floor violations |
+| --- | --- | --- | --- | --- | --- |
+| Shadow baseline: every turn on the large model, observer on every turn | ₹0.6592 | | 22/40 | 22/40 | 0 |
+| Routed tiers and gated observer | ₹0.1689 | −74.4% | 22/40 | 22/40 | 0 |
+| Plus the semantic cache | ₹0.0716 | −89.1% | 22/40 | 22/40 | 0 |
+
+Scripted traffic repeats itself, so the cache saves more here than it will with real shoppers; the 74.4% from routing and gating does not depend on repetition.
+
+- **Failover drill (G3)**, on every push in the Data tier workflow: the primary is SIGKILLed under four writers and the synchronous standby promoted. Run 42198370506: 13,616 acknowledged writes, **0 lost**, `pg_promote` in 0.11 s, longest write outage 2.23 s against a 30 s budget. The integration (38 tests) and end-to-end (105) suites also pass through PgBouncer in transaction pooling ([runbook](docs/runbooks/database-failover.md#drill-results)).
+- **Messaging (G2, S1)**, in the Services workflow: a NATS consumer killed before its effect, and between commit and acknowledgement, still applies all 20 events exactly once. Kafka keeps 12 keys × 15 events in order per key across 3 partitions, a replay of 180 events adds no effect, and a search read model rebuilt from the topic matches the original.
+- **Saga crash suite (S4):** a worker is SIGKILLed right after each step's database commit, at every step, on a real Temporal server. All 12 scenarios end in one correct state (paid once with one invoice and one email, or closed with its stock back and at most one refund), in two consecutive Services runs, 42450630481 and 42451009288 ([details](docs/architecture/sagas.md#tests-and-measured-results)).
+- **Fresh cluster install (G4)**, Cluster workflow: a k3d cluster (k3s 1.35) installs `values-growth.yaml` with the gateway, PgBouncer and the agent pool. 9 of 9 smoke checks pass, the scripted buyer agent haggles ₹5,499 down to ₹5,060 over MCP through APISIX, order AB-1001 is paid, and all 11 MCP requests land on the agent pool; the whole run takes 3 min 37 s. With tracing on: 548 spans, none with an email, phone or token ([details](docs/operations/kubernetes.md#results)).
+- **Agent spike (S6)**, one API process on PGlite with a fake model ([details](docs/benchmarks/agent-spike.md)): a 5× spike to 5 agent conversations a second meets every budget from a cold cache (search p95 24.4 ms against 300 ms, chat turn p95 137.4 ms against 1 s, ₹0.0720 per conversation against ₹0.50, 0 errors in 1,497 requests). At 10 a second one process saturates (from a cold cache, search p95 444.3 ms and chat turn 1.17 s), which is what the agent pool's replicas are for.
+- **Platform suites:** OpenBao 6 of 6, Keycloak 26.8 OIDC 4 of 4, ClickHouse 6 of 6; the edge 26 of 26 checks (SQL injection, XSS and path traversal refused, an address banned after 12 failed sign-ins, ordinary and agent traffic untouched); Wazuh 18 of 18 expected rules fired; OpenTofu tests for lite (17), growth (14) and scale (27); OPA policies (13 Kubernetes and 7 Terraform rule tests) passing on all three Helm value sets and all three plans.
+- **Scale load profile and zone-failure drill (S5): not run.** `tests/load/scale.js` passed every threshold at 1% scale on a laptop (3,974 requests, 0 errors, read p95 83.5 ms, checkout p95 237 ms, agent p95 126 ms), which proves the tooling, not the scale profile. The full run and the AWS FIS drill need a real scale stack: about $30 to $50 on a running stack, $130 to $170 if one is created only for the test ([runbook](docs/runbooks/scale-load-and-zone-drill.md)).
 
 ## Testing and quality gates
 
@@ -487,39 +560,94 @@ Tests are written with the feature and tagged by profile (`@lite`, `@growth`, `@
 | --- | --- | --- |
 | Unit and property | `pnpm test` | Vitest and fast-check. Pricing, quotes, GST, money, customization, state machines |
 | Integration | `pnpm test:int` | Real dependencies. PGlite by default; set `TEST_DATABASE_URL` for real Postgres |
-| End-to-end, contract, negative, regression | `pnpm test:e2e` | `apps/api/test/{e2e,contract,negative,regression}`, including golden search queries |
+| End-to-end, contract, negative, regression | `pnpm test:e2e` | `apps/api/test/{e2e,contract,negative,regression}`, including golden search queries and the AI cost check |
 | Adversarial agents | `pnpm test:e2e` | Prompt injection, floor probing, PII extraction, competitor-price claims, via the adversarial buyer in `@agentbazaar/testkit` |
 | Concurrency | `pnpm test:int` | 1,000 parallel buyers for 10 units must sell exactly 10 (200 buyers on PGlite); replayed webhooks change nothing (`pnpm test:e2e`) |
-| Web journeys and accessibility | `pnpm --filter @agentbazaar/web test:e2e` | Playwright with axe-core, against a running stack |
+| Growth and scale services | `pnpm --filter @agentbazaar/api test:services` | Against the real services in [`tests/infra/docker-compose.yml`](tests/infra/docker-compose.yml): every search engine, NATS, Kafka, OpenBao, ClickHouse, Temporal sagas, failure injection through Toxiproxy, data scale at 1M order events |
+| Coverage | `pnpm --filter @agentbazaar/api test:coverage` | Unit, integration and end-to-end suites on PGlite in one measurement ([quality gates](docs/testing/quality-gates.md)) |
+| Mutation | `pnpm --filter @agentbazaar/api mutation:critical` | StrykerJS on pricing, quote signing, inventory and the order state machine; `mutation` covers all domain and application code and takes hours |
+| Web journeys and accessibility | `pnpm --filter @agentbazaar/web test:e2e` | Playwright with axe-core, against a running stack started by `scripts/e2e-stack.sh` ([journeys, Lighthouse, fuzzing and ZAP](docs/testing/e2e-and-dast.md)) |
+| LLM evals | [docs/testing/evals.md](docs/testing/evals.md#running-them) | promptfoo chat and MCP evals and garak probes against a running API in demo mode |
 | Python service | `cd services/ai && uv run pytest` | pytest and Hypothesis, 90% coverage gate |
-| Load | `k6 run -e BASE_URL=http://localhost:4000 tests/load/lite.js` | Lite targets: read p95 < 300 ms, checkout p95 < 800 ms, errors < 0.1%. Soak with `-e DURATION=8h` |
+| Load | `k6 run -e BASE_URL=http://localhost:4000 tests/load/lite.js` | Lite targets: read p95 < 300 ms, checkout p95 < 800 ms, errors < 0.1%. Soak with `-e DURATION=8h`. `tests/load/agent-spike.js` and `tests/load/scale.js` for the scale profile |
 | Types, lint, module boundaries | `pnpm typecheck && pnpm lint` | ESLint (no `any`, complexity 15, 500-line files) and dependency-cruiser |
 | Generated contracts | `pnpm --filter @agentbazaar/contracts exec tsx scripts/generate.ts --check` | OpenAPI and AI schemas must match the Zod sources |
 | Licences | `pnpm license:check` | Allowlist only; AGPL, GPL and source-available licences fail |
 | Docs | `pnpm docs:check` | Diagrams in this README match their sources |
 
-CI also runs gitleaks, Semgrep, OSV-Scanner and Trivy on every pull request and nightly ([security.yml](.github/workflows/security.yml)), boots the Docker demo and runs the k6 profile ([stack.yml](.github/workflows/stack.yml)), and runs this README's quickstart in a clean runner ([quickstart.yml](.github/workflows/quickstart.yml)).
+### CI workflows
 
-**Measured results** (filled in from CI and the [lite benchmark](docs/benchmarks/lite.md); never estimated):
+Every workflow on `main`, what it checks, when it runs and how its latest run on `main` ended (2026-11-08). Numbers name the run that recorded them.
+
+| Workflow | What it checks | When it runs | Latest result |
+| --- | --- | --- | --- |
+| [CI](.github/workflows/ci.yml) | Build, types, lint, module boundaries, generated contracts; unit, integration and end-to-end suites on real Postgres and on PGlite | Every push and pull request | Green: 812 unit, 106 integration and 129 end-to-end tests (run 42451493203) |
+| [Quality](.github/workflows/quality.yml) | Coverage gates (API, config, contracts, AI service) and the critical-scope mutation gate | Every push and pull request | Green; recorded at `739deb2`: 91.58% lines, 85.43% branches, and at `887938e`: mutation 96.68% on the critical scope |
+| [Mutation (full scope)](.github/workflows/mutation.yml) | StrykerJS on all domain and application code in five shards; the merged score must reach 70% | Nightly 22:30 UTC; changes to the mutation setup | See [Measured results](#measured-results) |
+| [Services](.github/workflows/services.yml) | The growth and scale suites against eleven real services: search engines (golden set at 10,000 products), messaging, OpenBao, ClickHouse, sagas, failure injection, data scale at 1M | Every push and pull request | Green: sagas 12/12, failure injection 11/11 |
+| [Data tier](.github/workflows/data-tier.yml) | The integration and end-to-end suites through PgBouncer, read-your-writes, the failover drill | Every push and pull request | Green: 0 acknowledged writes lost in the drill |
+| [Search benchmark](.github/workflows/search-benchmark.yml) | Relevance and latency at 100,000 products in every engine | Search changes on `main`; nightly 02:30 UTC | Green: recall 1.000; p95 15.1 ms Meilisearch, 20.8 ms OpenSearch + Qdrant |
+| [Data scale](.github/workflows/data-scale.yml) | Plans, partition pruning and latency at 10M and 100M order events | Partitioning changes on `main`; nightly 01:00 UTC | Green: the same plan shapes at 1M, 10M and 100M |
+| [Upgrade](.github/workflows/upgrade.yml) | Seeds a database with the previous release (the newest `v*` tag, else `ad481e8`, the lite release candidate), migrates it, then checks health, catalog, search, an old customer's sign-in and order history, and a new checkout | `v*` tags; migration changes on `main`; nightly 00:30 UTC | Green (run 42439737407) |
+| [Cluster](.github/workflows/cluster.yml) | A fresh k3d install of the growth chart: smoke, an agent sale over MCP through the gateway, routing and tracing checks | Chart and cluster-test changes on `main`; nightly 02:30 UTC | Green: smoke, agent sale, routing and tracing checks pass |
+| [Keycloak](.github/workflows/keycloak.yml) | The OIDC suite against Keycloak 26.8 | Identity and config changes | Green: 4/4 |
+| [Evals](.github/workflows/evals.yml) | promptfoo chat and MCP evals; the full set and garak nightly | Every push and pull request; full set nightly 02:30 UTC | Green: 0 floor, PII or injection failures; garak 0 successful attacks in 1,293 probe prompts (run 42358294325) |
+| [Web E2E](.github/workflows/web-e2e.yml) | 17 Playwright smoke tests on Chromium, axe on 10 page states in English and Hindi, 4 screenshot baselines, Lighthouse budgets; every journey on Chromium, Firefox, WebKit, Pixel 7 and iPhone 15 nightly | Every push and pull request; all browsers nightly 01:30 UTC | Green: no serious axe violations, Lighthouse budgets met (performance 0.97 to 0.98 in run 42447026108) |
+| [DAST](.github/workflows/dast.yml) | Schemathesis on all 54 REST operations; a ZAP baseline of the web app and the API | Every push and pull request (fixed seed); nightly 03:00 UTC with fresh seeds | Green: every check passes on every operation; no High alerts |
+| [Edge](.github/workflows/edge.yml) | Caddy with Coraza and CrowdSec in front of the demo API | Edge changes; nightly 03:45 UTC | Green: 26/26 checks |
+| [SIEM](.github/workflows/siem.yml) | The Wazuh decoders and rules through `wazuh-logtest` | SIEM changes; nightly 04:30 UTC | Green: 18/18 expected rules fire |
+| [Supply chain](.github/workflows/supply-chain.yml) | Dependency review (advisories and licences) and an SBOM diff | Pull requests; pushes that change a manifest or lockfile | Green; dependency review warns and skips until the owner turns on the Dependency graph |
+| [Security](.github/workflows/security.yml) | gitleaks, Semgrep, OSV-Scanner, Trivy and the licence gate (387 production packages) | Every push and pull request; nightly 02:00 UTC | Green |
+| [IaC](.github/workflows/iac.yml) | OpenTofu tests against mocked AWS; OPA policies on the rendered chart and on every profile's plan | Changes under `deploy/` | Green: tofu tests lite 17, growth 14, scale 27 |
+| [Stack](.github/workflows/stack.yml) | The Compose stack, the Docker demo profile and a 2-minute k6 run | Every push to `main`; nightly 03:00 UTC | Green |
+| [Quickstart](.github/workflows/quickstart.yml) | This README's quickstart on a clean runner, and `pnpm docs:check` | Every push and pull request; nightly 03:30 UTC | Green |
+| [Soak](.github/workflows/soak.yml) | The lite k6 profile for 5 hours with a per-minute sampler and a growth gate | Weekly, Saturday 20:00 UTC | Green: 648,048 requests, 0 failed, no growth (run 42425746043) |
+| [Release](.github/workflows/release.yml) | Multi-arch images (api, web, ai, workflow worker) signed with cosign, with SBOMs and provenance | `v*` tags | Not run yet: no release is tagged |
+
+### Measured results
+
+Lite numbers and the Phase 1 gates; growth and scale results are [above](#measured-results-growth-and-scale). Every value comes from a recorded run, in CI or on the laptop of the [lite benchmark](docs/benchmarks/lite.md); none is estimated.
 
 | Measure | Result |
 | --- | --- |
-| Unit and property tests | <!-- METRIC:unit_test_count -->473 (API 378, web 48, contracts 27, config 12, testkit 8)<!-- /METRIC --> |
-| Integration and end-to-end tests | <!-- METRIC:e2e_test_count -->128 on real Postgres (29 integration; 99 end-to-end, contract, negative and regression); 127 on PGlite, which skips the search benchmark<!-- /METRIC --> |
-| Python tests | <!-- METRIC:python_test_count -->320<!-- /METRIC --> |
-| Line and branch coverage (domain + application) | <!-- METRIC:coverage -->86.0% lines, 72.5% branches across all API suites; unit tests alone 25.5% and 25.9%. The 80% branch gate is not met yet<!-- /METRIC --> |
+| Unit and property tests | <!-- METRIC:unit_test_count -->812 (API 706, web 53, contracts 29, config 16, testkit 8), CI run 42451493203<!-- /METRIC --> |
+| Integration and end-to-end tests | <!-- METRIC:e2e_test_count -->235 on real Postgres (106 integration; 129 end-to-end, contract, negative and regression), and the same 129 on PGlite, CI run 42451493203<!-- /METRIC --> |
+| Python tests | <!-- METRIC:python_test_count -->353, at 100% statement and branch coverage<!-- /METRIC --> |
+| Line and branch coverage, domain and application code (gate: 85% and 80%) | <!-- METRIC:coverage -->91.58% lines, 85.43% branches (Quality workflow, main at `739deb2`)<!-- /METRIC --> |
+| Mutation score (gate: 80% on the critical scope, 70% on everything) | 96.68% on the critical scope: pricing, quote signing, inventory and the order state machine (Quality workflow, main at `887938e`). All domain and application code: <!-- PENDING:quality -->not reported yet; the first five-shard nightly run was in progress on 2026-11-08<!-- /PENDING:quality --> |
 | Search p95, 10,000 products, real Postgres (target < 150 ms) | <!-- METRIC:search_p95_ms_10k -->23.0 ms<!-- /METRIC --> |
 | k6 lite: read p95 (target < 300 ms) | <!-- METRIC:k6_read_p95_ms -->17.3 ms (laptop run)<!-- /METRIC --> |
 | k6 lite: checkout p95 (target < 800 ms) | <!-- METRIC:k6_checkout_p95_ms -->35 ms (laptop run)<!-- /METRIC --> |
 | k6 lite: error rate (target < 0.1%) | <!-- METRIC:k6_error_rate -->0.00%, 0 of 4,379 requests (laptop run)<!-- /METRIC --> |
-| Adversarial suite: floor and PII leaks (target 0) | <!-- METRIC:adversarial_leaks -->0 floor leaks, 0 PII leaks<!-- /METRIC --> |
+| Soak, 5 hours, weekly in CI (same targets, no growth) | Passed ([run 42425746043](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42425746043)): 648,048 requests, 0 failed, read p95 14.02 ms, checkout p95 17 ms; memory, connections and outbox backlog flat ([details](docs/benchmarks/soak-lite.md#3-results)) |
+| Soak, 8 hours (release gate) | <!-- PENDING:soak -->A run started on 2026-11-08 at 02:22 UTC on a laptop with native Postgres; its result goes in [soak-lite.md](docs/benchmarks/soak-lite.md#3-results)<!-- /PENDING:soak --> |
+| Adversarial suite and evals (target 0) | <!-- METRIC:adversarial_leaks -->0 floor leaks, 0 PII leaks<!-- /METRIC -->; 0 injection successes in promptfoo, 0 successful attacks in 1,293 garak probe prompts ([evals](docs/testing/evals.md)) |
+| Failure injection: Postgres, Valkey, payment gateway, AI service and model outages | 11 of 11: fast 503s, `/readyz` 503 while the database is down, breakers and fallbacks, no half-written orders or oversell, full recovery |
+| Lighthouse, mobile, median of 5 runs (budgets: performance ≥ 0.90, LCP ≤ 3.0 s, TBT ≤ 300 ms, CLS ≤ 0.05) | Performance 0.97 to 0.98; accessibility, best practices and SEO 1.00; LCP 2.05 to 2.45 s; TBT 61 to 100 ms; CLS 0 ([details](docs/testing/e2e-and-dast.md#lighthouse-budgets)) |
+| API fuzzing and DAST | Schemathesis: 5,082 + 2,438 + 125 cases over all 54 operations pass (run 42447026147); ZAP baseline: no High alerts ([details](docs/testing/e2e-and-dast.md#results)) |
 | Concurrency: 1,000 parallel buyers for 10 units, real Postgres | Exactly 10 sold, 990 refused with `out_of_stock`, stock never oversold |
 | `pnpm demo` wall time on a laptop | <!-- METRIC:demo_runtime_s -->16.4 s with warm builds (61.9 s on the first run after a code change, mostly TypeScript compilation); the demo itself reports 3.2 s<!-- /METRIC --> |
 
-Search, load and concurrency numbers come from a laptop run on 2026-11-05 with Postgres on the same machine
-([details and hardware](docs/benchmarks/lite.md#3-results)). The VPS benchmark and the 8-hour soak are still to do.
+The lite search, k6 and concurrency numbers come from a laptop run on 2026-11-05 with Postgres on the same machine
+([details and hardware](docs/benchmarks/lite.md#3-results)). The VPS benchmark is still to do.
 
-**Merge gates** for every pull request: zero type, lint and boundary errors; at least 85% line and 80% branch coverage on domain and application code (enforced by Vitest); no critical or high vulnerabilities and a clean secrets scan; allowlisted licences only; REST, MCP and A2A contract tests pass; end-to-end smoke and accessibility pass; migrations apply forward on seeded data; zero PII findings in logs and traces. Mutation testing (Stryker, 70% overall and 80% on pricing, inventory, quotes and the order state machine) is the next gate to switch on. The checklist is in the [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
+**Merge gates** for every pull request: zero type, lint and boundary errors; at least 85% line and 80% branch coverage on domain and application code (enforced by Vitest); a mutation score of at least 80% on pricing, quote signing, inventory and the order state machine (StrykerJS; the 70% gate on all domain and application code runs nightly); no critical or high vulnerabilities and a clean secrets scan; allowlisted licences only; REST, MCP and A2A contract tests pass; end-to-end smoke, accessibility and Lighthouse budgets pass; migrations apply forward on seeded data; zero PII findings in logs and traces. The checklist is in the [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
+
+### Bugs the gates found
+
+Fixed on `main`, with the commit:
+
+- Lite Postgres data sat in an anonymous volume, because pg18 moved its data directory, and was lost when the container was recreated (`d50d0df`).
+- The licence gate had been checking 0 packages; it now checks every workspace's production dependencies (`bc4abdd`).
+- A database or cache outage answered 500 instead of 503 (`53a8141`). A connection dropped mid-transaction crashed the process, a black-holed database hung requests forever, and a pooled connection whose `BEGIN` failed was never released, so the pool drained (`5ff6742`). An `Idempotency-Key` stayed "in progress" forever after a failed request (`6d06f92`).
+- The admin console's landing page always failed: `GET /api/v1/admin/dashboard` had never been implemented (`f02d38c`).
+- ZAP: before hydration, the sign-in and registration forms fell back to GET and put the password in the URL (`625f5ff`). Schemathesis: a NUL character in any input gave a 500 (`42b2c49`), and carts and quotes could pass the ₹1 crore contract cap (`ccbd573`).
+- Safari dropped every cookie of the plain-HTTP demo (`f951a8d`), and a just-paid order could read "Awaiting payment" (`f4730c7`).
+- An offer after a negotiation lapsed rolled back the expiry, leaving the session open (`23a7aa9`).
+- Node's `fetch` stalled about 43 ms on Meilisearch's chunked answers, so p95 at 100,000 products was 47.9 ms until the engines moved to `node:http` (`f9a2158`). Tied search scores had no total order, so a page could repeat or skip a product (`074c55a`).
+- Order history read the whole `orders` table (p95 122 ms at 200,000 orders) until migration 0052 indexed `subject` (`badedbc`); the outbox could deliver one aggregate's events out of commit order (`db3d458`).
+- The PII detectors read digits inside UUIDs as phone or Aadhaar numbers (`eddc2be`, `8f8d6a9`).
+- The evals found personal-data requests answered as product searches and three attacks not recognised as attacks; they are refused now (`22d525c`).
 
 ## How to create user-flow diagrams
 
@@ -571,12 +699,36 @@ C_month = 360 × [0.7 × (6,000·P_in,small + 400·P_out,small) + 0.3 × (12,000
 
 ## Roadmap
 
-| Version | Scope | Done when |
-| --- | --- | --- |
-| **v0.9**, lite release candidate | Milestones M0 to M9: catalog and search, customization, inventory and orders, identity and security baseline, pricing engine, AI service and router, MCP, A2A and chat, storefront and admin, hardening | Every gate green, Razorpay run against its sandbox by a person, lite benchmark published |
-| **v0.95**, growth | Meilisearch, NATS JetStream, read replicas with PgBouncer, k3s and Helm, OpenBao, APISIX, OPA, OpenTelemetry, semantic cache and observer gating | The growth suite passes on real infrastructure, search p95 < 50 ms at 100,000 products |
-| **v1.0**, scale | Kafka outbox relay, OpenSearch + Qdrant, partitioning and archival, Temporal sagas for checkout and payment, multi-AZ Kubernetes, autoscaled agent pool | All three profiles pass their suites, including the 10 lakh-user load profile and a zone-failure drill |
-| **v1.1**, ops agents | An advisory team (market analyst, pricing strategist, inventory planner, finance and compliance guards) that proposes; a code rules engine executes | Suggest-only by default. Margin floors and budget caps in code; a guard veto always wins |
+| Version | Scope | Status on 2026-11-08 | Done when |
+| --- | --- | --- | --- |
+| **v0.9**, lite release candidate | Milestones M0 to M9: catalog and search, customization, inventory and orders, identity and security baseline, pricing engine, AI service and router, MCP, A2A and chat, storefront and admin, hardening; then the Phase 1 release gates | Built, and every gate runs in CI. Open: the 8-hour soak result, the VPS benchmark, the Razorpay sandbox run and the approval of the evidence report | Every gate green, Razorpay run against its sandbox by a person, lite benchmark published |
+| **v0.95**, growth | G1 to G5: Meilisearch, NATS JetStream, read replicas with PgBouncer, k3s and Helm, OpenBao, APISIX, OPA, OpenTelemetry, semantic cache and observer gating | Built and verified in CI against real services and a k3s cluster; search p95 15.1 ms at 100,000 products. Open: a failover on real cloud infrastructure | The growth suite passes on real infrastructure, search p95 < 50 ms at 100,000 products |
+| **v1.0**, scale | S1 to S6: Kafka outbox relay, OpenSearch + Qdrant, partitioning and archival, Temporal sagas for checkout and payment, multi-AZ Kubernetes, autoscaled agent pool | Built and verified in CI, except the two runs that need AWS: the 10 lakh-user load profile and the zone-failure drill | All three profiles pass their suites, including the 10 lakh-user load profile and a zone-failure drill |
+| **v1.1**, ops agents | An advisory team (market analyst, pricing strategist, inventory planner, finance and compliance guards) that proposes; a code rules engine executes | Planned | Suggest-only by default. Margin floors and budget caps in code; a guard veto always wins |
+
+## Known limits and owner steps
+
+**Known limits.** Each is documented on the page linked.
+
+- **Scale proof needs AWS.** The 10 lakh-user load profile and the zone-failure drill have not run ([runbook](docs/runbooks/scale-load-and-zone-drill.md)); a failover on real cloud infrastructure and Terratest wait for AWS too.
+- **One process on embedded PGlite saturates at about 10 agent conversations a second** ([agent spike](docs/benchmarks/agent-spike.md)). Growth and scale scale out with API replicas and the agent pool.
+- **The agent pool autoscales on CPU.** Scaling on request rate needs prometheus-adapter: documented, not exercised. APISIX rate limits are counted per gateway replica ([kubernetes.md](docs/operations/kubernetes.md#agent-pool-s6)).
+- **The GPU classifier needs an image you build** with the `ml` extra and CUDA PyTorch; the published AI-service image is CPU-only.
+- **The WAF skips its SQL-injection rules on free-text JSON fields** (chat, offer messages, personalisation text), which ordinary sentences trip. That is safe only while every query stays parameterised ([edge-waf.md](docs/security/edge-waf.md)).
+- **A crash between claiming a refund and calling the gateway** leaves the refund pending, in the saga as in lite; closing it needs a gateway idempotency key on refunds ([sagas.md](docs/architecture/sagas.md)).
+- **Hindi search** covers the words in a reviewed term map; other Hindi words and product names written in Hindi are not found yet ([search.md](docs/benchmarks/search.md#hindi-queries)).
+- **Data:** `chat_messages` and `offers` are not partitioned, `idempotency_keys` needs a TTL sweep, per-module databases are designed but not built, and switching analytics to ClickHouse does not backfill earlier events.
+- **Upgrades:** migration 0051 locks the event tables while it copies them (37 s at 1 million order events and 120 s at 5 million, on a laptop), so large installs need a maintenance window ([data-scale.md](docs/benchmarks/data-scale.md#converting-an-existing-database)).
+- **Test gaps:** the ZAP job runs the baseline scan, not the active API scan; screenshot baselines are desktop Chromium only; classifier calibration is checked as ordering, not as a calibration error on a held-out set.
+
+**Steps only the owner can take.**
+
+- Turn on the repository's **Dependency graph** (Settings > Code security) so dependency review enforces instead of warning ([supply-chain.md](docs/security/supply-chain.md)).
+- Upload `docs/assets/social-preview.png` as the social preview, and host the live demo (`demo.agentbazaar.dev` is a placeholder).
+- Approve AWS spend and credentials for the 10 lakh-user load test, the zone-failure drill, a growth failover on real infrastructure and Terratest ([cost](docs/runbooks/scale-load-and-zone-drill.md#cost)).
+- Run the Razorpay adapter against Razorpay's test mode, check the YouPI-PG adapter against YouPI-PG's real API contract, have counsel review the DPDP notice and consent wording, GST invoices and terms, and commission an independent penetration test.
+- On every lite deployment set `CROWDSEC_BOUNCER_KEY`; behind PgBouncer set the role's `statement_timeout`.
+- For a GPU classifier build a CUDA image; for request-rate autoscaling install prometheus-adapter.
 
 ## Contributing
 

@@ -74,6 +74,24 @@ node tests/load/soak-monitor.mjs --check tests/load/results/soak.csv
 
 ## 3. Results
 
+### Weekly CI soak, 5 hours: passed (2026-11-07)
+
+[Soak run 42425746043](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42425746043), the first scheduled run
+of `.github/workflows/soak.yml`, commit `3bb5166`: a GitHub-hosted `ubuntu-latest` runner, the API's production
+build against Postgres 18 (`pgvector/pgvector:pg18`) in a service container, and k6 on the same runner. This is the
+CI soak (5 hours, within a hosted job's limit), not the 8-hour release run below.
+
+| k6, 5 hours | Value | Target |
+| --- | --- | --- |
+| Requests | 648,048, none failed (0.00%) | errors under 0.1% |
+| Read p95 | 14.02 ms | under 300 ms |
+| Checkout p95 | 17 ms | under 800 ms |
+| Checks | 0 of 612,004 failed | |
+
+Growth gate (`--check`, 302 samples, every one ready, no 4xx or 5xx): resident memory median 283.7 MB in the first
+third and 284.6 MB in the last, heap used 71.9 MB and 76.4 MB, Postgres connections 3 and 4, outbox backlog 2 and 2.
+Every rule passed.
+
 ### Attempt 1, Docker Postgres: aborted after 131 healthy minutes (2026-11-06)
 
 It ran healthy for 131 minutes, then the host ran critically low on memory, WSL was stopped and Postgres went

@@ -112,6 +112,11 @@ below full recall, per engine) and, per engine, the latency line and its three s
 All 66 queries, the ten in Devanagari included, scored 1.000 in every engine. G1 is met (growth recall equals
 lite, p95 under 50 ms) and so is S2 (scale equals growth).
 
+The latest run, on the current code with the tie-break of `074c55a`
+([run 42451009235](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42451009235), an AMD EPYC 9V74 runner),
+kept recall and nDCG at 1.000 in every engine with p95 15.1 ms for Meilisearch, 20.8 ms for OpenSearch + Qdrant and
+368 ms for Postgres. The README quotes this run.
+
 - **Meilisearch's slowest queries** (23 to 33 ms) are text with a brand filter that no keyword matches
   (`wireless mouse`, `chocolat`, `mid tower case`, each with brand Thock), where the vector leg searches until it
   finds neighbours inside the filter. That is Meilisearch's own processing time.
