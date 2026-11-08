@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { SearchQuery } from '@agentbazaar/contracts';
 import type { FetchLike } from '../../src/modules/search/infrastructure/json-http.js';
 import { workload } from '../support/search-workload.js';
@@ -88,6 +89,49 @@ export async function profileMeilisearch(engines: RealEngines): Promise<string> 
       variants.push(`${name} ${ms(median(runs.map((r) => r.http)))}/${ms(median(runs.map((r) => r.processing)))}`);
     }
     out.push(`    http/meilisearch ms: ${variants.join('; ')}`);
+    out.push(`    transports, the same request (median ms of five): ${await transports(s)}`);
   }
+  keepAlive.destroy();
   return out.join('\n');
+}
+
+const keepAlive = new http.Agent({ keepAlive: true });
+
+/** POST with node:http (Nagle off by default) on a kept-alive or a new connection; resolves with the elapsed ms. */
+function post(url: string, headers: Record<string, string>, body: string, agent: http.Agent | false): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const started = performance.now();
+    const extra = { 'content-length': String(Buffer.byteLength(body)), ...(agent ? {} : { connection: 'close' }) };
+    const req = http.request(url, { method: 'POST', agent, headers: { ...headers, ...extra } }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(performance.now() - started));
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+}
+
+/** Whether the stall belongs to the client (undici) or to the connection: fetch against node:http, kept alive or closed. */
+async function transports(s: Sample): Promise<string> {
+  const headers = s.init.headers as Record<string, string>;
+  const viaFetch = async () => {
+    const started = performance.now();
+    await (await fetch(s.url, { ...s.init, signal: null, body: s.body })).text();
+    return performance.now() - started;
+  };
+  const ways: [string, () => Promise<number>][] = [
+    ['fetch', viaFetch],
+    ['node:http kept alive', () => post(s.url, headers, s.body, keepAlive)],
+    ['node:http connection close', () => post(s.url, headers, s.body, false)],
+  ];
+  const out: string[] = [];
+  for (const [name, run] of ways) {
+    const runs: number[] = [];
+    for (let i = 0; i < 5; i++) runs.push(await run());
+    out.push(`${name} ${ms(median(runs))}`);
+  }
+  const res = await fetch(s.url, { ...s.init, signal: null, body: s.body });
+  await res.text();
+  const framing = `content-length ${res.headers.get('content-length')}, transfer-encoding ${res.headers.get('transfer-encoding')}`;
+  return `${out.join('; ')}; request ${Buffer.byteLength(s.body)} bytes; response ${framing}`;
 }

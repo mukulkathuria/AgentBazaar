@@ -12,6 +12,7 @@ on:
       - 'apps/api/src/modules/catalog/application/catalog.service.ts'
       - 'apps/api/test/services/search-golden.spec.ts'
       - 'apps/api/test/services/real-engines.ts'
+      - 'apps/api/test/services/meili-profile.ts'
       - 'apps/api/test/support/search-golden.ts'
       - 'apps/api/test/support/search-workload.ts'
       - 'packages/testkit/src/**'
