@@ -92,11 +92,13 @@ describe('@lite negative: quotes, checkout tokens, idempotency, IDOR and mass as
     );
     ok(await startWith({ quoteToken: q.token }, alice.accessToken), 201);
 
-    // Two lines, the second impossible: the first line must not stay reserved.
+    // Two lines, the second impossible: the first line must not stay reserved. One unit more than the GPU
+    // stock keeps the cart under the ₹1 crore order ceiling, so checkout (not the cart) is what refuses it.
     const kb = await stockOf(app, 'THOCK-TK87-RED');
+    const gpu = await stockOf(app, 'ZENTRIX-ZX9090TI-24G');
     const cartId = await newCart(app, [
       { sku: 'THOCK-TK87-RED', quantity: 1 },
-      { sku: 'ZENTRIX-ZX9090TI-24G', quantity: 1000 },
+      { sku: 'ZENTRIX-ZX9090TI-24G', quantity: gpu.on_hand - gpu.reserved + 1 },
     ]);
     expect((await startWith({ cartId })).statusCode).toBe(409);
     expect(await stockOf(app, 'THOCK-TK87-RED')).toEqual(kb);
