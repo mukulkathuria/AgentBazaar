@@ -12,10 +12,17 @@ An ADR records one significant decision: the context, what we chose, what it cos
 | [0006](0006-typescript-6.md) | Stay on TypeScript 6 while TypeScript 7's native compiler breaks typed linting | Accepted |
 | [0007](0007-builtin-identity-and-oidc.md) | Built-in EdDSA identity in lite, Keycloak or any OIDC issuer from growth | Accepted |
 | [0008](0008-prometheus-io-client.md) | `@prometheus-io/client` instead of the deprecated `prom-client` name | Accepted |
+| [0009](0009-replica-routing-and-read-your-writes.md) | Route chosen reads to streaming replicas, with read-your-writes by WAL position | Accepted |
+| [0010](0010-checkout-sagas-on-temporal.md) | Run checkout and payment as a Temporal saga in scale, behind a workflow engine port | Accepted |
+| 0011 | Not used | n/a |
+| [0012](0012-semantic-cache-and-observer-gating.md) | Reuse model wording only as number-free templates, and observe only turns with a risk signal | Accepted |
+| [0013](0013-time-partitioned-event-logs.md) | Partition the event logs by month, archive whole months, and keep orders in one table | Accepted |
+| [0014](0014-platform-at-scale-analytics-edge-siem.md) | Platform at scale: ClickHouse analytics from the outbox, a layered edge, Wazuh as a separate service | Accepted |
+| [0015](0015-growth-platform-on-kubernetes.md) | Growth platform on Kubernetes: APISIX in standalone mode, an agent pool, conftest policies, opt-in tracing | Accepted |
 
 ## Template
 
-Copy this into `docs/adr/NNNN-short-title.md`, using the next free number.
+Copy this into `docs/adr/NNNN-short-title.md`, using the next number after the highest in the table (0016); 0011 stays unused.
 
 ```markdown
 # ADR NNNN: Short title in the imperative

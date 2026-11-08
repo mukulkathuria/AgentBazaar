@@ -91,6 +91,14 @@ turns used to bypass the observer entirely.
   name, a poisoned entry, ambiguous numbers, every injection, extraction, personal-data, floor-probe
   and abuse string being observed, and the Valkey store shared by two instances.
 
+**Note, 2026-11-08.** The figures above are the first run of the evaluation, kept as recorded. After the
+classifier fix of 2026-11-08, which refuses extraction and personal-data requests without a model call
+in every arm, the same evaluation measured ₹0.6592 per conversation for the shadow baseline, ₹0.1689
+with routing and the gated observer (74.4% less) and ₹0.0716 with the semantic cache as well (89.1%
+less). Deals, checkout links and floor violations (zero) were again identical in every arm. The judge
+ran on 71 turns against the baseline's 183 and is now 86% of the remaining spend. Current numbers:
+[ai-cost.md](../benchmarks/ai-cost.md).
+
 ## Alternatives considered
 
 - **Cache whole replies keyed on message similarity:** fast, but it serves another customer's prices
