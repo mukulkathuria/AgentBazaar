@@ -1,6 +1,5 @@
-import http from 'node:http';
 import { SearchQuery } from '@agentbazaar/contracts';
-import type { FetchLike } from '../../src/modules/search/infrastructure/json-http.js';
+import { nodeFetch, type FetchLike } from '../../src/modules/search/infrastructure/json-http.js';
 import { workload } from '../support/search-workload.js';
 import type { RealEngines } from './real-engines.js';
 
@@ -38,13 +37,14 @@ const VARIANTS: Record<string, (queries: Query[]) => Query[]> = {
 /**
  * Where Meilisearch's search time goes, for docs/benchmarks/search.md: the mixed workload through the
  * adapter with Meilisearch's own processingTimeMs per query of the multi-search against the HTTP round
- * trip, then the five slowest queries re-sent with one part changed at a time (median of five).
+ * trip (the adapter's node:http transport), then the five slowest queries re-sent with one part changed
+ * at a time (median of five).
  */
 export async function profileMeilisearch(engines: RealEngines): Promise<string> {
   let last: Omit<Sample, 'q' | 'total'> | undefined;
   const recording: FetchLike = async (url, init) => {
     const started = performance.now();
-    const res = await fetch(url, init);
+    const res = await nodeFetch(url, init);
     const text = await res.text();
     const results = (JSON.parse(text) as { results?: Result[] }).results ?? [];
     last = {
@@ -82,56 +82,14 @@ export async function profileMeilisearch(engines: RealEngines): Promise<string> 
       const runs: { http: number; processing: number }[] = [];
       for (let i = 0; i < 5; i++) {
         const started = performance.now();
-        const res = await fetch(s.url, { ...s.init, signal: null, body: JSON.stringify({ queries: change(queries) }) });
+        const res = await nodeFetch(s.url, { ...s.init, signal: null, body: JSON.stringify({ queries: change(queries) }) });
         const results = ((await res.json()) as { results?: Result[] }).results ?? [];
         runs.push({ http: performance.now() - started, processing: results.reduce((n, r) => n + (r.processingTimeMs ?? 0), 0) });
       }
       variants.push(`${name} ${ms(median(runs.map((r) => r.http)))}/${ms(median(runs.map((r) => r.processing)))}`);
     }
     out.push(`    http/meilisearch ms: ${variants.join('; ')}`);
-    out.push(`    transports, the same request (median ms of five): ${await transports(s)}`);
   }
-  keepAlive.destroy();
   return out.join('\n');
 }
 
-const keepAlive = new http.Agent({ keepAlive: true });
-
-/** POST with node:http (Nagle off by default) on a kept-alive or a new connection; resolves with the elapsed ms. */
-function post(url: string, headers: Record<string, string>, body: string, agent: http.Agent | false): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const started = performance.now();
-    const extra = { 'content-length': String(Buffer.byteLength(body)), ...(agent ? {} : { connection: 'close' }) };
-    const req = http.request(url, { method: 'POST', agent, headers: { ...headers, ...extra } }, (res) => {
-      res.resume();
-      res.on('end', () => resolve(performance.now() - started));
-    });
-    req.on('error', reject);
-    req.end(body);
-  });
-}
-
-/** Whether the stall belongs to the client (undici) or to the connection: fetch against node:http, kept alive or closed. */
-async function transports(s: Sample): Promise<string> {
-  const headers = s.init.headers as Record<string, string>;
-  const viaFetch = async () => {
-    const started = performance.now();
-    await (await fetch(s.url, { ...s.init, signal: null, body: s.body })).text();
-    return performance.now() - started;
-  };
-  const ways: [string, () => Promise<number>][] = [
-    ['fetch', viaFetch],
-    ['node:http kept alive', () => post(s.url, headers, s.body, keepAlive)],
-    ['node:http connection close', () => post(s.url, headers, s.body, false)],
-  ];
-  const out: string[] = [];
-  for (const [name, run] of ways) {
-    const runs: number[] = [];
-    for (let i = 0; i < 5; i++) runs.push(await run());
-    out.push(`${name} ${ms(median(runs))}`);
-  }
-  const res = await fetch(s.url, { ...s.init, signal: null, body: s.body });
-  await res.text();
-  const framing = `content-length ${res.headers.get('content-length')}, transfer-encoding ${res.headers.get('transfer-encoding')}`;
-  return `${out.join('; ')}; request ${Buffer.byteLength(s.body)} bytes; response ${framing}`;
-}

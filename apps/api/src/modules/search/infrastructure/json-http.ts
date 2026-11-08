@@ -1,7 +1,41 @@
+import http from 'node:http';
+import https from 'node:https';
 import { AppError } from '../../../shared/kernel/errors.js';
 import { CircuitBreaker, withTimeout } from '../../../shared/resilience/resilience.js';
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
+
+const httpAgent = new http.Agent({ keepAlive: true });
+const httpsAgent = new https.Agent({ keepAlive: true });
+/** Statuses that carry no body; the Response constructor rejects one. */
+const NO_BODY = new Set([204, 205, 304]);
+
+/**
+ * fetch over node:http(s) on kept-alive connections. Node's built-in fetch (undici) waited about 40 ms on
+ * Meilisearch's chunked responses; node:http took 1.4 to 6.4 ms for the same requests (docs/benchmarks/search.md).
+ */
+export const nodeFetch: FetchLike = (url, init) =>
+  new Promise((resolve, reject) => {
+    const target = new URL(url);
+    const body = typeof init.body === 'string' ? init.body : undefined;
+    const headers = { ...(init.headers as Record<string, string>), ...(body === undefined ? {} : { 'content-length': String(Buffer.byteLength(body)) }) };
+    const options: http.RequestOptions = { method: init.method ?? 'GET', headers, signal: init.signal ?? undefined };
+    const onResponse = (res: http.IncomingMessage) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('error', reject);
+      res.on('end', () => {
+        const status = res.statusCode ?? 502;
+        resolve(new Response(NO_BODY.has(status) ? null : Buffer.concat(chunks), { status }));
+      });
+    };
+    const req =
+      target.protocol === 'https:'
+        ? https.request(target, { ...options, agent: httpsAgent }, onResponse)
+        : http.request(target, { ...options, agent: httpAgent }, onResponse);
+    req.on('error', reject);
+    req.end(body);
+  });
 
 export interface JsonHttpOptions {
   fetch?: FetchLike;
@@ -15,7 +49,7 @@ export interface JsonHttpOptions {
  */
 export const WRITE_TIMEOUT_MS = 15_000;
 
-/** JSON over plain `fetch` with a timeout and a circuit breaker, for search engines and the AI service. */
+/** JSON over HTTP (`nodeFetch` unless a fetch is given) with a timeout and a circuit breaker, for search engines and the AI service. */
 export class JsonHttp {
   private readonly breaker: CircuitBreaker;
 
@@ -32,7 +66,7 @@ export class JsonHttp {
    * is sent as is, as NDJSON (bulk APIs); anything else as JSON. `timeoutMs` overrides the default.
    */
   request<T>(method: string, path: string, body?: unknown, allow: readonly number[] = [], timeoutMs?: number): Promise<T> {
-    const doFetch = this.opts.fetch ?? fetch;
+    const doFetch = this.opts.fetch ?? nodeFetch;
     const ndjson = typeof body === 'string';
     return this.breaker.exec(() =>
       withTimeout(async (signal) => {

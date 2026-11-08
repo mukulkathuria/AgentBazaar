@@ -1,5 +1,7 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { SearchQuery } from '@agentbazaar/contracts';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SearchDocument } from '../application/ports.js';
 import { hashEmbed, HashEmbeddings } from '../domain/embeddings.js';
 import { AiServiceEmbeddings } from './ai-service-embeddings.js';
@@ -346,6 +348,42 @@ describe('@lite JSON over HTTP', () => {
     const http = new JsonHttp('engine', 'http://engine', { fetch: slow, timeoutMs: 10 });
     await expect(http.request('GET', '/')).rejects.toThrow(/Timed out after 10 ms/);
     await expect(http.request('GET', '/', undefined, [], 1000)).resolves.toEqual({ ok: true });
+  });
+
+  describe('default transport (node:http)', () => {
+    let server: Server;
+    let json: JsonHttp;
+    beforeAll(async () => {
+      // Answers the way Meilisearch does, with a chunked body; /gone is a 404 and /slow never answers.
+      server = createServer((req, res) => {
+        let body = '';
+        req.on('data', (chunk: Buffer) => (body += chunk.toString()));
+        req.on('end', () => {
+          if (req.url === '/slow') return;
+          if (req.url === '/gone') return void res.writeHead(404).end();
+          res.setHeader('content-type', 'application/json');
+          res.write('{"echo":');
+          res.end(`${JSON.stringify({ method: req.method, length: req.headers['content-length'], body: body ? (JSON.parse(body) as unknown) : null })}}`);
+        });
+      });
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      json = new JsonHttp('engine', `http://127.0.0.1:${(server.address() as AddressInfo).port}`, { timeoutMs: 200 });
+    });
+    afterAll(() => {
+      server.closeAllConnections(); // the /slow request and kept-alive sockets
+      server.close();
+    });
+
+    it('sends JSON with its length and reads a chunked answer', async () => {
+      expect(await json.request('POST', '/echo', { a: 1 })).toEqual({ echo: { method: 'POST', length: '7', body: { a: 1 } } });
+      expect(await json.request('GET', '/echo')).toEqual({ echo: { method: 'GET', body: null } });
+    });
+
+    it('passes allowed statuses through and fails on others, and gives up on a server that never answers', async () => {
+      expect(await json.request('DELETE', '/gone', undefined, [404])).toBeUndefined();
+      await expect(json.request('GET', '/gone')).rejects.toMatchObject({ code: 'unavailable' });
+      await expect(json.request('GET', '/slow')).rejects.toThrow(/Timed out after 200 ms/);
+    });
   });
 });
 
