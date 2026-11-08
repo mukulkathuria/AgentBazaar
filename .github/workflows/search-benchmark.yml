@@ -54,6 +54,7 @@ jobs:
       - name: Benchmark at 100,000 products
         env:
           SEARCH_BENCH_PRODUCTS: '100000'
+          SEARCH_BENCH_PROFILE: '1'
           VITEST_MAX_WORKERS: '1'
         run: pnpm --filter @agentbazaar/api exec vitest run --project services test/services/search-golden.spec.ts
       - name: Engine memory after the run

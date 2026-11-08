@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { EmbeddingsPort } from '../../src/modules/search/domain/embeddings.js';
+import type { JsonHttpOptions } from '../../src/modules/search/infrastructure/json-http.js';
 import { MeilisearchAdapter } from '../../src/modules/search/infrastructure/meilisearch.adapter.js';
 import { OpenSearchAdapter } from '../../src/modules/search/infrastructure/opensearch.adapter.js';
 
@@ -38,6 +39,8 @@ export function realEngines(prefix: string, embeddings: EmbeddingsPort) {
   return {
     name,
     meilisearch: new MeilisearchAdapter({ url: meili, apiKey: key, index: name }, embeddings),
+    /** Another adapter on the same Meilisearch index, for example with a recording fetch. */
+    meilisearchWith: (opts: JsonHttpOptions) => new MeilisearchAdapter({ url: meili, apiKey: key, index: name, ...opts }, embeddings),
     opensearch: new OpenSearchAdapter({ url: os, qdrantUrl: qdrant, index: name, collection: name }, embeddings),
 
     /** Waits until Meilisearch has applied every queued write (none may fail) and OpenSearch has refreshed. */
