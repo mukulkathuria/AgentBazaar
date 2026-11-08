@@ -1,7 +1,7 @@
 import type { SearchQuery, SearchResult } from '@agentbazaar/contracts';
 import type { SearchDocument, SearchPort } from '../application/ports.js';
 import type { EmbeddingsPort } from '../domain/embeddings.js';
-import { MIN_VECTOR_SIMILARITY, reciprocalRankFusion } from '../domain/ranking.js';
+import { byScoreThenId, MIN_VECTOR_SIMILARITY, reciprocalRankFusion } from '../domain/ranking.js';
 import { type EngineDoc, facetList, fromEngineDoc, toEngineDoc, tookMs } from './engine-doc.js';
 import { JsonHttp, type JsonHttpOptions, WRITE_TIMEOUT_MS } from './json-http.js';
 
@@ -33,6 +33,7 @@ const INDEX = {
   settings: { analysis: { analyzer: { sku: { type: 'custom', tokenizer: 'keyword', filter: ['lowercase'] } } } },
   mappings: {
     properties: {
+      id: { type: 'keyword' },
       name: { type: 'text', fields: { keyword: { type: 'keyword' } } },
       brand: { type: 'keyword' },
       brand_lc: { type: 'keyword' },
@@ -130,8 +131,10 @@ export class OpenSearchAdapter implements SearchPort {
     const started = performance.now();
     const q = query.q.trim();
     const filter = openSearchFilter(query);
+    // Every order ends on the product id, so equal names or scores page the same way on every request.
     if (!q) {
-      const r = await this.keywords({ from: query.offset, size: query.limit, sort: [{ 'name.keyword': 'asc' }], query: { bool: { filter } } });
+      const sort = [{ 'name.keyword': 'asc' }, { id: 'asc' }];
+      const r = await this.keywords({ from: query.offset, size: query.limit, sort, query: { bool: { filter } } });
       return this.result(r, r.hits.hits.map((h) => h._source), r.hits.total.value, started);
     }
     // Both engines rank deep enough to fill the requested page after fusion.
@@ -141,7 +144,7 @@ export class OpenSearchAdapter implements SearchPort {
     // A whole-SKU match outweighs a brand word in a name (best_fields keeps one field's score per document).
     const match = { query: q, fields: ['name^3', 'category_name^2', 'skus^10', 'description'], fuzziness: 'AUTO', prefix_length: 1 };
     const [kw, vec] = await Promise.all([
-      this.keywords({ from: 0, size: depth, query: { bool: { must: [{ multi_match: match }], filter } } }),
+      this.keywords({ from: 0, size: depth, sort: ['_score', { id: 'asc' }], query: { bool: { must: [{ multi_match: match }], filter } } }),
       this.qdrant.request<QdrantResponse>('POST', `${this.points}/points/search`, {
         vector,
         limit: depth,
@@ -150,13 +153,15 @@ export class OpenSearchAdapter implements SearchPort {
         filter: qdrantFilter(query),
       }),
     ]);
+    // Qdrant returns equal scores (identical vectors) in no particular order, so they are put in id order here.
+    const neighbours = vec.result.map((p) => ({ id: String(p.id), score: p.score, payload: p.payload })).sort(byScoreThenId);
     const docs = new Map<string, EngineDoc>([
-      ...vec.result.map((p): [string, EngineDoc] => [String(p.id), p.payload]),
+      ...neighbours.map((p): [string, EngineDoc] => [p.id, p.payload]),
       ...kw.hits.hits.map((h): [string, EngineDoc] => [h._id, h._source]),
     ]);
     // The keyword ranking counts twice, the balance of lite's two lexical legs (full text, trigram) to one vector leg.
     const keywordIds = kw.hits.hits.map((h) => h._id);
-    const fused = reciprocalRankFusion([keywordIds, keywordIds, vec.result.map((p) => String(p.id))]);
+    const fused = reciprocalRankFusion([keywordIds, keywordIds, neighbours.map((p) => p.id)]);
     // An exact SKU (of any variant) is a lookup: that product goes first, as in the other engines.
     const sku = kw.hits.hits.find((h) => h._source.skus.includes(q.toUpperCase()))?._id;
     const ranked = sku ? [sku, ...fused.map((f) => f.id).filter((id) => id !== sku)] : fused.map((f) => f.id);

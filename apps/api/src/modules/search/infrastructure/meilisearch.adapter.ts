@@ -88,7 +88,7 @@ export class MeilisearchAdapter implements SearchPort {
     if (vector?.some((x) => x !== 0)) {
       Object.assign(page, { vector, hybrid: { embedder: 'default', semanticRatio: 0.5 }, showRankingScore: true });
     }
-    if (!q) page.sort = ['name:asc'];
+    if (!q) page.sort = ['name:asc', 'id:asc'];
     const counts = { indexUid: this.uid, q, filter, facets: ['brand', 'category_top'], limit: 0 };
     const { results } = await this.http.request<{ results: [MeiliResponse, MeiliResponse] }>('POST', '/multi-search', {
       queries: [page, counts],
@@ -107,12 +107,16 @@ export class MeilisearchAdapter implements SearchPort {
     };
   }
 
-  /** Applied once, lazily; a failure is retried on the next write. Facet attributes must be filterable. */
+  /**
+   * Applied once, lazily; a failure is retried on the next write. Facet attributes must be filterable. The
+   * default ranking rules end on the product id, so equal scores keep one order across requests and pages.
+   */
   private ensureSettings(): Promise<unknown> {
     const settings = {
       searchableAttributes: ['name', 'brand', 'skus', 'category_name', 'description'],
       filterableAttributes: ['category_paths', 'brand_lc', 'min_price_paise', 'max_price_paise', 'in_stock', 'brand', 'category_top'],
-      sortableAttributes: ['name'],
+      sortableAttributes: ['name', 'id'],
+      rankingRules: ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness', 'id:asc'],
       pagination: { maxTotalHits: MAX_TOTAL_HITS },
       embedders: { default: { source: 'userProvided', dimensions: this.embeddings.dim } },
     };

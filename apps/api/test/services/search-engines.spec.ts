@@ -164,4 +164,33 @@ describe('@growth @scale search engines on real Meilisearch, OpenSearch and Qdra
       expect((await find(port, { q: '', category: 'no.such.category' })).total, name).toBe(0);
     });
   });
+
+  it('pages through products with tied scores and tied names without repeating or skipping one', { timeout: 300_000 }, async () => {
+    // Thirty products the engines cannot tell apart: same name, brand, category and description, one SKU each.
+    const slugs = Array.from({ length: 30 }, (_, i) => `zorvex-tiebreak-mug-${i}`);
+    const ids: string[] = [];
+    for (const [i, slug] of slugs.entries()) {
+      const variant = { sku: `ZTB-${i}`, title: 'Standard', pricePaise: 50_000, mrpPaise: 60_000, costPricePaise: 20_000, stock: 5 };
+      const p = AdminProductInput.parse({ ...MUG, slug, name: 'Zorvex Tiebreak Mug', brand: 'Zorvex', description: 'A plain test mug.', variants: [variant] });
+      ids.push((await catalog.upsertProduct(p, 'admin:test')).id);
+    }
+    await each(async (_name, port) => {
+      const indexer = new SearchIndexer(port, embeddings, catalog);
+      for (const id of ids) await indexer.indexProduct(id);
+    });
+    await engines.settle();
+    const pages = async (port: SearchPort, query: SearchQueryInput) => {
+      const seen: string[] = [];
+      for (let offset = 0; offset < 30; offset += 7) seen.push(...(await find(port, { ...query, limit: 7, offset })).items.map((i) => i.slug));
+      return seen.slice(0, 30);
+    };
+    await each(async (name, port) => {
+      for (const query of [{ q: 'tiebreak' }, { q: '', brand: 'Zorvex' }]) {
+        const first = await pages(port, query);
+        expect(new Set(first).size, `${name} ${query.q || 'browse'}: no product twice`).toBe(30);
+        expect(new Set(first), `${name} ${query.q || 'browse'}: no product skipped`).toEqual(new Set(slugs));
+        expect(await pages(port, query), `${name} ${query.q || 'browse'}: the same order every time`).toEqual(first);
+      }
+    });
+  });
 });

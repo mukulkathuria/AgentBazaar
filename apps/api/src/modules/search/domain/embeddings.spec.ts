@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { fnv1a32, HASH_DIM, HASH_MODEL, hashEmbed, HashEmbeddings, hashFeatures } from './embeddings.js';
-import { reciprocalRankFusion } from './ranking.js';
+import { byScoreThenId, reciprocalRankFusion } from './ranking.js';
 
 /** Written by services/ai's own tests; absent until that service ships its embedder. */
 const PY_FIXTURE = join(dirname(fileURLToPath(import.meta.url)), '../../../../../../services/ai/tests/fixtures/hash_embeddings.json');
@@ -72,5 +72,13 @@ describe('@lite reciprocal rank fusion', () => {
     expect(fused.map((f) => f.id)).toEqual(['b', 'a', 'd', 'c']);
     expect(fused[0]!.score).toBeCloseTo(1 / 62 + 1 / 61, 12);
     expect(reciprocalRankFusion([])).toEqual([]);
+  });
+
+  it('orders equal scores by id in code-unit order, whatever order the lists came in', () => {
+    // Uppercase sorts before lowercase in code units (as in OpenSearch keyword sorts and Postgres), unlike a locale compare.
+    const ids = ['b-2', 'B-2', 'a-10', 'a-9'];
+    expect(reciprocalRankFusion([[ids[0]!], [ids[1]!], [ids[2]!], [ids[3]!]]).map((f) => f.id)).toEqual(['B-2', 'a-10', 'a-9', 'b-2']);
+    expect(reciprocalRankFusion([[ids[3]!], [ids[2]!], [ids[1]!], [ids[0]!]]).map((f) => f.id)).toEqual(['B-2', 'a-10', 'a-9', 'b-2']);
+    expect([{ id: 'x', score: 1 }, { id: 'y', score: 2 }].sort(byScoreThenId).map((f) => f.id)).toEqual(['y', 'x']);
   });
 });

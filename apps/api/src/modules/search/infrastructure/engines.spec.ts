@@ -103,6 +103,9 @@ describe('@growth Meilisearch adapter (fake fetch)', () => {
     expect(calls[0]!.body).toMatchObject({
       // Facet attributes must be filterable too, or Meilisearch rejects every search.
       filterableAttributes: ['category_paths', 'brand_lc', 'min_price_paise', 'max_price_paise', 'in_stock', 'brand', 'category_top'],
+      // Equal scores keep one order: the default ranking rules, then the product id.
+      sortableAttributes: ['name', 'id'],
+      rankingRules: ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness', 'id:asc'],
       pagination: { maxTotalHits: 5050 },
       embedders: { default: { source: 'userProvided', dimensions: 256 } },
     });
@@ -169,7 +172,7 @@ describe('@growth Meilisearch adapter (fake fetch)', () => {
     const filter = ['brand_lc = "bob \\"the\\" \\\\ brand"'];
     expect(calls[0]!.body).toEqual({
       queries: [
-        { indexUid: 'products', q: '', filter, limit: 12, offset: 0, sort: ['name:asc'] },
+        { indexUid: 'products', q: '', filter, limit: 12, offset: 0, sort: ['name:asc', 'id:asc'] },
         { indexUid: 'products', q: '', filter, facets: ['brand', 'category_top'], limit: 0 },
       ],
     });
@@ -216,7 +219,7 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
     // SKUs are whole tokens, so a SKU fragment ("PC" in CACAOL-CHOCOL-PC-SINGLE) never matches a word.
     expect(calls[0]!.body).toMatchObject({
       settings: { analysis: { analyzer: { sku: { tokenizer: 'keyword', filter: ['lowercase'] } } } },
-      mappings: { properties: { skus: { type: 'text', analyzer: 'sku' } } },
+      mappings: { properties: { id: { type: 'keyword' }, skus: { type: 'text', analyzer: 'sku' } } },
     });
     expect(calls[1]!.body).toEqual({ vectors: { size: 256, distance: 'Cosine' } });
     expect(calls.slice(2, 7).map((c) => c.body)).toEqual([
@@ -262,6 +265,7 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
     expect(os.body).toMatchObject({
       from: 0,
       size: 50,
+      sort: ['_score', { id: 'asc' }],
       track_total_hits: true,
       query: {
         bool: {
@@ -318,11 +322,26 @@ describe('@scale OpenSearch + Qdrant adapter (fake fetch)', () => {
     expect(plain.items.map((i) => i.slug)).toEqual(['keyvo-kb', 'thock-kb-2', 'thock-tk87-mechanical-keyboard']);
   });
 
+  it('ranks vector hits with equal scores by id, whatever order Qdrant returns them in', async () => {
+    const tied = (ids: string[]) =>
+      make((url) =>
+        url.includes('qdrant')
+          ? { json: { result: ids.map((id) => ({ id, score: 0.8, payload: { ...engineDoc, id } })) } }
+          : { json: { hits: { total: { value: 0 }, hits: [] } } },
+      ).adapter.search(SearchQuery.parse({ q: 'keyboard' }));
+    for (const order of [
+      [third.id, other.id],
+      [other.id, third.id],
+    ]) {
+      expect((await tied(order)).items.map((i) => i.id)).toEqual([other.id, third.id]);
+    }
+  });
+
   it('browses with keyword search only, paged by the engine', async () => {
     const { adapter, calls } = make(() => ({ json: { hits: { total: { value: 40 }, hits: [{ _id: engineDoc.id, _source: engineDoc }] } } }));
     const r = await adapter.search(SearchQuery.parse({ offset: 12 }));
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.body).toMatchObject({ from: 12, size: 12, sort: [{ 'name.keyword': 'asc' }], query: { bool: { filter: [] } } });
+    expect(calls[0]!.body).toMatchObject({ from: 12, size: 12, sort: [{ 'name.keyword': 'asc' }, { id: 'asc' }], query: { bool: { filter: [] } } });
     expect(r).toMatchObject({ total: 40, items: [summary] });
   });
 
