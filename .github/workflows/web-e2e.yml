@@ -65,17 +65,23 @@ jobs:
         env:
           BROWSERS: ${{ env.FULL == 'true' && 'chromium firefox webkit' || 'chromium' }}
         run: pnpm exec playwright install --with-deps $BROWSERS
-      - name: Playwright smoke, axe and screenshots (Chromium)
+      - name: Playwright screenshots (Chromium, before the journeys change any data)
         if: env.FULL != 'true'
         working-directory: apps/web
         env:
-          # Compare with the committed baselines; a dispatch with update-snapshots rewrites them (uploaded below).
-          UPDATE_SNAPSHOTS: ${{ inputs.update-snapshots && 'all' || 'none' }}
-        run: pnpm exec playwright test --project=chromium --grep "@smoke|@visual" --update-snapshots="$UPDATE_SNAPSHOTS"
+          # Existing baselines are compared; a missing one is written and uploaded below (commit it from the
+          # artifact); a dispatch with update-snapshots rewrites them all.
+          UPDATE_SNAPSHOTS: ${{ inputs.update-snapshots && 'all' || 'missing' }}
+          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report-visual
+        run: pnpm exec playwright test --project=chromium --grep @visual --output=test-results-visual --update-snapshots="$UPDATE_SNAPSHOTS"
+      - name: Playwright smoke and axe (Chromium)
+        if: ${{ !cancelled() && env.FULL != 'true' }}
+        working-directory: apps/web
+        run: pnpm exec playwright test --project=chromium --grep @smoke
       - name: Playwright, every journey on every browser and mobile viewport
         if: env.FULL == 'true'
         working-directory: apps/web
-        run: pnpm exec playwright test
+        run: pnpm exec playwright test --grep-invert @visual
 
       - name: Keep the Playwright report
         if: failure()
@@ -83,8 +89,8 @@ jobs:
         with:
           name: playwright-report-${{ github.run_attempt }}
           path: |
-            apps/web/playwright-report
-            apps/web/test-results
+            apps/web/playwright-report*
+            apps/web/test-results*
           retention-days: 14
       - name: Keep the screenshot baselines
         if: always() && env.FULL != 'true'
