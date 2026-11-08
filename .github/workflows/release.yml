@@ -45,6 +45,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # syft reads only the first YAML document of pnpm 12's lockfile (pnpm itself); keep the project's (the last).
+      - name: Keep the project's lockfile document
+        run: |
+          awk '/^---$/{n++} {doc[n] = doc[n] $0 ORS} END {printf "%s", doc[n]}' pnpm-lock.yaml > lock.tmp
+          mv lock.tmp pnpm-lock.yaml
       - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with: { format: spdx-json, output-file: agentbazaar-sbom.spdx.json }
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2

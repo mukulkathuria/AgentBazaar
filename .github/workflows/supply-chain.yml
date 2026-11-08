@@ -31,7 +31,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      # The review needs the repository's Dependency graph, a setting only the owner can turn on. While it is off
+      # (the SBOM endpoint answers 404) the gate is skipped with a warning instead of failing every push; any other
+      # answer runs the review, so a real outage still fails loudly.
+      - name: Is the Dependency graph on?
+        id: graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status=$(gh api -i "repos/${{ github.repository }}/dependency-graph/sbom" 2> /dev/null | head -1 | awk '{print $2}')
+          if [ "$status" = 404 ]; then
+            msg="Dependency review is inactive: the repository's Dependency graph is off. The owner turns it on in Settings > Code security > Dependency graph (docs/security/supply-chain.md). Until then the SBOM diff and the licence gate in the Security workflow are the supply-chain gates."
+            echo "::warning title=Dependency review inactive::$msg"
+            printf '## Dependency review inactive\n\n%s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.graph.outputs.run == 'true'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           base-ref: ${{ env.BASE_SHA }}
           head-ref: ${{ env.HEAD_SHA }}
