@@ -1,9 +1,10 @@
 # Lite profile soak
 
-**Status: no 8-hour soak has completed yet. Two attempts on a shared laptop were cut short by the host (131
-and 53 minutes, section 3); a third 8-hour run started on 2026-11-08 at 02:22 UTC and ends at 10:22 UTC. Its
-result goes in section 3 when it ends (section 4 says how).** Every number on this page comes from a real
-run, with the commit, hardware and raw output recorded.
+**Status: no clean 8-hour soak yet. The third 8-hour run (2026-11-08, section 3) passed every threshold over
+the whole run and showed no memory, connection or outbox growth, but the shared laptop was suspended for about
+2 h 20 min in the middle of it, so it does not count as an uninterrupted 8 hours. The weekly 5-hour soak on
+GitHub's runners passed cleanly (section 3). A clean 8-hour run on a quiet, dedicated host is still owed.**
+Every number on this page comes from a real run, with the commit, hardware and raw output recorded.
 
 The plan's release gate for each profile includes a soak: the lite load profile for 8 hours, watching memory,
 connection and queue growth. Pass criteria: read p95 under 300 ms, checkout p95 under 800 ms, errors under
@@ -131,17 +132,50 @@ A latency gate measured on a laptop shared with several busy agents says more ab
 store; the release run belongs on a quiet machine (the VPS of `docs/benchmarks/lite.md`) or in
 `.github/workflows/soak.yml`.
 
-### Run 3, native Postgres, 8 hours (2026-11-08 02:22 to 10:22 UTC)
+### Run 3, native Postgres, 8 hours (started 2026-11-08 02:22 UTC)
 
 <!-- SOAK-RESULTS -->
-In progress; section 4 says how to fill this in.
+Laptop (i5-1345U, 16 GB) shared with other agents' builds and tests, native Windows Postgres 18.0, API in
+production mode on port 4103, k6 at the lite load profile. The host was suspended for about 2 h 20 min during
+the run: k6's slowest request took 2 h 20 m (8,423,223 ms), it dropped 254,075 planned iterations, and k6 only
+exited at 17:57 UTC. The sampler covered 470.1 minutes (02:22 to 10:12 UTC). So this is not a clean 8-hour
+soak; the numbers below are what it measured.
+
+| k6 (client side, whole run) | Value | Target |
+| --- | --- | --- |
+| Read p50, p95 | 9.7 ms, **33.0 ms** | p95 under 300 ms |
+| Checkout p50, p95 | 43.0 ms, **87.0 ms** | p95 under 800 ms |
+| Failed requests | **0.009%** (65 of 711,860) | under 0.1% |
+| Request rate | 17.2 req/s, 593,119 iterations, 672,186 checks passed, 64 failed | about 30 |
+| Thresholds crossed | none | none |
+
+| Sampler (server side, per minute) | Value |
+| --- | --- |
+| Samples | 332 (470.1 minutes) |
+| Requests, 4xx, 5xx | 711,477, 1, 29 |
+| Orders placed, processed events | 39,532, 79,070 |
+| Minutes with read p95 at or over 300 ms; checkout p95 at or over 800 ms | 8; 5 (host stalls) |
+| Resident memory at 30 min, at the end, max | 166.8, 176.3, 198 MB |
+| Heap used at 30 min, at the end, max | 69.3, 71.8, 79.3 MB |
+| Postgres connections, max | 20 (pool of 20) |
+| Outbox backlog, max | 25 events |
+| Event-loop lag p99, max | 1,062.7 ms |
+
+```
+PASS rss_mb: first-third median 168.3, last-third median 168.9, max 176.9
+PASS heap_used_mb: first-third median 59.9, last-third median 60.3, max 79.3
+PASS pg_conns: first-third median 4, last-third median 4, max 20
+PASS outbox_pending: first-third median 2, last-third median 2, max 11
+INFO handles: first-third median 129, last-third median 129, max 161
+PASS readiness: 0 of 332 samples not ready
+```
 <!-- /SOAK-RESULTS -->
 
-## 4. Finishing the run in progress
+## 4. Finishing a local run
 
-The run's processes were started through WMI so they outlive the session that started them; their ids and
-start times are in the T3 report. When k6 has exited (it prints its summary to `soak-lite.log` and writes
-`soak-lite.json`), from the repository root:
+Run 3 was finished this way on 2026-11-08: its API, sampler and private cluster are stopped and the cluster's
+data directory is deleted. For the next run: when k6 has exited (it prints its summary to `soak-lite.log` and
+writes `soak-lite.json`), from the repository root:
 
 ```bash
 node tests/load/soak-monitor.mjs --check tests/load/results/soak-lite.csv   # growth gate, exit code 1 on failure

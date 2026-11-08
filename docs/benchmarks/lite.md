@@ -156,7 +156,7 @@ k6 mixed load, 2 minutes (real Postgres, 1,000 products):
 | Checkout p95 | <!-- METRIC:k6_checkout_p95_ms -->35<!-- /METRIC --> ms | under 800 ms |
 | Error rate | <!-- METRIC:k6_error_rate -->0.00% (0 of 4,379 requests)<!-- /METRIC --> | under 0.1% |
 | Achieved request rate | <!-- METRIC:k6_achieved_rps -->36.4<!-- /METRIC --> req/s overall: 36.0 from the scenarios (30.0 iterations/s, a checkout iteration is 4 requests) plus 59 setup requests | about 30 |
-| 8-hour soak | <!-- METRIC:k6_soak_8h_result -->not run yet<!-- /METRIC --> | pass, with no memory, connection or queue growth |
+| 8-hour soak | <!-- METRIC:k6_soak_8h_result -->not clean yet: run 3 (2026-11-08, laptop) passed every threshold (read p95 33 ms, checkout p95 87 ms, 0.009% failed) with no growth, but the host was suspended for about 2 h 20 min mid-run; the weekly 5-hour CI soak passed cleanly<!-- /METRIC --> | pass, with no memory, connection or queue growth |
 
 Also from that run: 4,081 of 4,081 checks passed; 240 orders were placed, all `cod_confirmed`, over 40 SKUs
 (at most 10 per SKU), and no stock row ended with `reserved > on_hand`. The API process used 231 MB (Windows
