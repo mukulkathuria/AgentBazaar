@@ -1,6 +1,7 @@
 import type { Role, TokenResponse } from '@agentbazaar/contracts';
 import { cookies } from 'next/headers';
 import type { NextResponse } from 'next/server';
+import { SITE_URL } from './env';
 
 export const COOKIE = { access: 'ab_at', refresh: 'ab_rt', role: 'ab_role', cart: 'ab_cart', lang: 'lang' } as const;
 
@@ -8,11 +9,17 @@ export const COOKIE = { access: 'ab_at', refresh: 'ab_rt', role: 'ab_role', cart
 const REFRESH_MAX_AGE = 30 * 24 * 3600;
 export const CART_MAX_AGE = 30 * 24 * 3600;
 
+/**
+ * Secure in production, except when the store itself is plain http on this machine (the demo and the browser
+ * gates): WebKit, and so Safari, drops Secure cookies on http://localhost, which emptied carts and sign-ins there.
+ */
+export const SECURE_COOKIES = process.env.NODE_ENV === 'production' && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(SITE_URL);
+
 export function cookieOptions(maxAge: number) {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
+    secure: SECURE_COOKIES,
     path: '/',
     maxAge,
   };

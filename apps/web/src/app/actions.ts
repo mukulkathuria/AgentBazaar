@@ -1,7 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { COOKIE } from '@/lib/session';
+import { COOKIE, SECURE_COOKIES } from '@/lib/session';
 
 /** Language switch (works without JavaScript). Setting a cookie re-renders the current page. */
 export async function setLanguage(formData: FormData): Promise<void> {
@@ -11,6 +11,6 @@ export async function setLanguage(formData: FormData): Promise<void> {
     maxAge: 365 * 24 * 3600,
     sameSite: 'lax',
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: SECURE_COOKIES,
   });
 }
