@@ -27,7 +27,8 @@ histogram buckets the way Prometheus `histogram_quantile` does, so they are serv
 edges at 50, 100, 150, 300, 500 and 800 ms); k6's end-of-run summary gives the client-side percentiles the
 thresholds use.
 
-Growth rules of `--check` (median of the last third of the samples after warm-up against the first third):
+Growth rules of `--check` (median of the last third of the samples taken after warm-up and while k6 was still
+sending requests, against the first third):
 
 | Signal | Passes when |
 | --- | --- |
