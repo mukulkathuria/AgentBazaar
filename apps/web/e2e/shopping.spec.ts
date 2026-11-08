@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { fillCheckout, PRODUCTS, startCheckout } from './helpers';
 
-test('browse → personalised product → cart → checkout → mock pay → order page', async ({ page }) => {
+test('browse → personalised product → cart → checkout → mock pay → order page', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await page.locator(`a[href="/p/${PRODUCTS.mug}"]`).first().click();

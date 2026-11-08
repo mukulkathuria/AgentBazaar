@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { PRODUCTS } from './helpers';
 
-test('chat negotiation ends with a checkout link', async ({ page }) => {
+test('chat negotiation ends with a checkout link', { tag: '@smoke' }, async ({ page }) => {
   await page.goto(`/p/${PRODUCTS.keyboard}`);
   await page.getByRole('button', { name: 'Chat with our shopping assistant' }).click();
   const dialog = page.getByRole('dialog', { name: 'Shopping assistant' });
@@ -13,10 +13,15 @@ test('chat negotiation ends with a checkout link', async ({ page }) => {
     await dialog.getByRole('button', { name: 'Send' }).click();
   };
 
-  await send('Can I get 2 Thock TK87 keyboards for ₹2,000 each?');
+  // The chat has no page context: the buyer names the product, then haggles.
+  await send('How much is the Thock TK-87 Hot-swap Mechanical Keyboard?');
   // The pricing engine answers with a signed quote: offer card with a live countdown.
-  await expect(dialog.getByRole('timer')).toContainText(/Offer expires in \d+:\d{2}/, { timeout: 30_000 });
+  const timers = dialog.getByRole('timer');
+  await expect(timers.first()).toContainText(/Offer expires in \d+:\d{2}/, { timeout: 30_000 });
+  await expect(dialog.getByRole('region', { name: /^Offer: 1 × Thock TK-87/ })).toContainText('₹5,499 each');
 
+  await send('Can you do ₹4,000?');
+  await expect(timers).toHaveCount(2, { timeout: 30_000 }); // a counter-offer, never below the floor
   await dialog.getByRole('button', { name: 'Accept offer' }).last().click();
   const checkout = dialog.getByRole('link', { name: 'Checkout' });
   await expect(checkout).toBeVisible({ timeout: 30_000 });

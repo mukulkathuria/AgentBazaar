@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Seeded demo products (see the API seed). */
 export const PRODUCTS = {
@@ -36,6 +36,34 @@ export async function fillCheckout(page: Page, payment: 'Pay online (UPI, card, 
   await page.getByLabel('State').selectOption('KA');
   await page.getByLabel(payment).check();
   await page.getByLabel('I have read and accept the terms of sale').check();
+}
+
+/** Seeded MFA admin (scripts/e2e-stack.sh exports these); admin journeys skip without them. */
+export const ADMIN = {
+  email: process.env.E2E_ADMIN_EMAIL ?? '',
+  password: process.env.E2E_ADMIN_PASSWORD ?? '',
+  totpSecret: process.env.E2E_ADMIN_TOTP_SECRET ?? '',
+};
+export const hasAdmin = Boolean(ADMIN.email && ADMIN.password && ADMIN.totpSecret);
+
+/** Signs the admin in with password and a TOTP code; lands on `next`. */
+export async function adminSignIn(page: Page, next = '/admin'): Promise<void> {
+  await page.goto(`/account?next=${encodeURIComponent(next)}`);
+  const login = page.getByRole('form', { name: 'Sign in' });
+  await login.getByLabel('Email').fill(ADMIN.email);
+  await login.getByLabel('Password').fill(ADMIN.password);
+  await login.getByLabel('Authenticator code (admins only)').fill(totp(ADMIN.totpSecret));
+  await login.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(new RegExp(`${next.replace(/\//g, '\\/')}$`));
+}
+
+/** Presses Tab until `target` has focus: proves it is reachable by keyboard alone. */
+export async function tabTo(page: Page, target: Locator, maxPresses = 40): Promise<void> {
+  for (let i = 0; i < maxPresses; i++) {
+    if (await target.evaluate((el) => el === document.activeElement)) return;
+    await page.keyboard.press('Tab');
+  }
+  await expect(target).toBeFocused();
 }
 
 function base32Decode(input: string): Buffer {

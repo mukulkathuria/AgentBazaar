@@ -2,13 +2,13 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { uniqueEmail } from './helpers';
 
-test('register → export my data → erase my account', async ({ page }) => {
+test('register → export my data → erase my account', { tag: '@smoke' }, async ({ page }) => {
   const email = uniqueEmail('dpdp');
   await page.goto('/account');
 
   const register = page.getByRole('form', { name: 'Create an account' });
   await register.getByLabel('Full name').fill('Ravi Kumar');
-  await register.getByLabel('Email').fill(email);
+  await register.getByLabel('Email', { exact: true }).fill(email);
   await register.getByLabel('Password').fill('correct-horse-42');
   await register.getByLabel('I accept the terms of sale and the privacy notice').check();
   await register.getByRole('button', { name: 'Create an account' }).click();

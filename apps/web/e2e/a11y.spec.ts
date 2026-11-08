@@ -10,9 +10,19 @@ async function expectNoSeriousViolations(page: Page): Promise<void> {
   expect(serious).toEqual([]);
 }
 
-test.describe('accessibility (axe, zero serious/critical violations)', () => {
-  test('home', async ({ page }) => {
+test.describe('accessibility (axe, zero serious/critical violations)', { tag: '@smoke' }, () => {
+  test('home, in English and in Hindi', async ({ page }) => {
     await page.goto('/');
+    await expectNoSeriousViolations(page);
+    await page.getByRole('button', { name: 'हिन्दी' }).click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'hi');
+    await expectNoSeriousViolations(page);
+  });
+
+  test('category listing and search results', async ({ page }) => {
+    await page.goto('/c/electronics');
+    await expectNoSeriousViolations(page);
+    await page.goto('/search?q=keyboard&inStock=1');
     await expectNoSeriousViolations(page);
   });
 
@@ -32,6 +42,11 @@ test.describe('accessibility (axe, zero serious/critical violations)', () => {
     // Error state of the address form must stay accessible too.
     await page.getByRole('button', { name: 'Place order' }).click();
     await expect(page.getByText('Enter a valid Indian mobile number')).toBeVisible();
+    await expectNoSeriousViolations(page);
+  });
+
+  test('account sign-in and registration', async ({ page }) => {
+    await page.goto('/account');
     await expectNoSeriousViolations(page);
   });
 });
