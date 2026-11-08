@@ -4,15 +4,20 @@
  * Temporal hears the step finished, the hardest place for a crash to land.
  */
 import { loadConfig } from '@agentbazaar/config';
+import pino from 'pino';
 import { createApp } from '../../src/bootstrap/create-app.js';
 import type { CheckoutActivities } from '../../src/modules/orders/application/checkout-saga.js';
 import { CheckoutSagaSteps } from '../../src/modules/orders/index.js';
 import { runSagaWorker } from '../../src/modules/orders/infrastructure/temporal/worker.js';
+import { createLogger } from '../../src/shared/observability/logger.js';
 
 type Step = (...args: unknown[]) => Promise<unknown>;
 
 const config = loadConfig();
-const running = await createApp(config, { background: false });
+// pino's default stdout is asynchronous: a line a step logs (the "order paid" email) could still be
+// buffered when the SIGKILL below lands, and the suite counts those lines. Synchronous writes reach the pipe first.
+const logger = createLogger(config.env.LOG_LEVEL, pino.destination({ dest: 1, sync: true }));
+const running = await createApp(config, { background: false, logger });
 const crashAfter = process.env.SAGA_CRASH_AFTER;
 const steps = Object.entries(running.app.get(CheckoutSagaSteps).activities) as [string, Step][];
 const activities = Object.fromEntries(

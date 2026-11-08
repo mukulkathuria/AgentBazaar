@@ -9,7 +9,7 @@ import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { Client, Connection, WorkflowFailedError } from '@temporalio/client';
 import { bundleWorkflowCode } from '@temporalio/worker';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { InventoryService } from '../../src/modules/inventory/index.js';
 import { WORKFLOW_ENGINE, sagaId, type WorkflowEngine } from '../../src/modules/orders/index.js';
 import { WORKFLOWS_PATH } from '../../src/modules/orders/infrastructure/temporal/worker.js';
@@ -90,6 +90,12 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
     await app?.close();
     if (bundleDir) await rm(bundleDir, { recursive: true, force: true });
   });
+
+  beforeEach(() => {
+    crashes = 0;
+  });
+  // Even when a scenario fails: a worker left running would take the next scenario's steps and its crash.
+  afterEach(() => stopWorker());
 
   /** One worker at a time. A worker that dies is replaced by a healthy one, as a process supervisor would. */
   function startWorker(crashAfter?: string): void {
@@ -209,7 +215,6 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
     'a worker killed right after %s resumes to one paid order: stock committed, invoiced and notified once',
     async (step) => {
       const before = await stockOf(app, SKU);
-      crashes = 0;
       startWorker(step);
       const { session, order } = await buy(app, { sku: SKU, quantity: 1 });
       expect(await webhook(order.orderId, 'captured')).toBe('applied');
@@ -218,7 +223,6 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
       await app.drain(); // the relay's copy of order.paid reaches an email consumer that already sent it
       expect(crashes).toBe(1);
       await expectPaidOnce(order, before);
-      await stopWorker();
     },
     SCENARIO_MS,
   );
@@ -241,7 +245,6 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
       expect(await sagaResult(session.sessionId)).toBe('paid');
       await app.drain();
       await expectPaidOnce(order, before);
-      await stopWorker();
     },
     SCENARIO_MS,
   );
@@ -250,7 +253,6 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
     'payment failed, then the window closed: the order expires once and its stock comes back (killed after abandon)',
     async () => {
       const before = await stockOf(app, SKU);
-      crashes = 0;
       startWorker('abandon');
       const { session, order } = await buy(app, { sku: SKU, quantity: 1 });
       expect(await webhook(order.orderId, 'failed')).toBe('applied');
@@ -263,7 +265,6 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
       expect(await sagaResult(session.sessionId)).toBe('expired');
       expect(crashes).toBe(1);
       await expectClosedOnce(order.orderId, 'expired', before, 0);
-      await stopWorker();
     },
     SCENARIO_MS,
   );
@@ -272,14 +273,12 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
     'a cancelled saga cancels the order once and puts the stock back (killed after abandon)',
     async () => {
       const before = await stockOf(app, SKU);
-      crashes = 0;
       startWorker('abandon');
       const { session, order } = await buy(app, { sku: SKU, quantity: 1 });
       await client.workflow.getHandle(sagaId(session.sessionId)).cancel();
       await expect(sagaResult(session.sessionId)).rejects.toBeInstanceOf(WorkflowFailedError);
       expect(crashes).toBe(1);
       await expectClosedOnce(order.orderId, 'cancelled', before, 0);
-      await stopWorker();
     },
     SCENARIO_MS,
   );
@@ -288,7 +287,6 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
     'money that arrived before a cancel is refunded exactly once (killed after the refund)',
     async () => {
       const before = await stockOf(app, SKU);
-      crashes = 0;
       startWorker('refund');
       const { session, order } = await buy(app, { sku: SKU, quantity: 1 });
       expect(await webhook(order.orderId, 'captured')).toBe('applied'); // not drained: the saga has not heard yet
@@ -298,7 +296,6 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
       expect(crashes).toBe(1);
       await expectClosedOnce(order.orderId, 'cancelled', before, 1);
       expect(await count(`payments WHERE order_id = $1 AND status = 'refunded'`, [order.orderId])).toBe(1);
-      await stopWorker();
     },
     SCENARIO_MS,
   );
@@ -331,7 +328,6 @@ describe('@scale checkout and payment sagas on Temporal: a crash at every step r
           [SKU, s!.on_hand],
         );
       }
-      await stopWorker();
     },
     SCENARIO_MS,
   );
