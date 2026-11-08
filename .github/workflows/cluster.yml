@@ -40,7 +40,7 @@ jobs:
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
       - name: Install k3d
         run: |
-          curl -fsSLo /tmp/k3d https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-amd64
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o /tmp/k3d https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-amd64
           echo "06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0  /tmp/k3d" | sha256sum -c -
           sudo install -m 0755 /tmp/k3d /usr/local/bin/k3d
       - name: Create the cluster (k3s, Traefik, metrics-server, network policies)
