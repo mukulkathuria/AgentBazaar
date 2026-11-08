@@ -1,6 +1,11 @@
 # Schemathesis settings for fuzzing the demo API against packages/contracts/generated/openapi.json.
 # How to run it, the checks and the findings: docs/testing/e2e-and-dast.md.
 
+[generation]
+# The API answers U+0000 in any text with a 400 (Postgres text and jsonb cannot hold it), a rule JSON Schema
+# cannot state for every string; apps/api/test/regression/contract-fuzz.e2e.spec.ts covers it instead.
+allow-x00 = false
+
 # Half of the generated path parameters are real seeded products, so 200 responses get schema-checked too;
 # the other half (and every negative case) stay random.
 [dictionaries.slugs]
@@ -9,6 +14,14 @@ values = ["thock-tk87-mechanical-keyboard", "zentrix-zx7070-12gb", "mitti-person
 [dictionaries.skus]
 values = ["THOCK-TK87-RED", "ZENTRIX-ZX7070-12G", "MITTI-MUG-WHITE", "KOKOA-MINI-13G"]
 
+[dictionaries.customizable-skus]
+values = ["MITTI-MUG-WHITE", "MITTI-MUG-BLACK"]
+
 [parameters]
 "path.slug" = { dictionary = "slugs", probability = 0.5 }
 "path.sku" = { dictionary = "skus", probability = 0.5 }
+
+# Products that cannot be personalised answer the customization operations with a 400, so give them mugs.
+[[operations]]
+include-path-regex = "^/api/v1/customization/"
+parameters = { "path.sku" = { dictionary = "customizable-skus", probability = 0.5 } }

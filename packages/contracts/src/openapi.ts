@@ -21,7 +21,8 @@ function parameters(def: RouteDef): JsonSchema[] {
   add(def.params, 'path');
   add(def.query, 'query');
   if (def.idempotent) {
-    out.push({ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } });
+    // Same rule as apps/api/src/shared/http/idempotency.ts.
+    out.push({ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', pattern: '^[A-Za-z0-9_-]{8,128}$' } });
   }
   return out;
 }

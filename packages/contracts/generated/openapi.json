@@ -8946,8 +8946,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 8,
-              "maxLength": 128
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
             }
           }
         ],
@@ -10762,8 +10761,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 8,
-              "maxLength": 128
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
             }
           }
         ],
@@ -16348,7 +16346,8 @@
                   "password": {
                     "type": "string",
                     "minLength": 10,
-                    "maxLength": 128
+                    "maxLength": 128,
+                    "pattern": "[a-zA-Z][\\s\\S]*\\d|\\d[\\s\\S]*[a-zA-Z]"
                   },
                   "name": {
                     "type": "string",

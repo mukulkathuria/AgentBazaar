@@ -12,7 +12,8 @@ export const Password = z
   .string()
   .min(10, { error: 'Use at least 10 characters' })
   .max(128)
-  .refine((p) => /[a-zA-Z]/.test(p) && /\d/.test(p), { error: 'Use letters and numbers' });
+  // A regex rather than a refine, so the OpenAPI document (and the API fuzzer) carries the rule too.
+  .regex(/[a-zA-Z][\s\S]*\d|\d[\s\S]*[a-zA-Z]/, { error: 'Use letters and numbers' });
 
 export const RegisterInput = z.strictObject({
   email: z.email().max(200),

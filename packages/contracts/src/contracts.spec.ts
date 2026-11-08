@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { bandForPrice } from './catalog.js';
 import { McpToolInputs, A2AInbound } from './agent.js';
 import { AddressInput, StartCheckoutInput } from './orders.js';
+import { Password } from './identity.js';
 import { buildOpenApi, toFastifyPath } from './openapi.js';
 import { Routes } from './routes.js';
 
@@ -65,6 +66,14 @@ describe('@lite contracts', () => {
     expect(codes('/api/v1/products/{slug}', 'get')).not.toContain('413'); // GET bodies are never read
     expect(codes('/api/v1/products', 'get')).not.toContain('414'); // no path parameter
     expect(codes('/api/v1/analytics/events', 'post')).toEqual(expect.arrayContaining(['413', '431']));
+  });
+
+  it('states the password and Idempotency-Key rules as patterns the OpenAPI document carries', () => {
+    for (const good of ['correct-horse-42', '42-correct-horse', 'a\n123456789']) expect(Password.safeParse(good).success).toBe(true);
+    for (const bad of ['0000000000', 'abcdefghij', 'short1a']) expect(Password.safeParse(bad).success).toBe(false);
+    const doc = JSON.stringify(buildOpenApi('0.9.0').paths);
+    expect(doc).toContain(JSON.stringify('[a-zA-Z][\\s\\S]*\\d|\\d[\\s\\S]*[a-zA-Z]').slice(1, -1));
+    expect(doc).toContain('^[A-Za-z0-9_-]{8,128}$');
   });
 
   it('route paths are unique per method and convert to Fastify syntax', () => {
