@@ -141,7 +141,7 @@ Limits: an event that keeps failing holds back the later events of its aggregate
 
 ## Search
 
-Lite search runs inside PostgreSQL: weighted full-text search (name and brand first, then SKU and category, then description), trigram similarity for typos, and a 256-dimension vector search over an HNSW index, fused with reciprocal rank fusion (k = 60). The default embeddings are deterministic feature hashes, identical in TypeScript and Python; the AI service can supply a sentence-transformers model instead. Growth and scale swap the engine behind `SearchPort` and backfill it from the catalog. In every engine an exact SKU of any variant puts its product first. The [search benchmark](benchmarks/search.md) compares the three engines on a golden query set and on latency at 100,000 products.
+Lite search runs inside PostgreSQL: weighted full-text search (name and brand first, then SKU and category, then description), trigram similarity for typos, and a 256-dimension vector search over an HNSW index, fused with reciprocal rank fusion (k = 60). The default embeddings are deterministic feature hashes, identical in TypeScript and Python; the AI service can supply a sentence-transformers model instead. Growth and scale swap the engine behind `SearchPort` and backfill it from the catalog. In every engine an exact SKU of any variant puts its product first, and Hindi words in Devanagari are read through a reviewed map to the catalog's words (`HINDI_TERMS`). The [search benchmark](benchmarks/search.md) compares the three engines on a golden query set and on latency at 100,000 products.
 
 ## The agent layer
 
