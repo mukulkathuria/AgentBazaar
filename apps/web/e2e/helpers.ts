@@ -57,11 +57,11 @@ export async function adminSignIn(page: Page, next = '/admin'): Promise<void> {
   await expect(page).toHaveURL(new RegExp(`${next.replace(/\//g, '\\/')}$`));
 }
 
-/** Presses Tab until `target` has focus: proves it is reachable by keyboard alone. */
-export async function tabTo(page: Page, target: Locator, maxPresses = 40): Promise<void> {
+/** Presses Tab (or `key`) until `target` has focus: proves it is reachable by keyboard alone. */
+export async function tabTo(page: Page, target: Locator, maxPresses = 40, key = 'Tab'): Promise<void> {
   for (let i = 0; i < maxPresses; i++) {
     if (await target.evaluate((el) => el === document.activeElement)) return;
-    await page.keyboard.press('Tab');
+    await page.keyboard.press(key);
   }
   await expect(target).toBeFocused();
 }

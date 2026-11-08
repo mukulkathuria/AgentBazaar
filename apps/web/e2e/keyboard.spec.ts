@@ -2,23 +2,27 @@ import { expect, test } from '@playwright/test';
 import { PRODUCTS, tabTo } from './helpers';
 
 test.describe('keyboard only', () => {
-  test('skip link, search, product and add to cart without a pointer', { tag: '@smoke' }, async ({ page }) => {
+  test('skip link, search, product and add to cart without a pointer', { tag: '@smoke' }, async ({ page, browserName }) => {
+    // Safari's Tab stops on form controls only; Option+Tab also stops on links, as a keyboard user there would use.
+    const tab = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
     await page.goto('/');
-    await page.keyboard.press('Tab');
+    await page.keyboard.press(tab);
     await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#main$/);
 
-    await tabTo(page, page.getByRole('searchbox', { name: 'Search products' }));
+    // From the top of a fresh page, as a keyboard user starts (Tab past the end leaves Firefox's page).
+    await page.goto('/');
+    await tabTo(page, page.getByRole('searchbox', { name: 'Search products' }), 40, tab);
     await page.keyboard.type('thock keyboard');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/search\?q=thock\+keyboard/);
 
-    await tabTo(page, page.locator(`a[href="/p/${PRODUCTS.keyboard}"]`).first());
+    await tabTo(page, page.locator(`a[href="/p/${PRODUCTS.keyboard}"]`).first(), 40, tab);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`/p/${PRODUCTS.keyboard}$`));
 
-    await tabTo(page, page.getByRole('button', { name: 'Add to cart' }));
+    await tabTo(page, page.getByRole('button', { name: 'Add to cart' }), 40, tab);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/cart$/);
     await expect(page.getByRole('button', { name: 'Proceed to checkout' })).toBeVisible();

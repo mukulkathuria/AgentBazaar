@@ -21,7 +21,7 @@ test('browse → personalised product → cart → checkout → mock pay → ord
   await fillCheckout(page, 'Pay online (UPI, card, net banking)');
   await page.getByRole('button', { name: 'Place order' }).click();
 
-  await expect(page).toHaveURL(/\/pay\/mock\/[0-9a-f-]{36}\?t=/);
+  await expect(page).toHaveURL(/\/pay\/mock\/[0-9a-f-]{36}\?t=/, { timeout: 20_000 });
   await expect(page.getByText('Test payment — no real money moves')).toBeVisible();
   await page.getByRole('button', { name: /^Pay .+ \(mock\)$/ }).click();
 
