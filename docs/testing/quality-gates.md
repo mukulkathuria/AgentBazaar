@@ -96,7 +96,7 @@ until the background sweeper ran. The fix commits the expiry and raises the erro
 | Scope | Config | Mutated code | Tests that may kill a mutant | Break |
 | --- | --- | --- | --- | --- |
 | Critical | [`stryker.critical.config.mjs`](../../apps/api/stryker.critical.config.mjs) | `pricing/domain` (policy engine, negotiation state machine), `shared/crypto/keyring.ts` (quote token signing and verification), `inventory/{domain,application}`, `orders/domain` (order state machine) | the unit specs and the inventory service's PGlite suite ([`vitest.critical.config.mjs`](../../apps/api/vitest.critical.config.mjs)) | 80% |
-| Full | [`stryker.config.mjs`](../../apps/api/stryker.config.mjs) | every `src/modules/**/{domain,application}/**` file (62 files) | unit, integration, end-to-end, contract, negative and regression suites on PGlite | 70%, on the merged score |
+| Full | [`stryker.config.mjs`](../../apps/api/stryker.config.mjs) | every `src/modules/**/{domain,application}/**` file (68 on 2026-11-08) | unit, integration, end-to-end, contract, negative and regression suites on PGlite, less two benchmarks (below) | 70%, on the merged score |
 
 ```sh
 pnpm --filter @agentbazaar/api mutation:critical   # incremental; results in apps/api/reports/mutation/
