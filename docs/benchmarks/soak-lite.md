@@ -1,8 +1,9 @@
 # Lite profile soak
 
-**Status: an 8-hour run is in progress (started 2026-11-06 10:53 UTC). The table below holds interim
-numbers; the final row is filled in from the run's own CSV and k6 summary when it ends (section 4).**
-Every number on this page comes from a real run, with the commit, hardware and raw output recorded.
+**Status: no 8-hour soak has completed yet. Two attempts on a shared laptop were cut short by the host (131
+and 53 minutes, section 3); a third 8-hour run started on 2026-11-08 at 02:22 UTC and ends at 10:22 UTC. Its
+result goes in section 3 when it ends (section 4 says how).** Every number on this page comes from a real
+run, with the commit, hardware and raw output recorded.
 
 The plan's release gate for each profile includes a soak: the lite load profile for 8 hours, watching memory,
 connection and queue growth. Pass criteria: read p95 under 300 ms, checkout p95 under 800 ms, errors under
@@ -58,44 +59,75 @@ node tests/load/soak-monitor.mjs --check tests/load/results/soak.csv
 
 `tests/load/results/` is git-ignored: attach the CSV, the k6 summary JSON and its log to the release.
 
-## 2. Environment of the 2026-11-06 run
+## 2. Environment
 
 | Item | Value |
 | --- | --- |
 | Host | Laptop, Windows 11 Enterprise (Insider Preview, build 26340), Intel Core i5-1345U (10 cores, 12 threads), 16 GB RAM |
-| Database | **Native Windows** PostgreSQL 18.0 (pgvector 0.8.1), a private cluster on port 54331 with `shared_buffers = 128MB`, `max_connections = 60`, fsync on; same host as the API |
+| Database (attempt 2 and the run in progress) | **Native Windows** PostgreSQL 18.0 (pgvector 0.8.1), a private cluster on port 54331 with `shared_buffers = 128MB`, `max_connections = 60`, fsync on; same host as the API. Attempt 1 used the shared Docker Postgres 18.6 in WSL instead |
 | API | Production build (`node apps/api/dist/main.js`, `NODE_ENV=production`, generated keys, `LOG_LEVEL=warn`, `RATE_LIMIT_PER_MINUTE=100000`), Node.js v26.12.1, pool of 20 connections, straight to port 4103 without Caddy |
-| Catalog | 1,000 generated products (1,773 variants) from `cli seed --products 1000`; stock raised by 2,000 per variant |
+| Catalog | 1,000 generated products (1,773 variants) from `cli seed --products 1000` into a fresh database for each attempt; stock raised by 2,000 per variant |
 | Load generator | k6 v1.8.2 (official Windows release, SHA-256 checked) on the same host |
-| Commit | `045ac7b` (main at `98dbe1f` plus a testkit export); the API was built from it |
-| Other load | Several other agents were building and testing on the same laptop throughout, and free memory was often under 2 GB, so the host was noisy |
+| Commit | `045ac7b` (main at `98dbe1f` plus a testkit export) for attempt 2 and the run in progress; attempt 1 ran a build of `5a5f919`, before the database fixes of `5ff6742` |
+| Other load | Several other agents were building and testing on the same laptop throughout, and free memory was often under 2 GB. The host was noisy, which these numbers include |
 
 ## 3. Results
 
-### First attempt (aborted after 131 healthy minutes)
+### Attempt 1, Docker Postgres: aborted after 131 healthy minutes (2026-11-06)
 
-The first attempt used the shared Docker Postgres (WSL). It ran healthy for 131 minutes, then the host ran
-critically low on memory, WSL was stopped and Postgres went with it; the API answered not-ready from then on.
-Those 131 minutes are kept for the record, not as the gate result: 256,989 requests, no 4xx, one 5xx (in the
-minute the host ran out of memory, just before Postgres went away), every sample up to then ready, resident memory 116 MB at start and a median of 158 MB
-in the first third against 136 MB in the last, heap used 60 MB against 51 MB, Postgres connections 7 against 5,
-outbox backlog 0 against 0 (at most 16 pending at a sample). Active handles stepped from about 90 to 127 at
-minute 70 to 90, when other work slowed the host (checkout p95 reached 770 ms for one minute) and k6 added
-virtual users, and then stayed flat: that is why handles are reported, not gated.
+It ran healthy for 131 minutes, then the host ran critically low on memory, WSL was stopped and Postgres went
+with it; the API answered not-ready from then on. Those 131 minutes are kept for the record, not as the gate
+result: 256,989 requests, no 4xx, one 5xx (in the minute the host ran out of memory, just before Postgres went
+away), every sample up to then ready, resident memory 116 MB at start and a median of 158 MB in the first
+third against 136 MB in the last, heap used 60 MB against 51 MB, Postgres connections 7 against 5, outbox
+backlog 0 against 0 (at most 16 pending at a sample). Active handles stepped from about 90 to 127 at minute 70
+to 90, when other work slowed the host (checkout p95 reached 770 ms for one minute) and k6 added virtual users,
+and then stayed flat: that is why handles are reported, not gated.
 
-### Second run: native Windows Postgres, 8 hours
+### Attempt 2, native Postgres: failed thresholds, killed after 53 minutes (2026-11-06)
+
+It started at 10:53 UTC and was killed at 11:46 UTC together with its Postgres cluster (a console control
+event: a Postgres backend exited with `0xC000013A` and k6 received a terminate signal), so it is not a soak
+result. In those 53 minutes it **crossed two thresholds**:
+
+| k6, 53 minutes | Value | Target |
+| --- | --- | --- |
+| Read p50, p95, max | 11.5, 242.1, 31,164 ms | p95 under 300 ms |
+| Checkout p50, p95, max | 47.0, **1,354.7**, 17,024 ms | p95 under 800 ms: **failed** |
+| Failed requests | **0.193%** (219 of 113,326) | under 0.1%: **failed** |
+| Rate | 35.6 req/s, 94,352 iterations, 1,100 iterations dropped while the host stalled | about 30 |
+
+What happened, from the sampler and the Postgres log: in 12 of the 53 minutes the host stalled (Postgres
+statements that normally take milliseconds took 1 to 11 seconds; the API's event-loop lag rose to 173 ms) while
+other agents' builds and test runs, and this track's own Semgrep and promptfoo runs, competed for the laptop.
+The worst stall, at minute 10, lasted about 50 seconds: every pooled connection was busy, new requests waited
+the pool's 10-second connect timeout and failed with a 5xx (143 of them, all in minutes 10 and 11; pool and
+query timeouts map to the standard 503 envelope), and the API
+recovered by itself with no restart and no leaked connections, which is what the fixes in
+`test/services/resilience.spec.ts` were for. No growth: resident memory 167 MB at 30 minutes and 138 MB at
+the end, heap 65 MB against 49 MB, Postgres connections (median) 12 against 12, outbox backlog at most 63 events
+during a stall and 1 to 2 otherwise, every sample ready.
+
+A latency gate measured on a laptop shared with several busy agents says more about the laptop than about the
+store; the release run belongs on a quiet machine (the VPS of `docs/benchmarks/lite.md`) or in
+`.github/workflows/soak.yml`.
+
+### Run 3, native Postgres, 8 hours (2026-11-08 02:22 to 10:22 UTC)
 
 <!-- SOAK-RESULTS -->
-Interim, filled in when the run ends.
+In progress; section 4 says how to fill this in.
 <!-- /SOAK-RESULTS -->
 
-## 4. Collecting the result of the run in progress
+## 4. Finishing the run in progress
 
-The run's processes were started outside any terminal so they outlive the session that launched them. Their
-process ids and the start time are in the run log next to the data directory (see the T3 report); the k6
-summary appears when k6 exits about 8 hours after the start.
+The run's processes were started through WMI so they outlive the session that started them; their ids and
+start times are in the T3 report. When k6 has exited (it prints its summary to `soak-lite.log` and writes
+`soak-lite.json`), from the repository root:
 
-```powershell
-# results (git-ignored): tests/load/results/soak-lite.csv, soak-lite.json (k6 summary), soak-lite.log
-node tests/load/soak-monitor.mjs --check tests/load/results/soak-lite.csv
+```bash
+node tests/load/soak-monitor.mjs --check tests/load/results/soak-lite.csv   # growth gate, exit code 1 on failure
 ```
+
+Then paste the k6 thresholds and the sampler summary into the block above, stop the API and sampler, stop the
+private cluster (`pg_ctl -D <data dir> stop -m fast`) and delete its data directory. Raw files
+(`tests/load/results/soak-lite.csv`, `.json`, `.log`) are git-ignored: attach them to the release.

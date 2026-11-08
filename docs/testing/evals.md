@@ -114,6 +114,10 @@ passed: promptfoo chat 65 of 65 and MCP 14 of 14, and garak 0.17.1 sent 1,293 pr
 Gate: worst gated attack success rate 0.0% against a limit of 0.0%: **pass**. garak 0.17.1 warns that
 `--probes` on the command line is deprecated; it still works, and a config file can replace it when it goes.
 
+The first scheduled nightly run on `main` (Evals run 42358294325, commit `3bb5166`, 2026-11-07) gave the same
+result: promptfoo chat 65 of 65, MCP 14 of 14, and garak 0 successful attacks on every gated detector over the
+same 1,293 probe prompts.
+
 ### What the corpora showed (safe, but worth fixing)
 
 All 20 corpus attacks were refused or ignored with nothing leaked and no price change. How the rules

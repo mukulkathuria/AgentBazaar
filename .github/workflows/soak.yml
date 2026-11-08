@@ -65,7 +65,9 @@ jobs:
           nohup node tests/load/soak-monitor.mjs tests/load/results/soak.csv > tests/load/results/monitor.log 2>&1 &
       - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
       - name: k6 lite profile for ${{ env.DURATION }}
-        run: k6 run -q -e BASE_URL="$BASE_URL" -e DURATION="$DURATION" --summary-export=tests/load/results/soak.json tests/load/lite.js
+        run: |
+          k6 run -q -e BASE_URL="$BASE_URL" -e DURATION="$DURATION" --summary-trend-stats 'avg,min,med,max,p(90),p(95),p(99)' \
+            --summary-export=tests/load/results/soak.json tests/load/lite.js
       - name: No growth of memory, handles, connections or the outbox after warm-up
         if: ${{ !cancelled() }}
         run: |
