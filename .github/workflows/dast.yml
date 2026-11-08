@@ -1,0 +1,116 @@
+name: DAST
+
+# Dynamic tests of the running demo store (scripts/e2e-stack.sh starts the production builds in the job).
+# Schemathesis fuzzes every REST operation against packages/contracts/generated/openapi.json: no 5xx, no
+# undocumented status code, content type or response shape. The OWASP ZAP baseline crawls the web app and the API
+# with its passive rules and fails on any High-risk alert not triaged in .zap/rules.tsv (release gate: no High
+# findings). How to run both locally: docs/testing/e2e-and-dast.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  API: http://localhost:4000
+  WEB: http://localhost:3000
+  SCHEMATHESIS: schemathesis==4.33.1
+  # ZAP's weekly "stable" image (2.16.1 core, current add-ons), pinned by digest on 2026-11-08.
+  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:stable@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+
+jobs:
+  dast:
+    name: Schemathesis and ZAP baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      E2E_STATE_DIR: ${{ github.workspace }}/.e2e-state
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Production builds (API and web)
+        run: pnpm turbo run build --filter=@agentbazaar/api... --filter=@agentbazaar/web...
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+      - name: Start the demo store
+        run: bash scripts/e2e-stack.sh
+
+      - name: Schemathesis, every REST operation against the OpenAPI document
+        env:
+          PYTHONUTF8: '1'
+        run: |
+          set -o pipefail
+          st() {
+            pipx run --spec "$SCHEMATHESIS" schemathesis --config-file tests/dast/schemathesis.toml run \
+              packages/contracts/generated/openapi.json --url "$API" --workers 4 --max-examples 100 \
+              --checks not_a_server_error,status_code_conformance,content_type_conformance,response_schema_conformance \
+              --report junit --report-dir "schemathesis-report/$1" "${@:2}"
+          }
+          shopper() {
+            curl -fsS "$API/api/v1/auth/register" -H 'content-type: application/json' \
+              -d "{\"email\":\"$1@example.com\",\"password\":\"Fuzz-pass-2026\",\"name\":\"Fuzz Tester\",\"consents\":{\"terms\":true}}" \
+              | jq -r .accessToken
+          }
+          rc=0
+          token=$(shopper fuzz-shopper)
+          echo "::add-mask::$token"
+          st storefront --exclude-path-regex '^/api/v1/admin/' --exclude-path /api/v1/me/erase -H "Authorization: Bearer $token" || rc=1
+          token=$(node tests/dast/admin-token.mjs "$API")
+          echo "::add-mask::$token"
+          st admin --include-path-regex '^/api/v1/admin/' -H "Authorization: Bearer $token" || rc=1
+          # Erasure ends the account behind the token, so it runs alone with an account of its own.
+          token=$(shopper fuzz-eraser)
+          echo "::add-mask::$token"
+          st erase --include-path /api/v1/me/erase -H "Authorization: Bearer $token" || rc=1
+          exit $rc
+
+      - name: OWASP ZAP baseline, web app and API
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p zap && cp .zap/rules.tsv zap/ && chmod -R a+w zap
+          scan() {
+            local rc=0
+            docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" "$ZAP_IMAGE" \
+              zap-baseline.py -t "$1" -c rules.tsv -I -m 2 -r "$2.html" -J "$2.json" -w "$2.md" || rc=$?
+            # -I: warnings alone exit 0; 1 means a FAIL rule matched, 3 a ZAP error.
+            [ "$rc" -eq 0 ] || { echo "::error::ZAP baseline of $1 exited with $rc"; return 1; }
+          }
+          rc=0
+          scan "$WEB" zap-web || rc=1
+          scan "$API/api/v1/products?limit=5" zap-api || rc=1
+          exit $rc
+      - name: No High-risk ZAP alerts
+        if: ${{ !cancelled() }}
+        run: |
+          jq -r '.site[]?.alerts[]? | "\(.riskdesc)\t\(.pluginid)\t\(.alert) (\(.count))"' zap/zap-web.json zap/zap-api.json | sort -u
+          fail=0
+          for id in $(jq -r '[.site[]?.alerts[]? | select(.riskcode == "3") | .pluginid] | unique | .[]' zap/zap-web.json zap/zap-api.json); do
+            grep -qP "^$id\tIGNORE\t" .zap/rules.tsv || { echo "::error::High-risk ZAP alert $id is not triaged"; fail=1; }
+          done
+          exit $fail
+
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dast-reports-${{ github.run_attempt }}
+          path: |
+            schemathesis-report
+            zap
+            .e2e-state/*.log
+          if-no-files-found: ignore
+          retention-days: 14

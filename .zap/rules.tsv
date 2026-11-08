@@ -1,0 +1,3 @@
+# OWASP ZAP baseline triage for the demo store (.github/workflows/dast.yml, docs/testing/e2e-and-dast.md).
+# Format: <alert id>	<IGNORE|INFO|WARN|FAIL>	(<alert name>: <reason>). Fields are tab-separated.
+# Unlisted alerts are WARN. The job fails on any FAIL rule, and on any High-risk alert not marked IGNORE here.

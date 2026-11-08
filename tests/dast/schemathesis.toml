@@ -1,0 +1,14 @@
+# Schemathesis settings for fuzzing the demo API against packages/contracts/generated/openapi.json.
+# How to run it, the checks and the findings: docs/testing/e2e-and-dast.md.
+
+# Half of the generated path parameters are real seeded products, so 200 responses get schema-checked too;
+# the other half (and every negative case) stay random.
+[dictionaries.slugs]
+values = ["thock-tk87-mechanical-keyboard", "zentrix-zx7070-12gb", "mitti-personalised-ceramic-mug", "kokoa-mini-milk-chocolate-13g"]
+
+[dictionaries.skus]
+values = ["THOCK-TK87-RED", "ZENTRIX-ZX7070-12G", "MITTI-MUG-WHITE", "KOKOA-MINI-13G"]
+
+[parameters]
+"path.slug" = { dictionary = "slugs", probability = 0.5 }
+"path.sku" = { dictionary = "skus", probability = 0.5 }
