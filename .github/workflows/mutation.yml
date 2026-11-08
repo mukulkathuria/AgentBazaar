@@ -29,14 +29,18 @@ jobs:
     timeout-minutes: 300
     strategy:
       fail-fast: false
-      # Five shards, balanced by size and by how much of the app each mutant's tests boot.
+      # Seven shards. In the first run (five shards) agent application code, orders and identity took 70 to
+      # 75 minutes each, while pricing with the catalog, and the agent domain, were still running after 2.5
+      # hours: most end-to-end suites cover catalog and agent-domain code, so each now has a shard of its own.
       matrix:
         include:
           - { id: agent-application, modules: agent/application }
-          - { id: agent-domain, modules: agent/domain recommendations analytics notifications tax }
+          - { id: agent-domain, modules: agent/domain }
           - { id: orders, modules: orders payments }
-          - { id: pricing, modules: pricing catalog inventory }
-          - { id: identity, modules: identity customization pii search }
+          - { id: pricing, modules: pricing inventory }
+          - { id: catalog, modules: catalog }
+          - { id: identity, modules: identity customization }
+          - { id: data, modules: pii search recommendations analytics notifications tax }
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -84,5 +88,5 @@ jobs:
         with:
           pattern: mutation-full-*
           path: reports
-      # 5 = the number of shards above; a missing report fails the gate.
-      - run: node scripts/mutation-score.mjs 70 5 reports/*/full.json
+      # 7 = the number of shards above; a missing report fails the gate.
+      - run: node scripts/mutation-score.mjs 70 7 reports/*/full.json

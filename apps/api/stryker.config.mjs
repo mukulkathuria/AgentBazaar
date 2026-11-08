@@ -18,11 +18,13 @@ export default {
   // forks matches plain `vitest run`; PGlite suites are not tried under worker threads.
   vitest: { configFile: 'vitest.config.ts', related: true, pool: 'forks' },
   mutate: [...scope, '!src/**/*.spec.ts', '!src/**/index.ts'],
-  // The in-process suites on PGlite; the real-service `services` project never runs here.
+  // The in-process suites on PGlite; the real-service `services` project never runs here. The two benchmarks
+  // (120 priced conversations, a search latency run) are left out: they assert aggregates, not behaviour, and
+  // rerunning them for every mutant they touch cost hours.
   testFiles: [
     'src/**/*.spec.ts',
-    'test/integration/**/*.spec.ts',
-    'test/e2e/**/*.spec.ts',
+    'test/integration/**/!(search-benchmark.int).spec.ts',
+    'test/e2e/**/!(ai-cost.e2e).spec.ts',
     'test/contract/**/*.spec.ts',
     'test/negative/**/*.spec.ts',
     'test/regression/**/*.spec.ts',
