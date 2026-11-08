@@ -61,8 +61,10 @@ is timed for reference only. The pass mark for Meilisearch and for OpenSearch pl
 
 **Also checked** in the same run: paging to the API's deepest page (offset 5,000) and exact browse totals in
 every engine. `apps/api/test/services/search-engines.spec.ts` covers the rest on 400 products: indexing through
-the outbox, updates, stock changes and deletes reaching every engine, any variant's SKU finding its product, and
-identical totals, facets and pages for filtered browsing.
+the outbox, updates, stock changes and deletes reaching every engine, any variant's SKU finding its product,
+identical totals, facets and pages for filtered browsing, and 30 products the engines cannot tell apart paged
+seven at a time (by text and by browsing), twice, with no product repeated or skipped and the same order both
+times.
 
 ## How to run
 
@@ -233,6 +235,13 @@ problems, now fixed and covered by the tests above:
   field. An index created before these changes keeps its old mapping: delete it and run `cli reindex`.
 - **Many Meilisearch requests through Node's `fetch` stalled about 40 ms**, with chunked answers, which put p95
   at 47.9 ms. The engines are now called over `node:http(s)`, and p95 fell to 11.4 ms ([above](#where-meilisearchs-time-went)).
+- **Equal scores had no order of their own in OpenSearch**, so tied products could swap places between requests
+  and a page could repeat or skip one. Every path now ends on the product id: OpenSearch sorts text on `_score`
+  then `id` and browsing on name then `id`, Qdrant's tied hits are put in id order before fusion, Meilisearch's
+  ranking rules end with `id:asc` (after exactness, so only ties move) and its browsing sorts on name then id,
+  and fusion breaks ties by id in code-unit order, the order Postgres's uuid and OpenSearch's keyword sorts use.
+  At 100,000 products the extra sort cost nothing measurable ([run 42451009235](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42451009235):
+  OpenSearch p95 20.8 ms, Meilisearch 15.1 ms, recall 1.000).
 - **Index creation timed out.** Creating a Qdrant collection took about 1.6 s on the test stack, close to the
   2 s timeout searches use. Index creation and writes now get 15 s.
 - **One HTTP request per product.** Reindexing now writes a page of 500 products per engine request (a
