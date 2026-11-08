@@ -1,20 +1,25 @@
 # AI cost per conversation (milestone G5)
 
-**Status: measured on 2026-11-06 on a Windows 11 laptop (embedded PGlite, deterministic fake model).**
+**Status: measured on 2026-11-08 on a Windows 11 laptop (embedded PGlite, deterministic fake model).**
 G5's definition of done is: "Cost per conversation falls against the all-large-model shadow baseline
 with no drop in conversion proxies." This page reports the run that checks it. Every number below
 comes from that run; nothing is estimated.
 
 | Arm | Cost per conversation | Tokens per conversation | Model calls per conversation | Judge calls | Cache hits | Deals | Checkout links | Floor violations |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Shadow baseline: every turn on the large model, observer on every turn | ₹0.7127 | 3,206 | 10.00 | 200 | 0 | 22/40 | 22/40 | 0 |
-| Routed tiers and gated observer, cache off | ₹0.2090 | 1,867 | 5.42 | 88 | 0 | 22/40 | 22/40 | 0 |
-| **Routed tiers, semantic cache and gated observer** | **₹0.0995** | **698** | **2.83** | **88** | **104** | **22/40** | **22/40** | **0** |
+| Shadow baseline: every turn on the large model, observer on every turn | ₹0.6592 | 2,956 | 9.15 | 183 | 0 | 22/40 | 22/40 | 0 |
+| Routed tiers and gated observer, cache off | ₹0.1689 | 1,618 | 4.58 | 71 | 0 | 22/40 | 22/40 | 0 |
+| **Routed tiers, semantic cache and gated observer** | **₹0.0716** | **528** | **2.17** | **71** | **96** | **22/40** | **22/40** | **0** |
 
-Cost per conversation fell **86.0%** against the shadow baseline. Routing and the observer gate save
-70.7%, and the semantic cache saves about half of what remains. The conversion proxies did not move:
-the same 22 of 40 conversations reached a deal and got a checkout link in every arm, and no seller
-quote was at or below a floor.
+Cost per conversation fell **89.1%** against the shadow baseline. Routing and the observer gate save
+74.4%, and the semantic cache saves more than half of what remains. The conversion proxies did not
+move: the same 22 of 40 conversations reached a deal and got a checkout link in every arm, and no
+seller quote was at or below a floor.
+
+The first run, on 2026-11-06, measured ₹0.7127, ₹0.2090 and ₹0.0995 (an 86.0% saving). The difference
+is the classifier fix of 2026-11-08: the adversarial conversations' extraction and personal-data
+requests are now refused without any model call in every arm, where they used to be answered as
+product searches.
 
 ## What runs
 
@@ -58,26 +63,26 @@ Calls and spend for all 40 conversations, from `llm_traces` (`kind` is new in mi
 
 | Arm | Phrasing, small model | Phrasing, large model | Judge, large model | Cache hits |
 | --- | --- | --- | --- | --- |
-| Shadow baseline | none | 200 calls, ₹20.41 | 200 calls, ₹8.09 | none |
-| Routed, cache off | 68 calls, ₹0.46 | 61 calls, ₹4.83 | 88 calls, ₹3.07 | none |
-| Routed, cache on | 15 calls, ₹0.09 | 10 calls, ₹0.82 | 88 calls, ₹3.07 | 104 |
+| Shadow baseline | none | 183 calls, ₹18.90 | 183 calls, ₹7.47 | none |
+| Routed, cache off | 63 calls, ₹0.43 | 49 calls, ₹3.87 | 71 calls, ₹2.46 | none |
+| Routed, cache on | 12 calls, ₹0.08 | 4 calls, ₹0.33 | 71 calls, ₹2.46 | 96 |
 
 - **Routing** moves search, product questions and price quotes to the small model, and greetings,
   order status, refusals and rule answers to templates.
-- **Gating** runs the judge on 88 turns instead of 200. Every judged turn was a commitment or risky;
+- **Gating** runs the judge on 71 turns instead of 183. Every judged turn was a commitment or risky;
   calm browsing turns were skipped.
-- **The cache** answered 104 of the 129 phrasing requests in the cached arm (81%). Every hit was filled
+- **The cache** answered 96 of the 112 phrasing requests in the cached arm (86%). Every hit was filled
   with that request's own numbers and passed the guard again. See
   [ADR 0012](../adr/0012-semantic-cache-and-observer-gating.md) for why this cannot leak another
   customer's prices or name.
-- **The judge is now 77% of the remaining spend**, because every commitment is judged, including
+- **The judge is now 86% of the remaining spend**, because every commitment is judged, including
   cached ones. That is deliberate.
 
 ## Caveats
 
 - **Scripted traffic repeats itself.** Forty conversations over five products and fixed phrasings
   give a far higher cache hit rate than real shoppers will. Watch `agentbazaar_semantic_cache_total`
-  in production. The 70.7% saved by routing and gating does not depend on repetition.
+  in production. The 74.4% saved by routing and gating does not depend on repetition.
 - **Token counts come from the fake model** (one token per four characters). Real tokenizers and real
   replies differ, which changes the absolute rupee figures, not the comparison: all three arms
   send the same prompts.

@@ -118,7 +118,27 @@ The first scheduled nightly run on `main` (Evals run 42358294325, commit `3bb516
 result: promptfoo chat 65 of 65, MCP 14 of 14, and garak 0 successful attacks on every gated detector over the
 same 1,293 probe prompts.
 
-### What the corpora showed (safe, but worth fixing)
+### 2026-11-08, local, after the classifier fix
+
+| Run | Tests | Passed | Floor leaks | PII leaks | Injection successes |
+| --- | --- | --- | --- | --- | --- |
+| promptfoo chat, core | 36 (12 golden turns in 3 conversations, 12 attacks with their set-up turns) | 36 | 0 | 0 | 0 of 12 attack turns |
+| promptfoo MCP, core | 4 | 4 | 0 | 0 | 0 |
+| promptfoo chat, full | 76 (core plus all 20 corpus attacks, each after a quote) | 76 | 0 | 0 | 0 of 32 attack turns |
+| promptfoo MCP, full | 14 | 14 | 0 | 0 | 0 of 11 |
+| `policy.test.mjs` (assertions can fail) | 7 | 7 | | | |
+
+The gaps listed below are fixed in the rules classifier (TypeScript and the AI service's Python twin, kept
+identical). All 20 corpus attacks are now labelled `injection_attempt`, so the router refuses them without
+a model. The four personal-data requests get the polite refusal ("I can't change how I work or share
+internal details or anyone's personal information..."), never a product search. "thoda aur kam karo", like
+any request to come lower that names no price, is now an offer: the buyer's own last offer is restated, so
+the seller moves one step down its concession ladder in the same negotiation. Before any offer, the seller
+asks for the buyer's price instead of re-quoting the list price. Each case is a golden or attack test above
+(the full set now also requires every corpus attack to be recognised), and in `classifier.spec.ts`,
+`router.spec.ts`, `test_classifier.py` and `agent-chat.e2e.spec.ts`.
+
+### What the corpora showed before 2026-11-08 (fixed, see above)
 
 All 20 corpus attacks were refused or ignored with nothing leaked and no price change. How the rules
 classifier labelled them shows where the wording could be better:
@@ -131,7 +151,8 @@ classifier labelled them shows where the wording could be better:
   bought a keyboard yesterday?"). Nothing personal is ever exposed, but the buyer gets no refusal.
 - Golden set: a Hindi search ("मुझे कीबोर्ड दिखाओ") finds nothing because the catalog and its index are
   English (the Hinglish "mujhe keyboard dikhao" works), and "thoda aur kam karo" ("a bit lower") re-quotes the
-  list price instead of continuing the haggle. Neither is in the golden set as a passing case.
+  list price instead of continuing the haggle. Neither is in the golden set as a passing case. (The haggle is
+  fixed and now a golden turn; the Hindi search over an English catalog is still open.)
 
 ### Classifier and router accuracy and calibration
 

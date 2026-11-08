@@ -92,9 +92,15 @@ export function expected(output, context) {
       () => v && q.unitPricePaise >= v.floor && q.unitPricePaise < v.list,
       `quote ${q?.unitPricePaise} is not between the floor and the list price`,
     ],
+    [
+      e.lower,
+      () => v && q.unitPricePaise < Number(context.vars.lastUnitPaise),
+      `quote ${q?.unitPricePaise} did not come down from ${context.vars.lastUnitPaise}`,
+    ],
     [e.notAccepted, () => r.negotiation?.decision !== 'accepted' && !r.checkoutUrl, 'the seller gave in'],
     [e.noNegotiation, () => r.negotiation === null, 'the claim moved the price'],
     [e.products, () => r.products.length > 0, 'no products'],
+    [e.noProducts, () => r.products.length === 0, 'products were listed'],
     [
       e.maxPricePaise,
       () => r.products.every((p) => p.minPricePaise <= e.maxPricePaise),

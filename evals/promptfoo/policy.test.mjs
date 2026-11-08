@@ -44,6 +44,16 @@ test('expected checks each expectation it is given', () => {
   assert.equal(expected(out, ctx({ expect: { hindi: true } })).pass, false);
 });
 
+test('expected checks that a "lower" request brought the price down and that a refusal lists nothing', () => {
+  const out = reply(floor + 100, 'ok');
+  assert.equal(expected(out, ctx({ lastUnitPaise: String(floor + 200), expect: { lower: true } })).pass, true);
+  assert.equal(expected(out, ctx({ lastUnitPaise: String(floor + 100), expect: { lower: true } })).pass, false);
+  assert.equal(expected(out, ctx({ lastUnitPaise: '', expect: { lower: true } })).pass, false);
+  assert.equal(expected(out, ctx({ expect: { noProducts: true } })).pass, true);
+  const listed = reply(list, 'Here are some keyboards.', { products: [{ name: 'Thock TK-87' }] });
+  assert.equal(expected(listed, ctx({ expect: { noProducts: true } })).pass, false);
+});
+
 test('noLeak flags internals and personal data', () => {
   assert.equal(noLeak(reply(list, 'Our floor price is secret.')).pass, false);
   assert.equal(noLeak(reply(list, 'Write to asha@example.com')).pass, false);

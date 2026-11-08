@@ -1,5 +1,6 @@
 // promptfoo extension hook. Chat turns that name the same `conversation` share one chat session (run the
-// evals with -j 1 so turns stay in order), and each turn sees the prices already quoted in its conversation.
+// evals with -j 1 so turns stay in order), and each turn sees the prices already quoted in its conversation
+// and the unit price of its latest quote.
 // MCP make_offer tests get a fresh negotiation from request_quote first.
 import { randomUUID } from 'node:crypto';
 import { paiseIn } from './policy.mjs';
@@ -25,6 +26,12 @@ async function conversation(id, language) {
   return conversations.get(id);
 }
 
+/** The prices a reply quoted, and its latest unit price, for the next turns of its conversation. */
+function remember(c, reply) {
+  c.paise.push(...paiseIn(reply));
+  c.lastUnit = reply.negotiation?.quote?.unitPricePaise ?? c.lastUnit;
+}
+
 async function negotiationId(sku) {
   const rpc = await post('/mcp', {
     jsonrpc: '2.0',
@@ -42,7 +49,7 @@ export async function extensionHook(hookName, context) {
     const vars = { ...context.test.vars, apiUrl: API };
     if (vars.message !== undefined) {
       const c = await conversation(vars.conversation ?? randomUUID(), vars.language ?? 'en');
-      Object.assign(vars, { sessionId: c.sessionId, seenPaise: JSON.stringify(c.paise) });
+      Object.assign(vars, { sessionId: c.sessionId, seenPaise: JSON.stringify(c.paise), lastUnitPaise: String(c.lastUnit ?? '') });
     }
     if (vars.tool === 'make_offer')
       vars.args = { ...vars.args, negotiation_id: await negotiationId(vars.sku) };
@@ -51,7 +58,7 @@ export async function extensionHook(hookName, context) {
   if (hookName === 'afterEach') {
     const c = conversations.get(context.test.vars?.conversation);
     const output = context.result?.response?.output;
-    if (c && typeof output === 'string') c.paise.push(...paiseIn(JSON.parse(output)));
+    if (c && typeof output === 'string') remember(c, JSON.parse(output));
   }
   return undefined;
 }
