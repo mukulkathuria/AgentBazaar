@@ -1,0 +1,88 @@
+name: Mutation (full scope)
+
+# Merge gate: a mutation score of at least 70% on all domain and application code
+# (docs/testing/quality-gates.md). The critical scope runs on every push in quality.yml; this full run takes
+# about 7 hours on one runner, so it runs nightly in parallel shards and gates the merged score. A push that
+# changes the mutation setup runs it too.
+on:
+  schedule:
+    - cron: '30 22 * * *' # 04:00 IST
+  push:
+    branches: [main]
+    paths:
+      - apps/api/stryker.config.mjs
+      - scripts/mutation-score.mjs
+      - .github/workflows/mutation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  shard:
+    name: Mutants in ${{ matrix.modules }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      # Five shards, balanced by size and by how much of the app each mutant's tests boot.
+      matrix:
+        include:
+          - { id: agent-application, modules: agent/application }
+          - { id: agent-domain, modules: agent/domain recommendations analytics notifications tax }
+          - { id: orders, modules: orders payments }
+          - { id: pricing, modules: pricing catalog inventory }
+          - { id: identity, modules: identity customization pii search }
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@agentbazaar/api^...
+      # Each shard keeps its own incremental file: only mutants whose code or covering tests changed rerun.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/api/reports/mutation/full-incremental.json
+          key: stryker-full-${{ matrix.id }}-${{ github.run_id }}
+          restore-keys: stryker-full-${{ matrix.id }}-
+      # SIGINT before the job limit makes Stryker write its partial results, which the cache keeps.
+      - name: Mutation testing
+        working-directory: apps/api
+        env:
+          STRYKER_SHARD: ${{ matrix.modules }}
+        run: timeout --signal=INT 270m node_modules/.bin/stryker run --concurrency 4
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always()
+        with:
+          path: apps/api/reports/mutation/full-incremental.json
+          key: stryker-full-${{ matrix.id }}-${{ github.run_id }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: mutation-full-${{ matrix.id }}
+          path: |
+            apps/api/reports/mutation/full.html
+            apps/api/reports/mutation/full.json
+          retention-days: 30
+
+  score:
+    name: Mutation gate (all domain and application code, 70%)
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: mutation-full-*
+          path: reports
+      # 5 = the number of shards above; a missing report fails the gate.
+      - run: node scripts/mutation-score.mjs 70 5 reports/*/full.json

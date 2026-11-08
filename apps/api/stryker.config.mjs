@@ -1,6 +1,14 @@
-// Mutation testing, full scope: all domain and application code (nightly in .github/workflows/quality.yml).
+// Mutation testing, full scope: all domain and application code (nightly in .github/workflows/mutation.yml).
 // The critical scope (pricing, quotes, inventory, order state machine) lives in stryker.critical.config.mjs.
 // Scores and how to run: docs/testing/quality-gates.md.
+
+// One run takes about 7 hours on a 4-vCPU runner, so the nightly job splits it into shards that run in
+// parallel: STRYKER_SHARD lists modules ("orders payments") or module/layer pairs ("agent/domain").
+// A shard has no break threshold of its own; scripts/mutation-score.mjs gates the merged score.
+const shard = (process.env.STRYKER_SHARD ?? '').split(/\s+/).filter(Boolean);
+const scope = shard.length
+  ? shard.map((s) => (s.includes('/') ? `src/modules/${s}/**/*.ts` : `src/modules/${s}/{domain,application}/**/*.ts`))
+  : ['src/modules/**/{domain,application}/**/*.ts'];
 
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
@@ -9,7 +17,7 @@ export default {
   plugins: [import.meta.resolve('@stryker-mutator/vitest-runner')],
   // forks matches plain `vitest run`; PGlite suites are not tried under worker threads.
   vitest: { configFile: 'vitest.config.ts', related: true, pool: 'forks' },
-  mutate: ['src/modules/**/{domain,application}/**/*.ts', '!src/**/*.spec.ts', '!src/**/index.ts'],
+  mutate: [...scope, '!src/**/*.spec.ts', '!src/**/index.ts'],
   // The in-process suites on PGlite; the real-service `services` project never runs here.
   testFiles: [
     'src/**/*.spec.ts',
@@ -25,7 +33,7 @@ export default {
   concurrency: 2,
   incremental: true,
   incrementalFile: 'reports/mutation/full-incremental.json',
-  thresholds: { high: 85, low: 70, break: 70 },
+  thresholds: { high: 85, low: 70, break: shard.length ? null : 70 },
   reporters: ['clear-text', 'progress', 'html', 'json'],
   htmlReporter: { fileName: 'reports/mutation/full.html' },
   jsonReporter: { fileName: 'reports/mutation/full.json' },
