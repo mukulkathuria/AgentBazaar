@@ -17,6 +17,7 @@ import { DB, READ_DB } from '../../../shared/kernel/tokens.js';
 import { appendEvent } from '../../../shared/outbox/outbox.js';
 import { displayQty, InventoryService } from '../../inventory/index.js';
 import { floorPaise, productBand, type LandedCost } from '../domain/commercial.js';
+import { seedProductId } from './seed-ids.js';
 
 interface ProductRow {
   id: string;
@@ -428,11 +429,11 @@ export class CatalogService {
       const chunk = seed.products.slice(i, i + 400);
       const inserted = await rows<{ id: string; slug: string }>(
         tx,
-        sql`INSERT INTO products (slug, name, brand_id, category_id, description, band, hsn_code, product_type, attributes, faqs,
+        sql`INSERT INTO products (id, slug, name, brand_id, category_id, description, band, hsn_code, product_type, attributes, faqs,
                                   return_window_days, customization_schema_id, rating_avg, rating_count)
             VALUES ${sql.join(
               chunk.map(
-                (p) => sql`(${p.slug}, ${p.name}, ${brandIds.get(p.brand)!}, ${catIds.get(p.categoryPath)!}, ${p.description},
+                (p) => sql`(${seedProductId(p.slug)}, ${p.slug}, ${p.name}, ${brandIds.get(p.brand)!}, ${catIds.get(p.categoryPath)!}, ${p.description},
                   ${productBand(p.variants.map((v) => v.pricePaise))}, ${p.hsnCode}, ${p.productType}, ${json(p.attributes)},
                   ${json(p.faqs)}, ${p.returnWindowDays}, ${p.customizationSchema ? (schemaIds.get(p.customizationSchema) ?? null) : null},
                   ${p.rating?.average ?? null}, ${p.rating?.count ?? 0})`,
