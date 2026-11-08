@@ -130,4 +130,11 @@ describe('@lite search module (indexer, service, REST)', () => {
     expect(bad.statusCode).toBe(400);
     expect(bad.json()).toMatchObject({ error: { code: 'validation_failed' } });
   });
+
+  it('finds products for a query in Hindi', async () => {
+    const res = await ctx.app.inject({ method: 'GET', url: `/api/v1/products?q=${encodeURIComponent('कीबोर्ड')}&limit=10` });
+    const body = SearchResult.parse(res.json());
+    expect(body.items.length).toBeGreaterThan(0);
+    expect(body.items.every((i) => i.categoryPath === 'electronics.accessories.keyboards')).toBe(true);
+  });
 });

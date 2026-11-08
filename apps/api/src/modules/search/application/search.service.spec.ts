@@ -27,6 +27,13 @@ describe('@lite search service', () => {
     ]);
   });
 
+  it('searches Hindi words as the catalog writes them, and logs what the shopper typed', async () => {
+    const { service, port, track } = setup(4);
+    await service.search({ q: 'डार्क चॉकलेट' });
+    expect(port.search).toHaveBeenCalledWith(expect.objectContaining({ q: 'dark chocolate' }));
+    expect(track).toHaveBeenCalledWith(db, 'search', null, { q: 'डार्क चॉकलेट', total: 4 });
+  });
+
   it('does not count browsing or later pages as searches', async () => {
     const { service, track } = setup(0);
     await service.search({ q: '', category: 'food' });

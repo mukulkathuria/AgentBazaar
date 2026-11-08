@@ -6,6 +6,7 @@ import type { Executor } from '../../../shared/db/database.js';
 import { parseOrThrow } from '../../../shared/http/zod.js';
 import { DB, LOGGER } from '../../../shared/kernel/tokens.js';
 import { AnalyticsService } from '../../analytics/index.js';
+import { translateHindi } from '../domain/hindi-terms.js';
 import { SEARCH_PORT, type SearchPort } from './ports.js';
 
 /** What callers may pass: defaults (limit, offset, inStockOnly) are filled in. */
@@ -21,9 +22,10 @@ export class SearchService {
     @Inject(LOGGER) private readonly logger: Logger,
   ) {}
 
+  /** Hindi words are searched as the catalog writes them; analytics keeps what the shopper typed. */
   async search(input: SearchQueryInput): Promise<SearchResult> {
     const query = parseOrThrow(SearchQuery, input, 'search query');
-    const result = await this.port.search(query);
+    const result = await this.port.search({ ...query, q: translateHindi(query.q) });
     await this.record(query, result.total);
     return result;
   }

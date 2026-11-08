@@ -24,8 +24,9 @@ What the test does:
   the search read model with `SearchIndexer.reindexAll()` and runs `ANALYZE search_documents`.
 - Warms up with 10 queries, then times 100 queries through `SearchService.search()`, the same code path the
   REST endpoint and the MCP `search_products` tool use.
-- Workload mix: 25 text queries including typos (`keybaord`, `chocolat`), a SKU (`THOCK-TK87-RED`) and a
-  query with no hits (`xyzzy`); every fifth query is a browse with empty text; six filter combinations
+- Workload mix: 26 text queries including typos (`keybaord`, `chocolat`), a SKU (`THOCK-TK87-RED`), a query
+  with no hits (`xyzzy`) and one in Hindi (`डार्क चॉकलेट`, from 2026-11-08; the 2026-11-05 results below predate
+  it); every fifth query is a browse with empty text; six filter combinations
   (none, in stock, category, max price, category plus min price, brand); every seventh query asks for page 2.
 - Prints `p50`, `p95` and `max`, and fails when p95 is 150 ms or more.
 - Runs only against real Postgres. On embedded PGlite (single-threaded WebAssembly) the suite is skipped,

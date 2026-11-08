@@ -50,6 +50,8 @@ describe(`@growth @scale golden search queries and latency at ${PRODUCTS} produc
   let seed: SeedCatalog;
   let engines: RealEngines;
   let ports: Record<Engine, SearchPort>;
+  /** SearchService per engine: the REST and MCP code path, Hindi query terms included. */
+  let services: Record<Engine, SearchService>;
   const embeddings = new HashEmbeddings();
 
   beforeAll(
@@ -72,6 +74,8 @@ describe(`@growth @scale golden search queries and latency at ${PRODUCTS} produc
       }
       // Steady state, as in production: hint bits set, visibility map and statistics current.
       await t.database.query('VACUUM ANALYZE search_documents');
+      const service = (port: SearchPort) => new SearchService(port, new AnalyticsService(db, new PgAnalyticsStore(db)), db, createLogger('silent'));
+      services = { postgres: service(ports.postgres), meilisearch: service(ports.meilisearch), opensearch: service(ports.opensearch) };
     },
     Math.max(600_000, PRODUCTS * 36),
   );
@@ -82,12 +86,14 @@ describe(`@growth @scale golden search queries and latency at ${PRODUCTS} produc
 
   it('scores growth at least as high as lite, and scale at parity with growth', { timeout: 600_000 }, async () => {
     const golden = goldenQueries(seed);
-    expect(golden.length).toBeGreaterThanOrEqual(50);
+    expect(golden.length).toBeGreaterThanOrEqual(60);
     const scores = {} as Record<Engine, GoldenScore>;
-    for (const name of ENGINES) scores[name] = await scoreGolden(golden, (q) => ports[name].search(q));
+    for (const name of ENGINES) scores[name] = await scoreGolden(golden, (q) => services[name].search(q));
     console.warn(report(golden, scores));
     expect(scores.meilisearch.recall).toBeGreaterThanOrEqual(scores.postgres.recall);
     expect(scores.opensearch.recall).toBeGreaterThanOrEqual(scores.meilisearch.recall);
+    // Devanagari queries reach every engine through SearchService's Hindi terms.
+    for (const name of ENGINES) expect(scores[name].byKind.hindi, name).toBeGreaterThanOrEqual(0.9);
   });
 
   it.skipIf(PRODUCTS < 5050)('pages to the deepest page the API allows and reports exact browse totals in every engine', async () => {
@@ -102,8 +108,7 @@ describe(`@growth @scale golden search queries and latency at ${PRODUCTS} produc
   for (const name of ENGINES) {
     const budget = name === 'postgres' ? Infinity : P95_BUDGET_MS;
     it(`${name} answers 100 mixed queries through SearchService${budget < Infinity ? ` with p95 under ${budget} ms` : ''}`, { retry: 2, timeout: 600_000 }, async () => {
-      const db = t.database.db;
-      const { p50, p95, max, slowest } = await measureLatency(new SearchService(ports[name], new AnalyticsService(db, new PgAnalyticsStore(db)), db, createLogger('silent')));
+      const { p50, p95, max, slowest } = await measureLatency(services[name]);
       console.warn(`${name} search latency over 100 queries, ${PRODUCTS} products: p50=${p50.toFixed(1)}ms p95=${p95.toFixed(1)}ms max=${max.toFixed(1)}ms`);
       console.warn(`${name} slowest: ${slowest}`);
       expect(p95).toBeLessThan(budget);

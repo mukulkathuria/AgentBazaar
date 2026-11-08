@@ -7,7 +7,7 @@ import type { SearchQueryInput } from '../../src/modules/search/application/sear
  * of each query are judged from catalog facts (category, name, brand, SKUs, prices, stock), never
  * from an engine's output, so every engine is scored against the same truth.
  */
-export type GoldenKind = 'term' | 'phrase' | 'typo' | 'sku' | 'brand' | 'category' | 'transliterated' | 'filter';
+export type GoldenKind = 'term' | 'phrase' | 'typo' | 'sku' | 'brand' | 'category' | 'transliterated' | 'hindi' | 'filter';
 
 export interface GoldenQuery {
   kind: GoldenKind;
@@ -53,7 +53,7 @@ function pick(products: readonly SeedProduct[], fraction: number, fact: Fact): S
   return found;
 }
 
-/** About 55 queries: plain terms, phrases, typos, SKUs, brands, category names, transliterated Hindi and filters. */
+/** About 65 queries: plain terms, phrases, typos, SKUs, brands, category names, transliterated and Devanagari Hindi, and filters. */
 export function goldenQueries(seed: Pick<SeedCatalog, 'products'>): GoldenQuery[] {
   const { products } = seed;
   const multiVariant = pick(products, 0.37, (p) => p.variants.length > 1);
@@ -110,6 +110,16 @@ export function goldenQueries(seed: Pick<SeedCatalog, 'products'>): GoldenQuery[
     ['transliterated', { q: 'kumhar' }, brand('Kumhar')],
     ['transliterated', { q: 'mithas chocolate' }, brand('Mithas')],
     ['transliterated', { q: 'desi threads tshirt' }, brand('Desi Threads')],
+    ['hindi', { q: 'कीबोर्ड' }, inCategory(KEYBOARDS)],
+    ['hindi', { q: 'चॉकलेट' }, inCategory(CHOCOLATES)],
+    ['hindi', { q: 'माउस' }, inCategory(MICE)],
+    ['hindi', { q: 'चाय' }, inCategory(TEA)],
+    ['hindi', { q: 'कप' }, inCategory('home.mugs')],
+    ['hindi', { q: 'डार्क चॉकलेट' }, named('dark chocolate')],
+    ['hindi', { q: 'ग्राफिक्स कार्ड' }, inCategory(GPUS)],
+    ['hindi', { q: 'पावर सप्लाई' }, inCategory(PSUS)],
+    ['hindi', { q: 'मिठास चॉकलेट' }, brand('Mithas')],
+    ['hindi', { q: 'टी-शर्ट' }, inCategory('apparel.tshirts')],
     ['filter', { q: 'chocolate', maxPricePaise: 5000 }, all(inCategory(CHOCOLATES), (p) => minPrice(p) <= 5000)],
     ['filter', { q: 'keyboard', brand: 'Thock' }, all(inCategory(KEYBOARDS), brand('Thock'))],
     ['filter', { q: 'mug', inStockOnly: true }, all(inCategory('home.mugs'), inStock)],

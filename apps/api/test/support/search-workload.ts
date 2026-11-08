@@ -4,7 +4,7 @@ const TEXT = [
   'gpu 12gb', 'mechanical keyboard', 'keybaord', 'chocolate', 'dark chocolate', 'green tea', 'assam tea', 'coffee mug',
   'ceramic mug', 'wireless mouse', 'gaming mouse', 'power supply 850w', 'modular psu', 'mid tower case', 'cotton t-shirt',
   'oversized tshirt', 'dotted journal', 'spiral notebook', 'zentrix', 'THOCK-TK87-RED', 'graphics card 24gb', 'chocolat',
-  'hazelnut', 'darjeeling first flush', 'xyzzy',
+  'hazelnut', 'darjeeling first flush', 'xyzzy', 'डार्क चॉकलेट',
 ];
 const FILTERS: Partial<SearchQueryInput>[] = [
   {},
