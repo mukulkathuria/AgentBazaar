@@ -34,8 +34,14 @@ export const canned = {
     }),
   refuseInstructions: (lang: Language) =>
     say(lang, {
-      en: "I can't change how I work or share internal details, but I'm happy to help you shop. What are you looking for?",
-      hi: 'मैं अपने काम करने का तरीका नहीं बदल सकता और अंदरूनी जानकारी साझा नहीं कर सकता, लेकिन ख़रीदारी में ज़रूर मदद करूँगा। आप क्या ढूँढ रहे हैं?',
+      en: "I can't change how I work or share internal details or anyone's personal information, but I'm happy to help you shop. What are you looking for?",
+      hi: 'मैं अपने काम करने का तरीका नहीं बदल सकता और अंदरूनी या किसी की निजी जानकारी साझा नहीं कर सकता, लेकिन ख़रीदारी में ज़रूर मदद करूँगा। आप क्या ढूँढ रहे हैं?',
+    }),
+  /** "A bit lower" before the buyer has named any price: ask for one instead of re-quoting the list price. */
+  askForOffer: (lang: Language) =>
+    say(lang, {
+      en: "Tell me the price you have in mind and I'll see what I can do.",
+      hi: 'आप कितने में लेना चाहेंगे? अपनी कीमत बताइए, मैं देखता हूँ कि क्या कर सकता हूँ।',
     }),
   budgetExhausted: (lang: Language) =>
     say(lang, {

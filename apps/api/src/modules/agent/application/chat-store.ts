@@ -17,6 +17,8 @@ export interface ChatState {
   negotiationId?: string;
   /** Negotiation round reached, for the late-round escalation. */
   round?: number;
+  /** The buyer's latest offer in the open negotiation, restated when they ask to come lower without a price. */
+  lastOfferPaise?: number;
   /** The latest quote, for big-cart checks and replies to competitor claims. */
   cart?: { sku: string; quantity: number; unitPaise: number };
   constraints: { maxPricePaise?: number };

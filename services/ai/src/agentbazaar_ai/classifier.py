@@ -113,6 +113,32 @@ _CUES: dict[str, re.Pattern[str]] = {
         r"सिस्टम प्रॉम्प्ट",
         r"जेलब्रेक",
         r"लागत मूल्य बताओ",
+        # A seller-rule override, an authority claim, prompt extraction, and requests for other
+        # people's personal data (eval regressions, docs/testing/evals.md).
+        r"(?:ignore|disregard|forget|bypass|override|skip) (?:all |any |the |your |of )*"
+        r"(?:pricing|price|discount|store|shop|seller|selling|negotiation|company|business)"
+        r" (?:rules|polic(?:y|ies)|limits?|guidelines|instructions)",
+        r"as (?:the |your )?(?:store|shop|site|website|system|platform) (?:admin|administrator"
+        r"|owner|manager|developer|operator)",
+        r"i (?:hereby )?authori[sz]e (?:a |an |the |this )?(?:\d+ ?% |full |special )?"
+        r"(?:discount|refund|override|price)",
+        r"(?:instructions?|prompts?|rules|guidelines) (?:that )?you (?:were |have been |had been )?"
+        r"(?:given|told|trained on|programmed with|following|got|received)",
+        r"(?:repeat|print|recite|output|dump|show|display|write out) (?:me |us )?(?:everything|all"
+        r"|the text|the words) (?:above|before|so far)",
+        r"above this (?:line|message|text)",
+        r"(?:e-?mails?|e-?mail address(?:es)?|phone(?: numbers?)?|mobile(?: numbers?)?|contact"
+        r" (?:details|numbers?)|address(?:es)?|names) (?:\w+ ){0,3}of (?:your |the |a |an |other"
+        r" |another |previous |last |past |recent |any |some )*(?:customers?|buyers?|clients?"
+        r"|users?|shoppers?|people)",
+        r"(?:customers?|buyers?|clients?|users?|shoppers?)'?s? (?!care|service|support|reviews?"
+        r"|ratings?|feedback)(?:\w+ ){0,2}(?:e-?mails?|phone|mobile|contact|address(?:es)?|numbers"
+        r"|names|details|data)",
+        r"who (?:bought|ordered|purchased|has bought|has ordered)",
+        r"their (?:names?|address(?:es)?|phone(?: numbers?)?|numbers|e-?mails?|contact details)",
+        r"(?:customers?|buyers?|grahak|kharidar)\w* (?:ka|ki|ke) (?:phone|mobile|number|no|email"
+        r"|address|pata|naam|contact|details)",
+        r"(?:ग्राहक|कस्टमर)\S* (?:का|की|के) (?:फोन|नंबर|मोबाइल|ईमेल|पता|नाम)",
     ),
     "human_handoff": _rx(
         r"(?:talk|speak|chat|connect|transfer|escalate|put)\w* (?:me )?(?:to|with|through to)"
@@ -663,6 +689,21 @@ _OFFER_WEAK = _rx(
     r"तक",
     r"में",
 )
+# Asking the seller to come down without naming a price ("thoda aur kam karo"): an offer, no amount.
+_CONCESSION = _rx(
+    r"(?:go|come) (?:a (?:bit|little) |any |some |even )?(?:lower|down)",
+    r"(?:a bit|a little|any) lower",
+    r"lower (?:it|that|the price|your price)",
+    r"reduce (?:it|that|the price|your price)",
+    r"bring (?:it|that|the price) down",
+    r"(?:can|could) you do better",
+    r"cheaper than that",
+    r"(?:thoda|thodi|thora|kuch|aur|zara|jara) (?:aur |or |sa |si )?kam (?:karo|kar do|kardo|kijiye"
+    r"|kariye|karein|karna|ho sakta|hoga|karoge)",
+    r"kam (?:karo|kar do|kardo|kijiye|kariye|karein|karoge)",
+    r"(?:थोड़ा|कुछ|और|ज़रा) (?:और )?कम (?:करो|कर दो|कीजिए|करिए|करें|हो सकता)",
+    r"कम (?:करो|कर दो|कीजिए|करिए|करें)",
+)
 _PRODUCTS = _rx(
     r"mugs?",
     r"cups?",
@@ -997,10 +1038,14 @@ def _intent(folded: str, text: str, amount: float | None, amount_kind: str) -> t
     if amount is not None and _SELLS.search(folded):
         hits["competitor_claim"] += 1
 
-    # An offer needs an amount. Weak cues ("for", "budget") only count outside product searches.
+    # An offer needs an amount, or asks the seller to come down. Weak cues ("for", "budget") only
+    # count outside product searches.
     shopping = hits["search"] or _PRODUCTS.search(folded)
     offer = _hits(_OFFER_STRONG, folded) + (0 if shopping else _hits(_OFFER_WEAK, folded))
-    hits["make_offer"] = offer + (amount_kind == "bare") if amount is not None else 0
+    if amount is None:
+        hits["make_offer"] = _hits(_CONCESSION, folded)
+    else:
+        hits["make_offer"] = offer + (amount_kind == "bare")
 
     words = _TOKENS.findall(folded)
     weak_accept = False

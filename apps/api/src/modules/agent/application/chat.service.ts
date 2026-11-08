@@ -408,22 +408,34 @@ export class ChatService {
     if (!sku) return { fallback: canned.needProduct(t.state.language) };
     const quantity = t.c.entities.quantity ?? t.state.lastQuantity ?? 1;
     const o = await this.shop.negotiations.requestQuote(t.session.subject, 'chat', { sku, quantity }, t.state.language);
+    delete t.state.lastOfferPaise; // offers made in an earlier negotiation do not carry over
     this.remember(t, o);
     return negotiated(o);
   }
 
   private async offer(t: Turn): Promise<Answer> {
     const amount = t.c.entities.amount_inr;
-    if (amount === null) return this.quote(t);
+    // "Thoda aur kam karo" names no price: the buyer's own last offer, restated, takes the seller one step
+    // down its concession ladder. With no offer yet, ask for one; a new quote would reset to the list price.
+    if (amount === null) {
+      if (!t.state.negotiationId) return this.quote(t);
+      const last = t.state.lastOfferPaise;
+      return last === undefined ? { fallback: canned.askForOffer(t.state.language) } : this.place(t, t.state.negotiationId, last);
+    }
     if (!t.state.negotiationId) {
       const opened = await this.quote(t);
       if (!t.state.negotiationId) return opened;
     }
+    t.state.lastOfferPaise = rupeesToPaise(amount);
+    return this.place(t, t.state.negotiationId, t.state.lastOfferPaise);
+  }
+
+  private async place(t: Turn, negotiationId: string, unitPricePaise: number): Promise<Answer> {
     try {
       const o = await this.shop.negotiations.makeOffer(
         t.session.subject,
-        t.state.negotiationId,
-        { unitPricePaise: rupeesToPaise(amount), quantity: t.c.entities.quantity ?? undefined, message: redact(t.text).slice(0, 1000) },
+        negotiationId,
+        { unitPricePaise, quantity: t.c.entities.quantity ?? undefined, message: redact(t.text).slice(0, 1000) },
         t.state.language,
       );
       this.remember(t, o);
@@ -442,6 +454,7 @@ export class ChatService {
     const link = await this.shop.checkoutLink(t.session.subject, token);
     delete t.state.negotiationId;
     delete t.state.cart;
+    delete t.state.lastOfferPaise;
     return { fallback: replies.checkoutReady(link, t.state.language), link, allowed: [inr(link.amountPaise)], commitment: true };
   }
 

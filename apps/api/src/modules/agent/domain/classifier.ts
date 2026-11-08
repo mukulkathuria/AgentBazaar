@@ -1,7 +1,8 @@
 import type { ClassifyResponse, DetectedLanguage, Intent, Language, Level } from '@agentbazaar/contracts';
 import {
-  ACCEPT_FILLERS, B, BUDGET, CLAIM, COMPATIBILITY, CUES, DAN, DEADLINE, E, GREETINGS, GREETING_FILLERS, HINGLISH,
-  OFFER_STRONG, OFFER_WEAK, PRODUCTS, SELLS, SMALL_TALK, SPECS, STORES, TOKENS, WEAK_ACCEPT, WORD, canon, fold, raw,
+  ACCEPT_FILLERS, B, BUDGET, CLAIM, COMPATIBILITY, CONCESSION, CUES, DAN, DEADLINE, E, GREETINGS, GREETING_FILLERS,
+  HINGLISH, OFFER_STRONG, OFFER_WEAK, PRODUCTS, SELLS, SMALL_TALK, SPECS, STORES, TOKENS, WEAK_ACCEPT, WORD, canon,
+  fold, raw,
 } from './intent-cues.js';
 
 /**
@@ -209,10 +210,11 @@ function greets(folded: string): number {
 
 function intentOf(folded: string, text: string, amount: number | null, amountKind: string): [Intent, number] {
   const hits = cueHits(folded, text, amount);
-  // An offer needs an amount. Weak cues ("for", "budget") only count outside product searches.
+  // An offer needs an amount, or asks the seller to come down. Weak cues ("for", "budget") only count
+  // outside product searches.
   const shopping = hits.search || has(PRODUCTS, folded);
   const offer = count(OFFER_STRONG, folded) + (shopping ? 0 : count(OFFER_WEAK, folded));
-  hits.make_offer = amount === null ? 0 : offer + Number(amountKind === 'bare');
+  hits.make_offer = amount === null ? count(CONCESSION, folded) : offer + Number(amountKind === 'bare');
   const [accept, weakAccept] = accepts(folded, hits.accept);
   hits.accept = accept;
   hits.greeting = greets(folded);

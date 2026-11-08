@@ -89,7 +89,28 @@ export const CUES = {
     (?:पिछले|पिछली|सारे|सभी|सब|अपने) (?:सारे |सभी )?(?:निर्देश\S*|नियम\S*|इंस्ट्रक्शन\S*|
     प्रॉम्प्ट) (?:को )?(?:भूल|अनदेखा|इग्नोर|छोड़)\S*|(?:निर्देश|नियम)\S* (?:को )?(?:भूल|अनदेखा|इग्नोर)\S*|
     (?:अपने|अपना|तुम्हारे|आपके) (?:नियम|निर्देश|प्रॉम्प्ट|सिस्टम प्रॉम्प्ट|लागत मूल्य|मार्जिन|
-    फ्लोर प्राइस) (?:बताओ|बताइए|बताइये|दिखाओ)|सिस्टम प्रॉम्प्ट|जेलब्रेक|लागत मूल्य बताओ`,
+    फ्लोर प्राइस) (?:बताओ|बताइए|बताइये|दिखाओ)|सिस्टम प्रॉम्प्ट|जेलब्रेक|लागत मूल्य बताओ|
+    (?:ignore|disregard|forget|bypass|override|skip) (?:all |any |the |your |of )*(?:pricing|price|discount|
+    store|shop|seller|selling|negotiation|company|business) (?:rules|polic(?:y|ies)|limits?|guidelines|
+    instructions)|
+    as (?:the |your )?(?:store|shop|site|website|system|platform) (?:admin|administrator|owner|manager|
+    developer|operator)|
+    i (?:hereby )?authori[sz]e (?:a |an |the |this )?(?:\d+ ?% |full |special )?(?:discount|refund|override|
+    price)|
+    (?:instructions?|prompts?|rules|guidelines) (?:that )?you (?:were |have been |had been )?(?:given|told|
+    trained on|programmed with|following|got|received)|
+    (?:repeat|print|recite|output|dump|show|display|write out) (?:me |us )?(?:everything|all|the text|
+    the words) (?:above|before|so far)|above this (?:line|message|text)|
+    (?:e-?mails?|e-?mail address(?:es)?|phone(?: numbers?)?|mobile(?: numbers?)?|contact (?:details|
+    numbers?)|address(?:es)?|names) (?:\w+ ){0,3}of (?:your |the |a |an |other |another |previous |last |
+    past |recent |any |some )*(?:customers?|buyers?|clients?|users?|shoppers?|people)|
+    (?:customers?|buyers?|clients?|users?|shoppers?)'?s? (?!care|service|support|reviews?|ratings?|
+    feedback)(?:\w+ ){0,2}(?:e-?mails?|phone|mobile|contact|address(?:es)?|numbers|names|details|data)|
+    who (?:bought|ordered|purchased|has bought|has ordered)|
+    their (?:names?|address(?:es)?|phone(?: numbers?)?|numbers|e-?mails?|contact details)|
+    (?:customers?|buyers?|grahak|kharidar)\w* (?:ka|ki|ke) (?:phone|mobile|number|no|email|address|pata|
+    naam|contact|details)|
+    (?:ग्राहक|कस्टमर)\S* (?:का|की|के) (?:फोन|नंबर|मोबाइल|ईमेल|पता|नाम)`,
   human_handoff: rx`
     (?:talk|speak|chat|connect|transfer|escalate|put)\w* (?:me )?(?:to|with|through to) (?:a |an |the |
     some |your |real |live |actual |proper )*(?:human|person|people|agent|representative|rep|manager|
@@ -226,6 +247,14 @@ export const OFFER_STRONG = rx`
   दे दीजिये|कर दो|लगा दो|लगाओ|फाइनल|चलेगा|दूंगा|दूंगी|ज़्यादा नहीं`;
 export const OFFER_WEAK = rx`
   budget|max(?:imum)?|(?:not|no) more than|only|just|for|at|mein|me|mai|tak|बजट|तक|में`;
+/** Asking the seller to come down without naming a price ("thoda aur kam karo"): an offer with no amount. */
+export const CONCESSION = rx`
+  (?:go|come) (?:a (?:bit|little) |any |some |even )?(?:lower|down)|(?:a bit|a little|any) lower|
+  lower (?:it|that|the price|your price)|reduce (?:it|that|the price|your price)|bring (?:it|that|the price) down|
+  (?:can|could) you do better|cheaper than that|
+  (?:thoda|thodi|thora|kuch|aur|zara|jara) (?:aur |or |sa |si )?kam (?:karo|kar do|kardo|kijiye|kariye|karein|
+  karna|ho sakta|hoga|karoge)|kam (?:karo|kar do|kardo|kijiye|kariye|karein|karoge)|
+  (?:थोड़ा|कुछ|और|ज़रा) (?:और )?कम (?:करो|कर दो|कीजिए|करिए|करें|हो सकता)|कम (?:करो|कर दो|कीजिए|करिए|करें)`;
 export const PRODUCTS = rx`
   mugs?|cups?|bottles?|t-?shirts?|shirts?|tees|kurtas?|kurtis?|sarees?|saris?|dress(?:es)?|jeans|trousers|
   jackets?|hoodies?|shoes|sneakers|sandals|chappals?|slippers|phones?|mobiles?|smartphones?|iphones?|

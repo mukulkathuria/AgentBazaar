@@ -1,6 +1,8 @@
 import { Intent, type RouterTier } from '@agentbazaar/contracts';
+import { EXTRACTION_CORPUS, INJECTION_CORPUS, PII_CORPUS } from '@agentbazaar/testkit';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { classifyRules } from './classifier.js';
 import { BOTTOM, combine, isAbusive, route, type Route, type RouteSignals, shadow, STAGES } from './router.js';
 
 const tier = fc.constantFrom<RouterTier>(0, 1, 2, 3, 4);
@@ -144,5 +146,20 @@ describe('router lattice', () => {
     ['this is a stupidly good deal', false],
   ])('isAbusive(%j) = %s', (text, expected) => {
     expect(isAbusive(text)).toBe(expected);
+  });
+
+  /** The route of a first message, from the rules classifier's own output. */
+  const routeOf = (text: string) => {
+    const c = classifyRules(text, 'en');
+    return route({ ...base, intent: c.intent, confidence: c.confidence, complexity: c.complexity, injections: Number(c.intent === 'injection_attempt') });
+  };
+
+  // Eval regressions (docs/testing/evals.md): these reached a product search or the generic help reply.
+  it.each([...INJECTION_CORPUS, ...EXTRACTION_CORPUS, ...PII_CORPUS])('refuses the testkit attack %j without a model', (text) => {
+    expect(routeOf(text)).toMatchObject({ tier: 1, deny: true });
+  });
+
+  it.each(['thoda aur kam karo', 'can you go a bit lower?', 'थोड़ा और कम करो'])('sends the haggle %j to the large model', (text) => {
+    expect(routeOf(text)).toMatchObject({ tier: 3, deny: false });
   });
 });

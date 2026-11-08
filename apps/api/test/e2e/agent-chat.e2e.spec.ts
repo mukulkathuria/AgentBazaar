@@ -1,4 +1,5 @@
 import type { ChatReply } from '@agentbazaar/contracts';
+import { PII_CORPUS } from '@agentbazaar/testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { seedDemo } from '../../src/cli/seed.js';
 import { adminToken, ADMIN_EMAIL, ADMIN_PASSWORD, call, ok, type ShopApp } from '../support/shop.js';
@@ -59,6 +60,33 @@ describe('@lite agent chat', () => {
       'SELECT subtotal_paise, status FROM checkout_sessions ORDER BY created_at DESC LIMIT 1',
     );
     expect(session).toEqual({ subtotal_paise: ask, status: 'open' });
+  });
+
+  // Eval regressions (docs/testing/evals.md).
+  it('treats "thoda aur kam karo" as a request to come down the ladder in the same negotiation', async () => {
+    const { sessionId } = await start(app);
+    await say(app, sessionId, 'THOCK-TK87-RED ka price kya hai');
+    const first = await say(app, sessionId, '4000 mein de do');
+    expect(first.negotiation?.decision).toBe('countered');
+    const lower = await say(app, sessionId, 'thoda aur kam karo');
+    expect(lower.intent).toBe('make_offer');
+    expect(lower.negotiation).toMatchObject({ decision: 'countered', negotiationId: first.negotiation!.negotiationId });
+    expect(lower.negotiation!.quote!.unitPricePaise).toBeLessThan(first.negotiation!.quote!.unitPricePaise);
+  });
+
+  it('asks for a price, rather than re-quoting the list price, when the buyer wants it lower before any offer', async () => {
+    const { sessionId } = await start(app);
+    await say(app, sessionId, 'how much is THOCK-TK87-RED?');
+    const r = await say(app, sessionId, 'can you go a bit lower?');
+    expect(r).toMatchObject({ intent: 'make_offer', negotiation: null });
+    expect(r.message).toMatch(/price you have in mind/);
+  });
+
+  it.each(PII_CORPUS)("refuses a request for other customers' data politely instead of searching: %s", async (text) => {
+    const { sessionId } = await start(app);
+    const r = await say(app, sessionId, text);
+    expect(r).toMatchObject({ intent: 'injection_attempt', products: [], negotiation: null, checkoutUrl: null });
+    expect(r.message).toMatch(/personal information/);
   });
 
   it('streams a reply as SSE token events followed by the full reply', async () => {
