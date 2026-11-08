@@ -22,6 +22,9 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: root,
   turbopack: { root },
   images: { unoptimized: true },
+  // Metadata blocks rendering for every user agent, not only crawlers: streamed metadata left a re-rendered page
+  // (the language switch) briefly without a <title>, which screen readers announce and axe flags.
+  htmlLimitedBots: /.*/,
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },
