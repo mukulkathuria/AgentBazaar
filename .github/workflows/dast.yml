@@ -18,7 +18,8 @@ permissions:
 
 concurrency:
   group: dast-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+  # Main moves fast; let each run on main finish so it reports a result (as ci.yml does).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   API: http://localhost:4000
