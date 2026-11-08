@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { RegisterInput } from '@agentbazaar/contracts';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AccountService, type CustomerPrincipal } from '../../src/modules/identity/application/account.service.js';
-import { TokenService } from '../../src/modules/identity/index.js';
+import { AgentClientService, TokenService } from '../../src/modules/identity/index.js';
 import { PiiService } from '../../src/modules/pii/index.js';
 import { totp } from '../../src/shared/crypto/primitives.js';
 import { ManualClock } from '../../src/shared/kernel/clock.js';
@@ -173,5 +173,43 @@ describe('@lite account service', () => {
     await expect(accounts.refresh(s.refreshToken!)).rejects.toMatchObject({ code: 'unauthorized' });
     await expect(accounts.login({ email: address, password: 'Correct-horse-9' })).rejects.toMatchObject({ code: 'unauthorized' });
     expect(await audit('identity.erased')).toContainEqual({ actor: who.subject, target: who.customerToken });
+  });
+
+  describe('agent clients (OAuth client credentials)', () => {
+    const clients = () => app.app.get(AgentClientService);
+    const grant = (client_id: string, client_secret: string, scope?: string) =>
+      clients().token({ grant_type: 'client_credentials', client_id, client_secret, ...(scope === undefined ? {} : { scope }) });
+
+    it('creates a client with a once-shown secret, de-duplicated scopes and an audit entry', async () => {
+      const c = await clients().create({ name: 'Price bot', scopes: ['catalog:read', 'quote:create', 'catalog:read'], quotaPerMinute: 30 }, 'admin:1');
+      expect(c).toMatchObject({ name: 'Price bot', scopes: ['catalog:read', 'quote:create'], quotaPerMinute: 30, status: 'active' });
+      expect(c.clientId).toMatch(/^agt_/);
+      expect(c.clientSecret).toMatch(/^abs_/);
+      const [row] = await q<{ data: unknown }>(`SELECT data FROM audit_log WHERE action = 'identity.agent_client_created' AND target = $1`, [c.clientId]);
+      expect(row!.data).toEqual({ name: 'Price bot', scopes: ['catalog:read', 'quote:create'] });
+      expect((await clients().list()).map((x) => x.clientId)).toContain(c.clientId);
+    });
+
+    it('grants the scopes asked for, or all of the client scopes, and nothing beyond them', async () => {
+      const c = await clients().create({ name: 'Buyer bot', scopes: ['catalog:read', 'quote:create'], quotaPerMinute: 45 }, 'admin:1');
+      const all = await grant(c.clientId, c.clientSecret!);
+      expect(all).toMatchObject({ token_type: 'Bearer', expires_in: 900, scope: 'catalog:read quote:create' });
+      const agent = await app.app.get(TokenService).verify(all.access_token);
+      expect(agent).toMatchObject({ kind: 'agent', clientId: c.clientId, quotaPerMinute: 45 });
+      expect((await grant(c.clientId, c.clientSecret!, '  catalog:read  catalog:read ')).scope).toBe('catalog:read');
+      await expect(grant(c.clientId, c.clientSecret!, 'catalog:read order:create admin:all')).rejects.toMatchObject({
+        code: 'validation_failed',
+        message: 'Scope not allowed for this client: order:create admin:all',
+      });
+    });
+
+    it('answers every credential failure the same way', async () => {
+      const c = await clients().create({ name: 'Old bot', scopes: ['catalog:read'], quotaPerMinute: 10 }, 'admin:1');
+      const invalid = { code: 'unauthorized', message: 'Invalid client credentials' };
+      await expect(grant(c.clientId, `${c.clientSecret!}x`)).rejects.toMatchObject(invalid);
+      await expect(grant('agt_unknown', c.clientSecret!)).rejects.toMatchObject(invalid);
+      await q(`UPDATE agent_clients SET status = 'disabled' WHERE client_id = $1`, [c.clientId]);
+      await expect(grant(c.clientId, c.clientSecret!)).rejects.toMatchObject(invalid);
+    });
   });
 });
