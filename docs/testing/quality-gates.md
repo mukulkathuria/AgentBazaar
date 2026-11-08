@@ -99,14 +99,15 @@ until the background sweeper ran. The fix commits the expiry and raises the erro
 
 ```sh
 pnpm --filter @agentbazaar/api mutation:critical   # incremental; results in apps/api/reports/mutation/
-pnpm --filter @agentbazaar/api mutation            # full scope, hours on a laptop
+pnpm --filter @agentbazaar/api mutation            # full scope: hours, use the nightly job instead
 ```
 
-Both configs run at concurrency 2 (CI passes `--concurrency 4`) in **incremental mode**: the incremental file under `reports/mutation/` keeps
-every result, and later runs retest only mutants whose code or covering tests changed. CI caches the file
-per scope (restored from the newest run, saved even when the gate fails), so pull requests pay only for
-what they touch. If a run is interrupted, Stryker writes the partial results first, so a full run that does
-not finish in one night continues the next night.
+Both configs run at concurrency 2 (CI passes `--concurrency 4`) in **incremental mode**: the incremental
+file under `reports/mutation/` keeps every result, and later runs retest only mutants whose code or
+covering tests changed. CI caches the file per scope (restored from the newest run, saved even when the
+gate fails), so pull requests pay only for what they touch. Cold runs are much slower on Windows than on the CI runner: the laptop
+used here tested about 8 mutants a minute (roughly an hour for the critical scope), against 512 mutants in
+3.5 minutes on `ubuntu-latest`.
 
 Decisions worth knowing:
 
@@ -118,8 +119,10 @@ Decisions worth knowing:
 - **Why the critical scope has its own Vitest config** rather than Stryker's `testFiles` option: with
   `testFiles` set, StrykerJS 10.1 activates static mutants only after the module is imported, so they can
   never be killed and every transition-table mutant reports as survived.
-- **pnpm:** Stryker's default plugin glob looks inside its own package's `node_modules`, which pnpm keeps
-  empty, so the config loads the Vitest runner by resolved path.
+- **pnpm:** Stryker's default plugin glob (`@stryker-mutator/*`) looks next to `@stryker-mutator/core`,
+  where pnpm's isolated layout holds only core's own dependencies, so the config loads the Vitest runner by
+  resolved path. A dependency of StrykerJS (`typed-rest-client`) pins `qs` 6.15.1, which OSV-Scanner flags;
+  an override in `pnpm-workspace.yaml` resolves it to the 6.17.1 the runtime already uses.
 - `.stryker-tmp/` (sandboxes) and `apps/api/reports/` are git-ignored, and `cleanTempDir: 'always'` removes
   sandboxes even after a failed run, so `eslint .` never sees them.
 
