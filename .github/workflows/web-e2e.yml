@@ -1,0 +1,107 @@
+name: Web E2E
+
+# Browser gates against production builds of the demo store started in the job (scripts/e2e-stack.sh: the API
+# on embedded Postgres with mock payments and the seeded catalog, the standalone Next.js server, a seeded MFA
+# admin). Pushes and pull requests: Lighthouse CI budgets, then Playwright smoke + axe + screenshot baselines on
+# Chromium. Nightly (and on demand): every journey on Chromium, Firefox, WebKit, Pixel 7 and iPhone 15.
+# How to run each gate locally: docs/testing/e2e-and-dast.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '30 1 * * *'
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run every journey on every browser and mobile viewport (as the nightly does)
+        type: boolean
+        default: false
+      update-snapshots:
+        description: Rewrite the screenshot baselines (download the artifact and commit it)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-e2e-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: ${{ (github.event_name == 'schedule' || inputs.full) && 'Playwright on every browser' || 'Lighthouse, Playwright smoke and axe' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FULL: ${{ github.event_name == 'schedule' || inputs.full == true }}
+      NEXT_TELEMETRY_DISABLED: '1'
+      E2E_BASE_URL: http://localhost:3000
+      E2E_STATE_DIR: ${{ github.workspace }}/.e2e-state
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Production builds (API and web)
+        run: pnpm turbo run build --filter=@agentbazaar/api... --filter=@agentbazaar/web...
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+      - name: Start the demo store
+        run: bash scripts/e2e-stack.sh
+
+      - name: Lighthouse CI budgets (apps/web/lighthouserc.json)
+        if: env.FULL != 'true'
+        working-directory: apps/web
+        run: npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.json
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps ${{ env.FULL == 'true' && 'chromium firefox webkit' || 'chromium' }}
+      - name: Playwright smoke, axe and screenshots (Chromium)
+        if: env.FULL != 'true'
+        working-directory: apps/web
+        # A baseline that is missing is written (and uploaded below) rather than failed; existing ones are compared.
+        run: pnpm exec playwright test --project=chromium --grep "@smoke|@visual" --update-snapshots=${{ inputs.update-snapshots && 'all' || 'missing' }}
+      - name: Playwright, every journey on every browser and mobile viewport
+        if: env.FULL == 'true'
+        working-directory: apps/web
+        run: pnpm exec playwright test
+
+      - name: Keep the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report-${{ github.run_attempt }}
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 14
+      - name: Keep the screenshot baselines
+        if: always() && env.FULL != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: screenshot-baselines-${{ github.run_attempt }}
+          path: apps/web/e2e/visual.spec.ts-snapshots
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Keep the Lighthouse reports
+        if: always() && env.FULL != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lighthouse-${{ github.run_attempt }}
+          path: apps/web/.lighthouseci
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Keep the server logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-stack-logs-${{ github.run_attempt }}
+          path: .e2e-state/*.log
+          if-no-files-found: ignore
+          retention-days: 14

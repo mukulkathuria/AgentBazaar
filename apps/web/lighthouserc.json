@@ -1,0 +1,38 @@
+{
+  "ci": {
+    "collect": {
+      "url": [
+        "http://localhost:3000/",
+        "http://localhost:3000/c/electronics",
+        "http://localhost:3000/p/thock-tk87-mechanical-keyboard",
+        "http://localhost:3000/search?q=keyboard"
+      ],
+      "numberOfRuns": 3,
+      "settings": { "chromeFlags": "--no-sandbox" }
+    },
+    "assert": {
+      "assertMatrix": [
+        {
+          "matchingUrlPattern": ".*",
+          "assertions": {
+            "categories:performance": ["error", { "minScore": 0.8, "aggregationMethod": "median-run" }],
+            "categories:accessibility": ["error", { "minScore": 0.95, "aggregationMethod": "median-run" }],
+            "categories:best-practices": ["error", { "minScore": 0.95, "aggregationMethod": "median-run" }],
+            "largest-contentful-paint": ["error", { "maxNumericValue": 3500, "aggregationMethod": "median-run" }],
+            "cumulative-layout-shift": ["error", { "maxNumericValue": 0.1, "aggregationMethod": "median-run" }],
+            "total-blocking-time": ["error", { "maxNumericValue": 600, "aggregationMethod": "median-run" }],
+            "resource-summary:script:size": ["error", { "maxNumericValue": 185000, "aggregationMethod": "median-run" }],
+            "resource-summary:total:size": ["error", { "maxNumericValue": 235000, "aggregationMethod": "median-run" }]
+          }
+        },
+        {
+          "matchingUrlPattern": "^https?://[^/]+/(c/.*|p/.*)?$",
+          "assertions": {
+            "categories:seo": ["error", { "minScore": 0.95, "aggregationMethod": "median-run" }]
+          }
+        }
+      ]
+    },
+    "upload": { "target": "filesystem", "outputDir": ".lighthouseci" }
+  }
+}
