@@ -14,6 +14,11 @@ transaction-level advisory lock, so with several API instances only one runs a g
 | `pii.retention` | Every 6 hours | Crypto-shreds **guest** customers (no active `users` row) whose `last_activity_at` is older than the retention window. Code default: `3 * 365` days. At most 200 customers per run |
 | `pricing.expire-negotiations` | Every 30 seconds | Marks expired negotiations and quotes as `expired`, declines pending approvals that expired. Rows are kept |
 | `inventory.expire-reservations` | Every 30 seconds | Releases stock holds whose time ran out. Rows are kept with status `expired` |
+| `db.partition-maintenance` | Every hour | Keeps monthly partitions of the seven event logs three months ahead, and moves rows that reached a default partition into their month. Deletes nothing |
+
+Archiving is a command rather than a job: `cli archive --older-than N` (the Helm chart's `archive` CronJob runs it
+nightly with 13 months) moves whole months of the event logs out of Postgres into verified gzip files
+([archive runbook](../runbooks/archive.md)).
 
 The 3-year guest window is a code default, not legal advice. Changing it today means changing the
 `retentionSweep()` default in [pii.service.ts](../../apps/api/src/modules/pii/application/pii.service.ts); a
@@ -29,19 +34,19 @@ configuration setting for it is planned.
 | Erasure log | `pii.erasure_requests` | Kept | Counsel: keep as proof of erasure |
 | Account credentials | `users`, `refresh_tokens` | Kept; expired and revoked refresh tokens are not purged | Planned: purge expired tokens |
 | Orders, order lines, invoices | `orders`, `order_lines`, `invoices`, `invoice_counters` | Kept; never erased (tokens only, no names) | CA/counsel: statutory period for tax and accounting records |
-| Order timeline | `order_events` | Kept; append-only | Same as orders |
+| Order timeline | `order_events` | Kept; append-only; monthly partitions that `cli archive` moves to files | Same as orders, for the archive files |
 | Customization snapshots | `order_line_customizations`, `cart_lines`, `quotes`, `negotiation_sessions`, `checkout_sessions` | Kept in plaintext; not covered by erasure | Operator decision: anonymise after delivery and the return window, or keep with the order |
 | Flagged customization text | `customization_reviews` | Kept | Operator decision: delete after the decision |
 | Negotiations and offers | `negotiation_sessions`, `offers`, `quotes`, `pricing_approvals` | Kept; `offers` is append-only | Operator decision; offer messages are redacted |
 | Chat sessions and messages, handoffs | `chat_sessions`, `chat_messages`, `handoffs` | Kept; messages redacted | Planned job; operator decision on the window |
-| LLM traces | `llm_traces` | Kept; append-only; redacted | Planned archival job |
-| Audit trail | `audit_log` | Kept; append-only | Counsel: security and accountability needs |
-| Analytics events | `analytics_events` | Kept; dashboards read the last 30 days | Planned job; operator decision |
+| LLM traces | `llm_traces` | Kept; append-only; redacted; monthly partitions that `cli archive` moves to files | Operator decision: window in the database (CronJob default 13 months) and for the files |
+| Audit trail | `audit_log` | Kept; append-only; monthly partitions that `cli archive` moves to files | Counsel: security and accountability needs |
+| Analytics events | `analytics_events` | Kept; dashboards read the last 30 days; monthly partitions that `cli archive` moves to files | Operator decision (CronJob default 13 months) |
 | Analytics events in ClickHouse (`ANALYTICS_ADAPTER=clickhouse`) | ClickHouse `analytics_events` | Deleted by table TTL 13 months after the event (`apps/api/migrations/clickhouse/0065_analytics_events.sql`); the outbox rows that fed them follow the outbox row above | Operator decision: change the TTL with a new ClickHouse migration |
 | Payments, refunds | `payments`, `refunds` | Kept | CA: same as orders |
-| Webhook deliveries | `webhook_events` | Kept; needed to reject replays | Planned: purge after the gateways' retry windows |
+| Webhook deliveries | `webhook_events` | Kept; needed to reject replays; monthly partitions that `cli archive` moves to files | Operator decision: archive after the gateways' retry windows (suggested 2 months) |
 | Idempotency keys | `idempotency_keys` | Kept; indexed by `created_at` for a purge job | Planned job |
-| Outbox and consumer markers | `outbox_events`, `processed_events` | Kept after publishing | Planned job |
+| Outbox and consumer markers | `outbox_events`, `processed_events` | Kept after publishing; monthly partitions that `cli archive` moves to files, skipping months with unpublished events | Operator decision (suggested 2 months) |
 | Carts and checkout sessions | `carts`, `cart_lines`, `checkout_sessions` | Kept; cart lines are deleted only when a cart is cleared (`CartService.clear`) | Planned job |
 | Cache, rate-limit and quota counters | Valkey | Not persisted (`--save ''`, `--appendonly no` in Compose) | None |
 | Application logs | Container stdout; CloudWatch on the AWS lite profile | Redacted at source; CloudWatch retention defaults to 30 days (`log_retention_days`) | Operator decision |
@@ -51,9 +56,12 @@ configuration setting for it is planned.
 
 `audit_log`, `llm_traces`, `offers` and `order_events` reject `UPDATE` and `DELETE` through the
 `forbid_mutation()` trigger ([0001_shared.sql](../../apps/api/migrations/0001_shared.sql)). This protects
-evidence, but it also means a retention job cannot delete old rows through the application. A maintenance
-procedure that archives and removes old rows with a privileged role (or time partitioning, planned for the scale
-profile) is **planned**. These tables hold redacted text and tokens, which limits the exposure in the meantime.
+evidence, but it also means a retention job cannot delete old rows through the application. Instead, the event
+logs are partitioned by month ([ADR 0013](../adr/0013-time-partitioned-event-logs.md)), and `cli archive` writes a
+month to a gzip file, checks it against the table and drops the partition. Dropping a whole table is a schema
+change that row triggers do not see, so the application still cannot alter a single row. Archives keep the rows as
+stored: redacted text and tokens, never names or contact details. `offers` stays append-only and unpartitioned;
+its retention follows the negotiations.
 
 ## How erasure interacts with retention
 
