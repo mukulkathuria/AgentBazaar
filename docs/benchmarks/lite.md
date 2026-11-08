@@ -12,7 +12,7 @@ real benchmarks (and only through a reviewed PR).
 | --- | --- | --- | --- |
 | Search latency, 10,000 products | `apps/api/test/integration/search-benchmark.int.spec.ts` | p95 under 150 ms | `pnpm test:int` in CI when `TEST_DATABASE_URL` is set (`.github/workflows/ci.yml`) |
 | Mixed load | `tests/load/lite.js` (k6) | read p95 under 300 ms, checkout p95 under 800 ms, errors under 0.1% | Nightly 2-minute run against the demo profile (`.github/workflows/stack.yml`); full run by hand |
-| Soak | `tests/load/lite.js` with `DURATION=8h` | same thresholds for 8 hours, no memory, connection or queue growth | By hand, before a release |
+| Soak | `tests/load/lite.js` with `DURATION=8h` | same thresholds for 8 hours, no memory, connection or queue growth | By hand, before a release ([soak-lite.md](soak-lite.md)); a 5-hour run weekly in CI (`.github/workflows/soak.yml`) |
 
 ## 1. Search latency at 10,000 products
 

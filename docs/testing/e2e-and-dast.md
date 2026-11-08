@@ -195,5 +195,7 @@ The API returns only informational cache-classification alerts.
   does not stop on links. The dialog's focus trap is still checked there.
 - The token used to trigger workflows here cannot dispatch them, so the first cross-browser run in CI is the
   nightly; the same projects pass on the laptop (see Results).
-- The OpenSearch engine (scale profile) ranks its keyword leg by `_score` without its own tie-break; the fused
-  ranking is a total order, but tied documents at the leg's depth cut-off can differ between replicas.
+- Fixed on 2026-11-08 in `074c55a`: the OpenSearch engine (scale profile) ranked its keyword leg by `_score`
+  without its own tie-break, so tied documents at the leg's depth cut-off could differ between replicas. It now
+  sorts on `_score` then the product id, and every engine path ends on the id
+  ([search.md](../benchmarks/search.md#what-the-real-engines-taught-us)).

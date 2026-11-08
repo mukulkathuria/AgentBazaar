@@ -15,7 +15,7 @@ The rule is **measure before scaling**: move up when metrics show a bottleneck, 
 | Cache, rate limits, agent quotas | Valkey (or in-memory) | Valkey | Valkey |
 | Key wrapping for personal data | Master key in the environment | OpenBao Transit | OpenBao Transit |
 | Identity | Built-in issuer | Built-in or Keycloak (OIDC) | OIDC |
-| Database | One PostgreSQL | Read replicas, PgBouncer | Partitioning, per-module databases |
+| Database | One PostgreSQL | Read replicas, PgBouncer | Read replicas, PgBouncer (per-module databases designed, not built) |
 | Ops skills needed | Docker, DNS, backups | Kubernetes, Helm, a few stateful services | A platform team |
 
 Signals that it is time to move up: search p95 above its budget at your catalog size; PostgreSQL CPU or connections saturated by reads; a growing outbox backlog (`agentbazaar_outbox_pending`, `/readyz`); a need for more than one API instance with zero-downtime deploys; or compliance requirements for a managed secrets service.
@@ -58,7 +58,7 @@ Other rules: growth and scale need a real PostgreSQL (`DATABASE_DRIVER=postgres`
 docker compose -f deploy/compose/docker-compose.yml --env-file .env --profile lite up -d --build
 ```
 
-**Growth services with Compose** (for evaluation; production growth runs on Kubernetes): add `--profile growth` to start Meilisearch, NATS JetStream, OpenBao and Keycloak alongside the lite services. The Compose OpenBao runs in dev mode and is not for production.
+**Growth services with Compose** (for evaluation; production growth runs on Kubernetes): add `--profile growth` to start Meilisearch, NATS JetStream, OpenBao, Keycloak, PgBouncer and a streaming read replica alongside the lite services (set `DATABASE_HOST=pgbouncer:6432` and `DATABASE_REPLICA_URLS` in `.env` to use the last two). The Compose OpenBao runs in dev mode and is not for production. `--profile scale` adds Kafka, OpenSearch, Qdrant, a single-node Temporal and the workflow worker.
 
 **Growth or scale on Kubernetes** with the Helm chart in [`deploy/helm/agentbazaar`](../deploy/helm/agentbazaar). Secrets come from an existing Kubernetes Secret (`agentbazaar-secrets` by default) and migrations run as a pre-install and pre-upgrade Job:
 
@@ -73,7 +73,7 @@ On AWS, the OpenTofu/Terraform root modules in [`deploy/terraform`](../deploy/te
 
 1. **Back up** the database and test the restore ([runbook](runbooks/backup-restore.md)).
 2. **Provision** PostgreSQL (with the `vector`, `ltree` and `pg_trgm` extensions), Valkey, Meilisearch, NATS JetStream and, if you will use it, OpenBao with a transit key created with `derived=true` (each wrap uses the customer as context).
-3. **Decide on key wrapping before switching.** Existing customers' data keys are wrapped by `PII_MASTER_KEY`. The OpenBao wrapper cannot unwrap them, and re-wrapping existing keys is not automated yet. On a store that already holds customer data, keep `SECRETS_ADAPTER=env` (overriding the growth default) until a re-wrap step exists; a new growth store can start on OpenBao directly. See the [key rotation runbook](runbooks/key-rotation.md).
+3. **Move the key wrapping before switching.** Existing customers' data keys are wrapped by `PII_MASTER_KEY`, which the OpenBao wrapper cannot unwrap. While the API still runs with `SECRETS_ADAPTER=env` (or is stopped), and with `OPENBAO_ADDR` and `OPENBAO_TOKEN` set, run `pnpm --filter @agentbazaar/api cli pii rewrap`. It re-wraps every data key with the Transit key in batches of 100, reads each one back from OpenBao before the row is updated, never reads field ciphertext, and can be stopped and run again. Repeat it until it exits 0, then switch. A new growth store can start on OpenBao directly. See [kubernetes.md](operations/kubernetes.md#pii-keys-and-openbao) and the [key rotation runbook](runbooks/key-rotation.md).
 4. **Configure** `PROFILE=growth`, `MEILISEARCH_URL`, `MEILISEARCH_API_KEY`, `NATS_URL`, `VALKEY_URL`, and `OPENBAO_*` or the `SECRETS_ADAPTER=env` override. Deploy with `values-growth.yaml`.
 5. **Backfill the new search engine** from the catalog:
 
@@ -89,7 +89,7 @@ On AWS, the OpenTofu/Terraform root modules in [`deploy/terraform`](../deploy/te
 
 ## Upgrading from growth to scale
 
-The same pattern: provision Kafka, OpenSearch and Qdrant, set `PROFILE=scale` with `KAFKA_BROKERS`, `OPENSEARCH_URL` and `QDRANT_URL`, deploy with `values-scale.yaml`, then run `cli reindex` to backfill OpenSearch and Qdrant. Partitioning of orders and events, per-module databases and Temporal sagas for checkout and payment are scale milestones on the road to v1.0 (see the [roadmap](../README.md#roadmap)); check the changelog for what has shipped.
+The same pattern: provision Kafka, OpenSearch and Qdrant, set `PROFILE=scale` with `KAFKA_BROKERS`, `OPENSEARCH_URL` and `QDRANT_URL`, deploy with `values-scale.yaml`, then run `cli reindex` to backfill OpenSearch and Qdrant. An OpenSearch index created before commits `4aa12b7` and `074c55a` keeps its old mapping: delete it before the reindex. Checkout and payment move to Temporal with `WORKFLOW_ENGINE=temporal`, `TEMPORAL_ADDRESS` and a `cli workflow-worker` deployment ([sagas](architecture/sagas.md)), and analytics to ClickHouse with `ANALYTICS_ADAPTER=clickhouse` if you want them there. The event logs are already partitioned by month in every profile (migrations 0050 and 0051), and `cli archive` moves old months out ([archive runbook](runbooks/archive.md)). Per-module databases are designed but not built ([ADR 0013](adr/0013-time-partitioned-event-logs.md)).
 
 ## PostgreSQL versions
 
