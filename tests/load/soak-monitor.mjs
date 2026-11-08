@@ -186,7 +186,9 @@ export function check(csv, warmupMin) {
   const rows = lines.map((l) =>
     Object.fromEntries(l.split(',').map((v, i) => [cols[i], v === '' ? NaN : Number(v)])),
   );
-  const steady = rows.filter((r) => r.elapsed_min >= warmupMin);
+  // Idle samples after k6 stopped would pull the last third down and hide growth under load.
+  const loaded = rows.slice(0, rows.findLastIndex((r) => r.reqs > 0) + 1);
+  const steady = loaded.filter((r) => r.elapsed_min >= warmupMin);
   if (steady.length < 6) return { ok: false, report: [`only ${steady.length} samples after warm-up`] };
   const third = Math.floor(steady.length / 3);
   const pick = (rs, k) => rs.map((r) => r[k]).filter(Number.isFinite);

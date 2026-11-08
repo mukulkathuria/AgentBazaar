@@ -31,6 +31,11 @@ test('check passes flat memory and fails steady growth after warm-up', () => {
   assert.equal(check(csv(steady(30, (i) => 150 + i * 5)), 30).ok, false);
 });
 
+test('idle samples after the load stopped do not hide growth', () => {
+  const idle = Array.from({ length: 30 }, (_, i) => `${60 + i},1,100,40,1,0,6,0,0,0`);
+  assert.equal(check(csv([...steady(30, (i) => 150 + i * 5), ...idle]), 30).ok, false);
+});
+
 test('check fails a run that was not ready', () => {
   const rows = steady(30, () => 150);
   rows[10] = rows[10].replace(/^(\d+),1,/, '$1,0,');
