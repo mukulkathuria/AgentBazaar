@@ -74,10 +74,9 @@ const RULES: Rule[] = [
     },
   },
   { type: 'PHONE', re: /(?<!\d)(?:\+91[\s-]?|0)?[6-9]\d{4}[\s-]?\d{5}(?!\d)/g },
-  // A hyphenated hex group on either side means the digits sit inside a UUID, not an Aadhaar number.
   {
     type: 'AADHAAR',
-    re: /(?<![0-9A-Fa-f]{4}-)\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b(?!-[0-9A-Fa-f]{4})/g,
+    re: /\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b/g,
     accept: (m) => verhoeffValid(m.replace(/\D/g, '')),
   },
   { type: 'PAN', re: /\b[A-Z]{5}\d{4}[A-Z]\b/g },
@@ -85,14 +84,21 @@ const RULES: Rule[] = [
   { type: 'PINCODE', re: /\b(?:pin(?:\s?code)?|postal code)\s*(?:[:#-]\s*)?[1-9]\d{5}\b/gi },
 ];
 
+// Identifiers, not personal data: digit runs inside a UUID can look like a phone or Aadhaar number.
+const UUID = /\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b/g;
+
+const overlaps = (spans: readonly { start: number; end: number }[], start: number, end: number): boolean =>
+  spans.some((f) => start < f.end && end > f.start);
+
 export function findPii(text: string): Finding[] {
+  const ids = [...text.matchAll(UUID)].map((m) => ({ start: m.index, end: m.index + m[0].length }));
   const found: Finding[] = [];
   for (const rule of RULES) {
     for (const m of text.matchAll(rule.re)) {
       const start = m.index;
       const end = start + m[0].length;
       if (rule.accept && !rule.accept(m[0])) continue;
-      if (found.some((f) => start < f.end && end > f.start)) continue;
+      if (overlaps(ids, start, end) || overlaps(found, start, end)) continue;
       found.push({ type: rule.type, start, end });
     }
   }

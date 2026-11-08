@@ -12,7 +12,13 @@ describe('@lite PII redaction', () => {
     ['aadhaar 2345-6789-0124', 'aadhaar [AADHAAR]'],
     ['aadhaar 234567890124', 'aadhaar [AADHAAR]'],
     ['bad check digit 2345 6789 0123', 'bad check digit 2345 6789 0123'], // fails Verhoeff
-    // Valid check digits inside UUIDs: last group, and the middle groups read with their hyphens.
+    // Digit runs inside UUIDs are identifiers: a phone-like run (CI run 42439821887), and valid
+    // Aadhaar check digits in the last group and in the middle groups read with their hyphens.
+    ['ref 8d002468-6fc0-47d8-bbb1-6157661817e4', 'ref 8d002468-6fc0-47d8-bbb1-6157661817e4'],
+    [
+      'call 9876543210 re 8d002468-6fc0-47d8-bbb1-6157661817e4',
+      'call [PHONE] re 8d002468-6fc0-47d8-bbb1-6157661817e4',
+    ],
     ['uuid dcd95cd2-8b1e-4c17-a27b-539223914742', 'uuid dcd95cd2-8b1e-4c17-a27b-539223914742'],
     ['uuid 0f4b2c1e-2345-4789-8120-0123456789ab', 'uuid 0f4b2c1e-2345-4789-8120-0123456789ab'],
     ['call +91 98765 43210', 'call [PHONE]'],

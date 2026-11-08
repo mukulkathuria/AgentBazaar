@@ -86,14 +86,7 @@ _RULES: tuple[tuple[str, Callable[[str], Iterator[re.Match[str]]], Callable[[str
         re.compile(rf"(?<!\d)(?:\+91[{_S}-]?|0)?[6-9]\d{{4}}[{_S}-]?\d{{5}}(?!\d)", _A).finditer,
         bool,
     ),
-    # A hyphenated hex group on either side means the digits sit inside a UUID, not an Aadhaar.
-    (
-        "AADHAAR",
-        re.compile(
-            r"(?<![0-9A-Fa-f]{4}-)\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b(?!-[0-9A-Fa-f]{4})", _A
-        ).finditer,
-        _aadhaar,
-    ),
+    ("AADHAAR", re.compile(r"\b[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}\b", _A).finditer, _aadhaar),
     ("PAN", re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b", _A).finditer, bool),
     ("UPI", re.compile(r"\b[A-Za-z0-9._-]{2,256}@(?:ok)?[a-z]{2,64}\b", _A).finditer, bool),
     (
@@ -112,12 +105,22 @@ def _overlaps(findings: list[RedactFinding], start: int, end: int) -> bool:
     return any(start < f.end and end > f.start for f in findings)
 
 
+# Identifiers, not personal data: digit runs inside a UUID can look like a phone or Aadhaar number.
+_UUID = re.compile(
+    r"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b", _A
+)
+
+
 def find_pii(text: str) -> list[RedactFinding]:
+    ids = [m.span() for m in _UUID.finditer(text)]
     found: list[RedactFinding] = []
     for kind, finditer, accept in _RULES:
         for m in finditer(text):
-            if accept(m.group()) and not _overlaps(found, m.start(), m.end()):
-                found.append(RedactFinding(type=kind, start=m.start(), end=m.end()))
+            start, end = m.span()
+            if any(start < e and end > s for s, e in ids) or not accept(m.group()):
+                continue
+            if not _overlaps(found, start, end):
+                found.append(RedactFinding(type=kind, start=start, end=end))
     return sorted(found, key=lambda f: f.start)
 
 
