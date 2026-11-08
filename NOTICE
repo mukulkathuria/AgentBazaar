@@ -76,6 +76,15 @@ PostgreSQL                      PostgreSQL License
 pgvector                        PostgreSQL License
 Valkey                          BSD-3-Clause
 Caddy                           Apache-2.0
+  built with coraza-caddy,      Apache-2.0     (deploy/compose/caddy/Dockerfile:
+  coraza-coreruleset (OWASP     Apache-2.0     WAF, OWASP Core Rule Set and the
+  CRS) and caddy-crowdsec-      Apache-2.0     CrowdSec bouncer compiled into
+  bouncer                                      the Caddy binary)
+CrowdSec                        MIT            (lite edge)
+ClickHouse                      Apache-2.0     (ANALYTICS_ADAPTER=clickhouse)
+Fluent Bit                      Apache-2.0     (deploy/siem shipping example)
+Wazuh                           GPL-2.0        (deploy/siem: configuration only;
+                                               separate service, never linked)
 Meilisearch (Community Edition) MIT            (growth profile; check the image's
                                                edition and licence at release)
 NATS Server                     Apache-2.0     (growth profile)
