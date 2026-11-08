@@ -29,5 +29,8 @@ installed `node_modules` and are not affected.
 
 - SBOM diff logic, reproduced in WSL with syft 1.33 before it went into the workflow: base `a786c9d` (M0) against
   the 2026-11-06 head gave 434 and 560 npm packages, 126 added and 0 removed; identical inputs gave no difference.
-- First runs on main: see the run list of the Supply chain workflow. The Dependency review job reports itself
-  inactive until the owner step above is done.
+- On main, 2026-11-08 ([run 42438395560](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42438395560),
+  commit `fb51e97`): green. Dependency review warned that it is inactive (Dependency graph off); the SBOM diff
+  counted 953 packages in base and head, 0 added and 0 removed (that push changed no dependency). The run before it
+  ([42437960747](https://github.com/mukulkathuria/AgentBazaar/actions/runs/42437960747)) failed with "Dependency
+  review is not supported on this repository", which is what the setting check now handles.

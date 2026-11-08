@@ -64,6 +64,8 @@ matter); the real storefront runs in the Stack workflow.
 
 Planned against mocked AWS in `deploy/terraform/profiles/scale/tests/waf-bots.tftest.hcl` (OpenTofu 1.10).
 
-## SIEM
+## Related
 
-Refusals at the API, prompt-injection flags and audit events go to Wazuh: [deploy/siem](../../deploy/siem/README.md).
+- SIEM: refusals at the API, prompt-injection flags and audit events go to Wazuh, see
+  [deploy/siem](../../deploy/siem/README.md).
+- Dependency review, SBOM diff and the licence gate: [supply-chain.md](supply-chain.md).
