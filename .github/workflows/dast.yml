@@ -53,11 +53,17 @@ jobs:
       - name: Schemathesis, every REST operation against the OpenAPI document
         env:
           PYTHONUTF8: '1'
+          # Pushes and pull requests replay one fixed seed, so a red run means the change under test broke something;
+          # the nightly and manual runs draw fresh seeds to keep finding new inputs (each finding gets a fix and a
+          # regression test, then joins the fixed seed's run too).
+          SEED: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'random' || '20261108' }}
         run: |
           set -o pipefail
+          seed=()
+          [ "$SEED" = random ] || seed=(--seed "$SEED")
           st() {
             pipx run --spec "$SCHEMATHESIS" schemathesis --config-file tests/dast/schemathesis.toml run \
-              packages/contracts/generated/openapi.json --url "$API" --workers 4 --max-examples 100 \
+              packages/contracts/generated/openapi.json --url "$API" --workers 4 --max-examples 100 "${seed[@]}" \
               --checks not_a_server_error,status_code_conformance,content_type_conformance,response_schema_conformance \
               --report junit --report-dir "schemathesis-report/$1" "${@:2}"
           }
@@ -113,5 +119,6 @@ jobs:
             schemathesis-report
             zap
             .e2e-state/*.log
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14

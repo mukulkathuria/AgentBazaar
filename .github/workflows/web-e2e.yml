@@ -69,8 +69,8 @@ jobs:
         if: env.FULL != 'true'
         working-directory: apps/web
         env:
-          # A baseline that is missing is written (and uploaded below) rather than failed; existing ones are compared.
-          UPDATE_SNAPSHOTS: ${{ inputs.update-snapshots && 'all' || 'missing' }}
+          # Compare with the committed baselines; a dispatch with update-snapshots rewrites them (uploaded below).
+          UPDATE_SNAPSHOTS: ${{ inputs.update-snapshots && 'all' || 'none' }}
         run: pnpm exec playwright test --project=chromium --grep "@smoke|@visual" --update-snapshots="$UPDATE_SNAPSHOTS"
       - name: Playwright, every journey on every browser and mobile viewport
         if: env.FULL == 'true'
@@ -100,6 +100,7 @@ jobs:
         with:
           name: lighthouse-${{ github.run_attempt }}
           path: apps/web/.lighthouseci
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
       - name: Keep the server logs
@@ -108,5 +109,6 @@ jobs:
         with:
           name: e2e-stack-logs-${{ github.run_attempt }}
           path: .e2e-state/*.log
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14

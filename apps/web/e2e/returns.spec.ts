@@ -19,7 +19,9 @@ test('cash on delivery → shipped → delivered → return requested → return
   await page.getByRole('button', { name: 'Place order' }).click();
   await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}\?t=/, { timeout: 20_000 });
   const orderId = new URL(page.url()).pathname.split('/').pop() ?? '';
-  await expect(page.getByText('Confirmed (cash on delivery)').first()).toBeVisible();
+  // The order's status line (a polite live region) is what a shopper reads after each step.
+  const status = page.locator('main p[aria-live="polite"]');
+  await expect(status).toHaveText('Status: Confirmed (cash on delivery)');
 
   // The store fulfils it from the admin console, in a separate session.
   const adminContext = await browser.newContext({ baseURL: test.info().project.use.baseURL });
@@ -29,17 +31,16 @@ test('cash on delivery → shipped → delivered → return requested → return
   await adminAction(admin, orderId, 'Mark delivered', /is now: Delivered/);
 
   await page.reload();
-  await expect(page.getByText('Delivered').first()).toBeVisible();
+  await expect(status).toHaveText('Status: Delivered');
   const form = page.getByRole('form', { name: 'Request a return' });
   await form.getByLabel('Reason').selectOption('damaged');
   await form.getByLabel('Anything else we should know? (optional)').fill('The box was crushed.');
   await form.getByRole('button', { name: 'Request return' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Return requested' })).toBeVisible();
-  await expect(page.getByText('Return requested').first()).toBeVisible();
+  // The form's own confirmation is brief: the page re-renders without the form once the return is requested.
+  await expect(status).toHaveText('Status: Return requested');
 
   await adminAction(admin, orderId, 'Complete return (restock and refund)', /is now: (Returned|Refunded)/);
   await adminContext.close();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Order timeline' })).toBeVisible();
-  await expect(page.getByText(/Returned|Refunded/).first()).toBeVisible();
+  await expect(status).toHaveText(/^Status: (Returned|Refunded)$/);
 });
