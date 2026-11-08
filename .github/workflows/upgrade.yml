@@ -1,0 +1,96 @@
+name: Upgrade
+
+# Plan test strategy, "Migration and upgrade": migrate from the previous release with seeded data, then run
+# smoke. The previous release (the from_ref input, else the newest v* tag, else ad481e8, the lite release
+# candidate) migrates and seeds a fresh Postgres and sells an order; this commit then migrates the same database
+# and must still serve health, catalog, search, the old order with its history, and a new checkout.
+on:
+  workflow_dispatch:
+    inputs:
+      from_ref:
+        description: Release to upgrade from (tag or commit); default the newest v* tag, else ad481e8
+        required: false
+  push:
+    tags: ['v*']
+  schedule:
+    - cron: '30 0 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upgrade-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    name: Upgrade from the previous release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_DRIVER: postgres
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      PAYMENT_ADAPTER: mock
+      RATE_LIMIT_PER_MINUTE: '100000'
+      LOG_LEVEL: warn
+      FROM_REF: ${{ inputs.from_ref }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Pick the previous release
+        run: |
+          from="$FROM_REF"
+          # On a tag push, the previous release is the newest other v* tag.
+          [ -n "$from" ] || from=$(git tag --list 'v*' --sort=-v:refname | grep -vxF "$GITHUB_REF_NAME" | head -1 || true)
+          from=${from:-ad481e8}
+          git rev-parse --verify "$from^{commit}"
+          echo "PREVIOUS=$from" >> "$GITHUB_ENV"
+          echo "Upgrading from $from to $(git rev-parse --short HEAD)"
+      - name: Build the previous release in its own worktree
+        run: |
+          git worktree add --detach ../previous "$PREVIOUS"
+          cd ../previous
+          pnpm install --frozen-lockfile
+          pnpm turbo run build --filter=@agentbazaar/api...
+      - name: One set of app keys for both versions, so the upgraded API still signs the customer in
+        working-directory: ../previous/apps/api
+        run: node dist/cli/index.js keys >> "$GITHUB_ENV"
+      - name: Previous release migrates, seeds and sells an order
+        working-directory: ../previous/apps/api
+        run: |
+          node dist/cli/index.js migrate
+          node dist/cli/index.js seed --products 60
+          node dist/main.js > "$RUNNER_TEMP/previous.log" 2>&1 &
+          pid=$!
+          for i in $(seq 1 60); do curl -fs 127.0.0.1:4000/readyz > /dev/null && break; sleep 1; done
+          node "$GITHUB_WORKSPACE/scripts/upgrade-smoke.mjs" before "$RUNNER_TEMP/state.json"
+          kill "$pid"; wait "$pid" || true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@agentbazaar/api...
+      - name: This commit migrates the same database and passes the smoke checks
+        working-directory: apps/api
+        run: |
+          node dist/cli/index.js migrate
+          node dist/main.js > "$RUNNER_TEMP/current.log" 2>&1 &
+          pid=$!
+          for i in $(seq 1 60); do curl -fs 127.0.0.1:4000/readyz > /dev/null && break; sleep 1; done
+          node "$GITHUB_WORKSPACE/scripts/upgrade-smoke.mjs" after "$RUNNER_TEMP/state.json"
+          kill "$pid"; wait "$pid" || true
+      - name: API logs
+        if: failure()
+        run: tail -n 100 "$RUNNER_TEMP/previous.log" "$RUNNER_TEMP/current.log" 2>/dev/null || true
