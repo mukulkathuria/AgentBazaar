@@ -1,6 +1,7 @@
 import { type DynamicModule, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import type { Infra } from './bootstrap/infra.js';
+import { AdminModule } from './modules/admin/index.js';
 import { AgentModule } from './modules/agent/index.js';
 import { AnalyticsModule } from './modules/analytics/index.js';
 import { AuditModule } from './modules/audit/index.js';
@@ -43,6 +44,7 @@ export class AppModule {
         RecommendationsModule,
         AnalyticsModule,
         AgentModule,
+        AdminModule,
       ],
       controllers: [HealthController],
       providers: [{ provide: APP_GUARD, useClass: AuthGuard }],

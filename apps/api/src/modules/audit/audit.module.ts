@@ -1,7 +1,7 @@
 import { Global, Inject, Injectable, Module } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import type { Logger } from 'pino';
-import type { Executor } from '../../shared/db/database.js';
+import { one, type Executor } from '../../shared/db/database.js';
 import { json } from '../../shared/db/sql-helpers.js';
 import { DB, LOGGER } from '../../shared/kernel/tokens.js';
 import { redact, redactDeep } from '../../shared/observability/redact.js';
@@ -51,6 +51,12 @@ export class AuditService {
             ${t.sampledForAudit})`,
     );
   }
+}
+
+/** Admin dashboard: model calls traced in the last 30 days (replies served from the semantic cache made none). */
+export async function llmCallCount(ex: Executor): Promise<number> {
+  const r = await one<{ n: number }>(ex, sql`SELECT count(*)::int AS n FROM llm_traces WHERE kind <> 'cache' AND at > now() - interval '30 days'`);
+  return r?.n ?? 0;
 }
 
 @Global()
