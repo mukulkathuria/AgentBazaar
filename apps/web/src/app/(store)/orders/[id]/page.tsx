@@ -2,6 +2,7 @@ import { formatInr, Routes, Uuid, type Language, type OrderStatus, type OrderVie
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ActionButton } from '@/components/action-button';
+import { PaymentWatcher } from '@/components/order/payment-watcher';
 import { ReturnForm } from '@/components/order/return-form';
 import { Badge, buttonClass, ErrorState } from '@/components/ui';
 import { firstParam, type SearchParams } from '@/lib/catalog';
@@ -109,9 +110,10 @@ export default async function OrderPage({ params, searchParams }: Props) {
       <div className="space-y-1">
         <h1 className="text-3xl font-bold">{fmt(t.order.title, { number: order.number })}</h1>
         <p className="text-gray-700">{fmt(t.order.placed, { date: formatDateTime(order.createdAt, lang) })}</p>
-        <p>
+        <p aria-live="polite">
           {t.order.status}: <Badge>{t.order.statuses[order.status]}</Badge>
         </p>
+        {order.status === 'pending_payment' && <PaymentWatcher />}
       </div>
       {payHref && (
         <a href={payHref} className={buttonClass()}>
