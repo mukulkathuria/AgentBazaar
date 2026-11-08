@@ -134,7 +134,8 @@ conversations). There are now seven shards (`agent/application`; `agent/domain`;
 pricing with inventory; catalog; identity with customization; PII, search, recommendations, analytics,
 notifications and tax), and the two benchmark suites (`test/e2e/ai-cost.e2e.spec.ts` and
 `test/integration/search-benchmark.int.spec.ts`) are left out of mutant runs: they assert aggregates rather
-than behaviour.
+than behaviour. The first seven-shard run took one hour; its longest shard (60 minutes) was one with no cache
+yet, and the catalog, also cold, took 27 minutes.
 
 Decisions worth knowing:
 
@@ -192,38 +193,49 @@ checkout, which is equivalent because only states that may move to checkout get 
 
 ### Results: full scope
 
-**71.34%** (3,654 of 5,122 testable mutants detected), so the 70% gate passes. `Mutation (full scope)` run
-`42438759581` on main at `739deb2`: the first complete run, with five shards, a push to the workflow
-standing in for the nightly schedule. It finished in 3 hours 49 minutes of wall time, its longest shard
-taking 228 minutes. The other 654 of the 5,776 mutants are static and were not run (see above).
+All three runs were triggered by pushes to the mutation setup, standing in for the nightly schedule, and all
+three pass the 70% gate.
 
-| Module | Score | Detected of testable |
-| --- | --- | --- |
-| payments | 100.00% | 6 of 6 |
-| inventory | 92.16% | 94 of 102 |
-| notifications | 92.86% | 13 of 14 |
-| search | 89.09% | 98 of 110 |
-| pricing | 88.58% | 605 of 683 |
-| tax | 87.93% | 51 of 58 |
-| recommendations | 82.35% | 84 of 102 |
-| customization | 81.07% | 274 of 338 |
-| catalog | 80.86% | 283 of 350 |
-| analytics | 79.59% | 39 of 49 |
-| identity | 75.77% | 269 of 355 |
-| orders | 68.45% | 601 of 878 |
-| agent | 60.18% | 1,182 of 1,964 |
-| pii | 48.67% | 55 of 113 |
+| Run | Main at | Layout | Wall time (longest shard) | Score | Detected of testable |
+| --- | --- | --- | --- | --- | --- |
+| `42438759581` | `739deb2` | five shards, benchmarks included, no caches | 3 h 49 min (228 min) | 71.34% | 3,654 of 5,122 |
+| `42449438096` | `e5d25fc` | seven shards, benchmarks left out, two shards without a cache | 1 h 0 min (60 min) | 73.48% | 3,787 of 5,154 |
+| `42456122508` | `f688714` | seven shards, caches trimmed to each shard | 11 min (11 min) | **73.91%** | 3,819 of 5,167 |
 
-Where the gap is, from the run's reports:
+The second run's own gate job printed 74.09% because it still counted the stale files described above
+(790 testable mutants, counted twice); 73.48% is its seven reports trimmed to their own modules. The third
+run is the current setup end to end: each shard trimmed its cache (the identity shard dropped 7 stale files
+and reused 603 of its 892 results), and the gate job printed 73.91% itself. About 650 static mutants per run
+are not tested (see above).
 
-- **agent** (782 undetected): reply templates (`agent/domain/replies.ts`, 21% detected), the chat
-  orchestration (`chat.service.ts`, 224 undetected) and the MCP tool layer (`mcp-tools.ts`, 107). The
-  conversation suites check outcomes (a deal, a checkout link, no floor leak) rather than wording and
-  every branch of the orchestration.
-- **orders** (277): `order-lifecycle.service.ts` has 124, mostly the hand-over to the payment saga and
-  payments that arrive after an order closed, which no in-process suite drives.
-- **pii** (58): `rewrap.ts` (moving data keys to OpenBao Transit) had no in-process test at all.
+| Module | First run | Latest run | Detected of testable (latest) |
+| --- | --- | --- | --- |
+| payments | 100.00% | 100.00% | 6 of 6 |
+| tax | 87.93% | 100.00% | 58 of 58 |
+| analytics | 79.59% | 97.96% | 48 of 49 |
+| pii | 48.67% | 97.35% | 110 of 113 |
+| identity | 75.77% | 93.24% | 331 of 355 |
+| customization | 81.07% | 92.92% | 315 of 339 |
+| notifications | 92.86% | 92.86% | 13 of 14 |
+| inventory | 92.16% | 92.16% | 94 of 102 |
+| search | 89.09% | 90.76% | 108 of 119 |
+| pricing | 88.58% | 87.22% | 621 of 712 |
+| recommendations | 82.35% | 85.57% | 83 of 97 |
+| catalog | 80.86% | 78.95% | 240 of 304 |
+| orders | 68.45% | 67.07% | 603 of 899 |
+| agent | 60.18% | 59.45% | 1,189 of 2,000 |
 
-The suites added after this run target PII (re-wrap against a stand-in Transit, the vault itself), identity
-(accounts, agent clients, tokens), customization (every buyer-facing message, previews), analytics and tax.
-They take part from the next nightly run on.
+PII, identity, customization, analytics and tax rose with the suites added after the first run (key re-wrap
+against a stand-in Transit and the vault itself; accounts, agent clients and tokens; every buyer-facing
+customization message; analytics events; GST edges). Pricing and the catalog moved by one to two points:
+their code changed between the runs (other workstreams kept merging), and the two benchmarks no longer run
+against mutants.
+
+Where the gap is:
+
+- **agent** (811 undetected): reply templates (`agent/domain/replies.ts`, 19% detected), the chat
+  orchestration (`chat.service.ts`, 232 undetected) and the MCP tool layer (`mcp-tools.ts`, 107). The
+  conversation suites check outcomes (a deal, a checkout link, no floor leak) rather than wording and every
+  branch of the orchestration.
+- **orders** (296): `order-lifecycle.service.ts` has 124, chiefly the hand-over to the payment saga
+  and payments that arrive after an order closed, which no in-process suite drives.
