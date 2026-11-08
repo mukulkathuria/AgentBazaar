@@ -28,6 +28,9 @@ describe('@lite negotiation service', () => {
     ))[0]!;
   const quoteStatuses = async (negotiationId: string) =>
     (await q<{ status: string }>('SELECT status FROM quotes WHERE negotiation_id = $1 ORDER BY created_at, id', [negotiationId])).map((r) => r.status);
+  /** The signed claims of a quote token (the body is readable; only the signature is secret). */
+  const claims = (token: string) => JSON.parse(Buffer.from(token.split('.')[0]!, 'base64url').toString('utf8')) as Record<string, unknown>;
+  const epoch = (iso: string) => Math.floor(Date.parse(iso) / 1000);
 
   /**
    * Premium GPU, two units: opening 99,000.00 (2-unit tier), lowest 96,030.00 after three rounds. Two lowballs,
@@ -61,6 +64,8 @@ describe('@lite negotiation service', () => {
       'Payment is confirmed by a person on the checkout page.',
     ]);
     expect(o.alternatives[0]).toMatchObject({ quantity: 3, reason: 'volume' });
+    // The token is bound to this quote, negotiation and buyer, and expires with the quote.
+    expect(claims(o.quote!.token)).toEqual({ qid: o.quote!.quoteId, nid: o.negotiationId, sub: subject, exp: epoch(o.quote!.expiresAt) });
     expect(o.message).toContain('प्रति पीस');
     const [offer] = await q<{ actor: string; decision: string; reason_codes: string[] }>(
       'SELECT actor, decision, reason_codes FROM offers WHERE negotiation_id = $1',
@@ -141,7 +146,7 @@ describe('@lite negotiation service', () => {
     const accepted = await accept(subject, deal.quote!.token);
     expect(accepted).toMatchObject({ negotiationId: o.negotiationId, sku: KEYBOARD, quantity: 1, unitPricePaise: 549_900, listUnitPaise: 549_900, customization: null });
     expect(await session(o.negotiationId)).toMatchObject({ state: 'checkout' });
-    await expect(accept(subject, deal.quote!.token)).rejects.toMatchObject({ code: 'quote_used' });
+    await expect(accept(subject, deal.quote!.token)).rejects.toMatchObject({ code: 'quote_used', message: 'This quote has already been used' });
   });
 
   it('tells apart forged, expired, superseded and withdrawn quotes', async () => {
@@ -156,7 +161,11 @@ describe('@lite negotiation service', () => {
     await expect(accept(subject, first)).rejects.toMatchObject({ code: 'quote_invalid', message: 'A newer quote replaced this one' });
 
     await q(`UPDATE quotes SET status = 'expired' WHERE id = $1`, [counter.quote!.quoteId]);
-    await expect(accept(subject, counter.quote!.token)).rejects.toMatchObject({ code: 'quote_expired' });
+    await expect(accept(subject, counter.quote!.token)).rejects.toMatchObject({ code: 'quote_expired', message: 'This quote has expired. Ask for a new one.' });
+    // A validly signed token whose quote row is gone (a retention purge) reads as expired, not as a crash.
+    const purged = await quote(subject);
+    await q('DELETE FROM quotes WHERE id = $1', [purged.quote!.quoteId]);
+    await expect(accept(subject, purged.quote!.token)).rejects.toMatchObject({ code: 'quote_expired', message: 'This quote has expired. Ask for a new one.' });
 
     const other = await quote(subject);
     clock.advance(16 * 60_000);
@@ -171,7 +180,8 @@ describe('@lite negotiation service', () => {
   it('expires a stale negotiation on the next offer and keeps it closed', async () => {
     const subject = buyer();
     const o = await quote(subject);
-    expect(await svc.activeQuoteToken(subject, o.negotiationId)).toEqual(expect.any(String));
+    const reissued = await svc.activeQuoteToken(subject, o.negotiationId);
+    expect(claims(reissued!)).toEqual({ qid: o.quote!.quoteId, nid: o.negotiationId, sub: subject, exp: epoch(o.quote!.expiresAt) });
     expect(await svc.activeQuoteToken(buyer(), o.negotiationId)).toBeNull();
     clock.advance(15 * 60_000);
     await expect(svc.makeOffer(subject, o.negotiationId, { unitPricePaise: 540_000 })).rejects.toMatchObject({
