@@ -12,6 +12,7 @@ on:
     paths:
       - apps/api/stryker.config.mjs
       - scripts/mutation-score.mjs
+      - scripts/mutation-prune.mjs
       - .github/workflows/mutation.yml
   workflow_dispatch:
 
@@ -56,6 +57,11 @@ jobs:
           path: apps/api/reports/mutation/full-incremental.json
           key: stryker-full-${{ matrix.id }}-${{ github.run_id }}
           restore-keys: stryker-full-${{ matrix.id }}-
+      # Stryker carries forward results of files outside `mutate`: drop any an earlier shard layout left here.
+      - name: Keep only this shard's files in the incremental file
+        env:
+          STRYKER_SHARD: ${{ matrix.modules }}
+        run: node scripts/mutation-prune.mjs apps/api/reports/mutation/full-incremental.json "$STRYKER_SHARD"
       # SIGINT before the job limit makes Stryker write its partial results, which the cache keeps.
       - name: Mutation testing
         working-directory: apps/api

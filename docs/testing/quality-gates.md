@@ -118,7 +118,11 @@ stopped it, without writing any results: about 7 hours for one run, more than a 
 chosen with `STRYKER_SHARD` (a list of modules, or `module/layer` for the agent module, which is split in
 two). A shard has no break threshold of its own:
 [`scripts/mutation-score.mjs`](../../scripts/mutation-score.mjs) merges the shard reports, prints the score
-per module, and fails the job under 70% overall or when a shard's report is missing. Each shard runs under
+per module, and fails the job under 70% overall, when a shard's report is missing, or when two reports
+contain the same file. That last case is real: in incremental mode StrykerJS carries forward the results of
+files outside `mutate`, so after the shard layout changed, a cache from the old layout reported another
+shard's files too. Each shard therefore first trims its cached incremental file to its own modules
+([`scripts/mutation-prune.mjs`](../../scripts/mutation-prune.mjs)). Each shard runs under
 `timeout --signal=INT 270m`, so one that runs long is stopped inside the job limit; StrykerJS's interrupt
 handler then writes its partial incremental results, which the cache step keeps for the next night (a
 safeguard: no shard has needed it yet).
