@@ -24,8 +24,8 @@ Both workflows build the API and the web app for production and start them with
 (PGlite) with mock payments and the seeded 300-product catalog, and the standalone Next.js server exactly as the
 web image runs it. The script also seeds an MFA admin with the CLI, using keys it shares with the server, so the
 admin and returns journeys can sign in; it writes `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD` and
-`E2E_ADMIN_TOTP_SECRET` to `$E2E_STATE_DIR/admin.env` (and to `$GITHUB_ENV` in Actions). Runs on `main` do not
-cancel each other, so every push reports a result.
+`E2E_ADMIN_TOTP_SECRET` to `$E2E_STATE_DIR/admin.env` (and to `$GITHUB_ENV` in Actions). On `main` a newer push
+never cancels a run that has started (a queued one can be replaced by the next push's run).
 
 ## Running the gates locally
 
