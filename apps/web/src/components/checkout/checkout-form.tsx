@@ -61,7 +61,7 @@ export function CheckoutForm({ sessionId, token, terms }: { sessionId: string; t
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-6">
+    <form method="post" onSubmit={onSubmit} noValidate className="space-y-6">
       <fieldset className="space-y-3">
         <legend className="text-lg font-semibold">{t.checkout.contact}</legend>
         <Field id="email" label={t.checkout.email} error={err(formState.errors.email)}>

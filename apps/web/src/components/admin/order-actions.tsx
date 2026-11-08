@@ -41,6 +41,7 @@ export function AdminOrderActions() {
 
   return (
     <form
+      method="post"
       onSubmit={(e) => {
         e.preventDefault();
         submit();

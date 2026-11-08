@@ -81,6 +81,7 @@ function Composer({ inputRef, busy, onSend }: { inputRef: RefObject<HTMLInputEle
   const [text, setText] = useState('');
   return (
     <form
+      method="post"
       onSubmit={(e) => {
         e.preventDefault();
         if (busy || !text.trim()) return;

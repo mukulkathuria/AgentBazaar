@@ -26,6 +26,7 @@ export function ReturnForm({ orderId, token }: { orderId: string; token?: string
   });
   return (
     <form
+      method="post"
       onSubmit={(e) => {
         e.preventDefault();
         request.mutate();

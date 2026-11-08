@@ -37,6 +37,7 @@ export function PolicyForm({ policy }: { policy: DiscountPolicyInput }) {
 
   return (
     <form
+      method="post"
       onSubmit={form.handleSubmit((v) => save.mutate(v))}
       noValidate
       aria-labelledby={id('title')}

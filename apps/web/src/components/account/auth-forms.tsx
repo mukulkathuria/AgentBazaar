@@ -46,7 +46,7 @@ function LoginForm({ next }: { next?: string }) {
     if (!error) done();
   });
   return (
-    <form onSubmit={onSubmit} noValidate aria-labelledby="login-heading" className="space-y-3 rounded-lg border border-gray-300 p-4">
+    <form method="post" onSubmit={onSubmit} noValidate aria-labelledby="login-heading" className="space-y-3 rounded-lg border border-gray-300 p-4">
       <h2 id="login-heading" className="text-xl font-semibold">
         {t.account.signIn}
       </h2>
@@ -96,7 +96,7 @@ function RegisterForm({ next }: { next?: string }) {
   });
   const termsError = errors.consents?.terms?.message;
   return (
-    <form onSubmit={onSubmit} noValidate aria-labelledby="register-heading" className="space-y-3 rounded-lg border border-gray-300 p-4">
+    <form method="post" onSubmit={onSubmit} noValidate aria-labelledby="register-heading" className="space-y-3 rounded-lg border border-gray-300 p-4">
       <h2 id="register-heading" className="text-xl font-semibold">
         {t.account.register}
       </h2>

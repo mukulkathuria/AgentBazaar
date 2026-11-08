@@ -60,6 +60,7 @@ export function EraseAccount() {
   });
   return (
     <form
+      method="post"
       onSubmit={(e) => {
         e.preventDefault();
         if (confirm === 'ERASE') erase.mutate();
@@ -109,6 +110,7 @@ export function MfaSetup() {
   }
   return (
     <form
+      method="post"
       onSubmit={(e) => {
         e.preventDefault();
         verify.mutate();

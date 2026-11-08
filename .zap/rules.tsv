@@ -1,3 +1,11 @@
 # OWASP ZAP baseline triage for the demo store (.github/workflows/dast.yml, docs/testing/e2e-and-dast.md).
 # Format: <alert id>	<IGNORE|INFO|WARN|FAIL>	(<alert name>: <reason>). Fields are tab-separated.
 # Unlisted alerts are WARN. The job fails on any FAIL rule, and on any High-risk alert not marked IGNORE here.
+# Fixed rather than triaged: 10055 (style-src no longer allows inline CSS), 90004's CORP part (pages send
+# Cross-Origin-Resource-Policy: same-origin) and 10024 (every client-handled form posts, so a submit before
+# hydration never puts a password or address in the URL).
+10202	IGNORE	(Absence of Anti-CSRF Tokens: the form ZAP finds is the language switch, a Next.js server action; Next refuses server actions whose Origin does not match the Host, the search form is a side-effect-free GET, and the JSON endpoints need a non-simple Content-Type with SameSite=Lax cookies.)
+90004	INFO	(Insufficient Site Isolation: CORP is set; Cross-Origin-Embedder-Policy is left unset on purpose: require-corp or credentialless can block cross-origin gateway frames and CDN images that send no CORP, and the store needs no cross-origin isolation.)
+10031	INFO	(User Controllable HTML Element Attribute: search and filter values are echoed into input values by React, which escapes attribute values.)
+10111	INFO	(Authentication Request Identified: the sign-in form, as expected.)
+10049	INFO	(Non-Storable / Storable Content: cache classification only; personalised pages are no-store on purpose.)

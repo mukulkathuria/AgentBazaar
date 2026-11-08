@@ -61,6 +61,7 @@ export function AgentClientForm() {
     <div className="space-y-4">
       {create.data?.clientSecret && <SecretOnce client={create.data} />}
       <form
+        method="post"
         onSubmit={form.handleSubmit((v) => create.mutate(v))}
         noValidate
         aria-labelledby="create-agent"

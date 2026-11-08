@@ -9,7 +9,8 @@ export function buildCsp(nonce: string, dev = process.env.NODE_ENV === 'developm
     "default-src 'self'",
     // 'unsafe-eval' only in dev: React uses eval there to rebuild server error stacks.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ''}`,
-    "style-src 'self' 'unsafe-inline'",
+    // Tailwind ships one stylesheet and no page renders inline styles, so inline CSS stays blocked (ZAP 10055).
+    "style-src 'self'",
     ['img-src', "'self'", 'data:', 'blob:', api, ...imageHosts].join(' '),
     "font-src 'self'",
     `connect-src 'self' ${api}${dev ? ' ws:' : ''}`,
