@@ -1,16 +1,29 @@
 name: Supply chain
 
 # Every pull request: GitHub dependency review (fails on high-severity advisories and on licences outside the
-# allowlist of scripts/license-check.mjs) and an SBOM diff of base against head in the job summary.
+# allowlist of scripts/license-check.mjs) and an SBOM diff of base against head in the job summary. Pushes to main
+# that change a manifest or lockfile get the same checks against the previous commit, since agents push directly.
 on:
   pull_request:
+  push:
+    branches: [main]
+    paths:
+      - 'pnpm-lock.yaml'
+      - '**/package.json'
+      - 'services/ai/uv.lock'
+      - 'services/ai/pyproject.toml'
+      - '.github/workflows/supply-chain.yml'
 
 permissions:
   contents: read
 
 concurrency:
   group: supply-chain-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   dependency-review:
@@ -20,6 +33,8 @@ jobs:
     steps:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
+          base-ref: ${{ env.BASE_SHA }}
+          head-ref: ${{ env.HEAD_SHA }}
           fail-on-severity: high
           # SPDX form of the license gate's allowlist (scripts/license-check.mjs).
           allow-licenses: >-
@@ -32,9 +47,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        with: { ref: '${{ github.event.pull_request.base.sha }}', path: base, persist-credentials: false }
+        with: { ref: '${{ env.BASE_SHA }}', path: base, persist-credentials: false }
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        with: { path: head, persist-credentials: false }
+        with: { ref: '${{ env.HEAD_SHA }}', path: head, persist-credentials: false }
       # pnpm 12 writes pnpm-lock.yaml as two YAML documents (pnpm's own packages, then the project's) and syft
       # reads only the first, so keep the last one.
       - name: Keep the project's lockfile document
@@ -61,4 +76,4 @@ jobs:
             for f in added removed; do
               if [ -s "$f.txt" ]; then printf '\n### %s\n\n```\n' "${f^}"; cat "$f.txt"; printf '```\n'; fi
             done
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
