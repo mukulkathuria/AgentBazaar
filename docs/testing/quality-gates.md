@@ -1,17 +1,17 @@
 # Quality gates: coverage and mutation testing
 
-**Status: measured on 2026-11-06, on a Windows 11 laptop (embedded PGlite, `VITEST_MAX_WORKERS=2`) and in
-the `Quality` workflow on GitHub Actions (`ubuntu-latest`); each number says which.** This page covers two of
-the merge gates in the development plan:
+**Status: measured on 2026-11-06 to 2026-11-08, on a Windows 11 laptop (embedded PGlite,
+`VITEST_MAX_WORKERS=2`) and in GitHub Actions (`ubuntu-latest`, 4 vCPUs); each number says which.** This
+page covers two of the merge gates in the development plan:
 
 | Gate (plan) | Threshold | Enforced by |
 | --- | --- | --- |
-| Unit coverage (domain and application) | at least 85% lines, 80% branches | `Quality` workflow, job *Coverage gate*, every push and pull request |
+| Unit coverage (domain and application) | at least 85% lines, 80% branches | [`Quality`](../../.github/workflows/quality.yml) workflow, job *Coverage gate*, every push and pull request |
 | Mutation score | at least 80% on pricing, inventory, quotes and the order state machine | `Quality` workflow, job *Mutation gate (critical scope)*, every push and pull request |
-| Mutation score | at least 70% on all domain and application code | `Quality` workflow, job *Mutation gate (all domain and application code)*, nightly and on demand |
+| Mutation score | at least 70% on all domain and application code | [`Mutation (full scope)`](../../.github/workflows/mutation.yml) workflow, job *Mutation gate (all domain and application code)*: nightly, on dispatch, and on pushes that change the mutation setup |
 
-Both gates fail the build below their threshold. Every number below comes from a run on this page's date;
-nothing is estimated.
+Both gates fail the build below their threshold. Every number below comes from a run; nothing is
+estimated.
 
 ## Coverage
 
@@ -42,7 +42,8 @@ gate. Leave `TEST_DATABASE_URL` unset; the job runs on PGlite.
 | --- | --- | --- | --- | --- |
 | Before (main at `5a5f919`, same merged run) | 86.01% (2,189 / 2,545) | **72.41%** (1,234 / 1,704) | 83.32% | 85.28% |
 | Behaviour specs, first batch (main at `7251947`, laptop run) | 90.15% (2,657 / 2,947) | 82.63% (1,618 / 1,958) | 88.46% | 89.26% |
-| Plus identity, customization and catalog suites (main at `887938e`, Quality workflow) | **91.33%** | **85.30%** | 89.82% | 90.39% |
+| Plus identity, customization and catalog suites (main at `887938e`, Quality workflow) | 91.33% | 85.30% | 89.82% | 90.39% |
+| Latest (main at `739deb2`, Quality workflow) | **91.58%** | **85.43%** | 90.10% | 90.56% |
 
 Main grew by about 400 measured lines between the first two runs (replica routing, sagas, tracing, the
 semantic cache), so the denominators differ. The unit project alone measures much lower, which is expected
@@ -82,7 +83,7 @@ until the background sweeper ran. The fix commits the expiry and raises the erro
 | --- | --- | --- | --- |
 | `packages/config` | 100% | 94.31% | Enforced (85 / 80): `pnpm --filter @agentbazaar/config test:coverage` |
 | `packages/contracts` | 98.34% | 85.18% | Enforced (85 / 80): `pnpm --filter @agentbazaar/contracts test:coverage` |
-| `services/ai` | 100% (460 statements) | 100% (94 branches) | Enforced: `pytest --cov --cov-branch` against the existing `fail_under = 90` (statements and branches combined). No workflow ran the Python tests before; the *Coverage gate (AI service)* job does now |
+| `services/ai` | 100% (467 statements) | 100% (96 branches) | Enforced: `pytest --cov --cov-branch` against the existing `fail_under = 90` (statements and branches combined). No workflow ran the Python tests before; the *Coverage gate (AI service)* job does now |
 | `packages/testkit` | 37.0% | 29.8% | Not enforced. It is test and demo tooling (catalog generator, scripted and adversarial buyer agents); its own spec covers the generator, and the agents are exercised by the API's end-to-end and negative suites, which do not count towards the package's own number |
 | `apps/web` (`src/lib`, `src/components`) | 26.1% | 27.4% | Not enforced. Pages and most components are covered by the Playwright journeys, not Vitest; reaching 85% would mean a component-test effort of its own |
 
@@ -95,19 +96,33 @@ until the background sweeper ran. The fix commits the expiry and raises the erro
 | Scope | Config | Mutated code | Tests that may kill a mutant | Break |
 | --- | --- | --- | --- | --- |
 | Critical | [`stryker.critical.config.mjs`](../../apps/api/stryker.critical.config.mjs) | `pricing/domain` (policy engine, negotiation state machine), `shared/crypto/keyring.ts` (quote token signing and verification), `inventory/{domain,application}`, `orders/domain` (order state machine) | the unit specs and the inventory service's PGlite suite ([`vitest.critical.config.mjs`](../../apps/api/vitest.critical.config.mjs)) | 80% |
-| Full | [`stryker.config.mjs`](../../apps/api/stryker.config.mjs) | every `src/modules/**/{domain,application}/**` file | unit, integration, end-to-end, contract, negative and regression suites on PGlite | 70% |
+| Full | [`stryker.config.mjs`](../../apps/api/stryker.config.mjs) | every `src/modules/**/{domain,application}/**` file (62 files) | unit, integration, end-to-end, contract, negative and regression suites on PGlite | 70%, on the merged score |
 
 ```sh
 pnpm --filter @agentbazaar/api mutation:critical   # incremental; results in apps/api/reports/mutation/
-pnpm --filter @agentbazaar/api mutation            # full scope: hours, use the nightly job instead
+STRYKER_SHARD="orders payments" pnpm --filter @agentbazaar/api mutation   # one shard of the full scope
+pnpm --filter @agentbazaar/api mutation            # the whole full scope: hours, leave it to the nightly job
 ```
 
 Both configs run at concurrency 2 (CI passes `--concurrency 4`) in **incremental mode**: the incremental
 file under `reports/mutation/` keeps every result, and later runs retest only mutants whose code or
-covering tests changed. CI caches the file per scope (restored from the newest run, saved even when the
-gate fails), so pull requests pay only for what they touch. Cold runs are much slower on Windows than on the CI runner: the laptop
-used here tested about 8 mutants a minute (roughly an hour for the critical scope), against 512 mutants in
-3.5 minutes on `ubuntu-latest`.
+covering tests changed. CI caches the file per scope, and per shard for the full scope (restored from the
+newest run, saved even when the gate fails), so pull requests and later nights pay only for what changed.
+Cold runs are much slower on Windows than on the CI runner: the laptop used here tested about 8 mutants a
+minute (roughly an hour for the critical scope), against 512 mutants in 3.5 minutes on `ubuntu-latest`.
+
+**Why the full scope runs in shards.** The full scope has 5,766 mutants, 5,112 of them testable (the rest are
+static). The first single-job run reached 4,055 of them in 320 minutes before the step time limit stopped
+it, without writing any results: about 7 hours for one run, more than a GitHub-hosted job may take.
+[`mutation.yml`](../../.github/workflows/mutation.yml) therefore runs five shards in parallel, chosen with
+`STRYKER_SHARD` (a list of modules, or `module/layer` for the agent module, which is split in two):
+`agent/application`; `agent/domain` with recommendations, analytics, notifications and tax; orders with
+payments; pricing, catalog and inventory; identity, customization, PII and search. A shard has no break
+threshold of its own: [`scripts/mutation-score.mjs`](../../scripts/mutation-score.mjs) merges the five JSON
+reports, prints the score per module, and fails the job under 70% overall or when a shard's report is
+missing. Each shard also runs under `timeout --signal=INT 270m`, so one that runs long is stopped inside the
+job limit; StrykerJS's interrupt handler then writes its partial incremental results, which the cache step
+keeps for the next night (a safeguard: no shard has needed it yet).
 
 Decisions worth knowing:
 
@@ -126,10 +141,11 @@ Decisions worth knowing:
 - `.stryker-tmp/` (sandboxes) and `apps/api/reports/` are git-ignored, and `cleanTempDir: 'always'` removes
   sandboxes even after a failed run, so `eslint .` never sees them.
 
-### Results
+### Results: critical scope
 
-**Critical scope: 96.68%** (512 mutants: 495 killed, 17 survived, none without a test). Quality workflow on
-main at `887938e`, a cold run with no incremental file, 3 minutes 27 seconds at concurrency 4.
+**96.68%** (512 mutants: 495 killed, 17 survived, none without a test). Quality workflow on main at
+`887938e`, a cold run with no incremental file, 3 minutes 27 seconds at concurrency 4. With the cached
+incremental file a later push (`739deb2`) reused 508 of the 512 results and finished in 14 seconds.
 
 | File | Score | Killed | Survived |
 | --- | --- | --- | --- |
@@ -156,3 +172,8 @@ The 17 survivors are equivalent mutants, left visible rather than disabled becau
 - `inventory.service.ts` (4): `setStock`'s upsert (`INSERT ... ON CONFLICT DO UPDATE ... RETURNING`) always
   returns a row, so its event guard is always true; `isHeld`'s `count(*)` query always returns a row, so its
   two optional chains never fire; and `availability` with no ids gets no rows from `= ANY('{}')` either.
+
+Quote handling outside the critical scope (issuing, accepting and re-signing quotes in
+`pricing/application/negotiation.service.ts`) was measured on its own against its integration suite alone:
+**98.46%** (64 of 65 mutants killed; laptop run). The survivor removes the state-machine check before
+checkout, which is equivalent because only states that may move to checkout get that far.
