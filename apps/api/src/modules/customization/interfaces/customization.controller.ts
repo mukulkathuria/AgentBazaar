@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Res } from '@nestjs/common';
 import { CustomizationValues, DecisionInput, Routes } from '@agentbazaar/contracts';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
@@ -19,6 +19,7 @@ export class CustomizationController {
   }
 
   @Post('api/v1/customization/:sku/validate')
+  @HttpCode(200)
   @Auth('public')
   validate(
     @Param(new ZodPipe(Routes.validateCustomization.params)) p: { sku: string },
@@ -49,6 +50,7 @@ export class CustomizationController {
   }
 
   @Post('api/v1/admin/reviews/:id/decide')
+  @HttpCode(200)
   @Auth('admin')
   decide(
     @Param(new ZodPipe(Routes.adminDecideReview.params)) p: { id: string },
