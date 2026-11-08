@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  formatInr,
+  MAX_PAISE,
   type CustomizationValues,
   type DiscountPolicyInput,
   type Language,
@@ -7,7 +9,6 @@ import {
   type NegotiationOutcome,
   type NegotiationState,
   type PriceBand,
-  type QuoteView,
   type RequestQuoteInput,
   type TradeAlternative,
 } from '@agentbazaar/contracts';
@@ -39,6 +40,7 @@ import {
   volumeAlternatives,
 } from '../domain/policy.js';
 import { describeOutcome } from './messages.js';
+import { quoteView } from './quote-view.js';
 
 export type Channel = 'mcp' | 'a2a' | 'chat' | 'rest';
 
@@ -191,6 +193,8 @@ export class NegotiationService {
   }
 
   private async issueQuote(tx: Executor, s: SessionRow, unit: number, quantity: number, ttlSeconds: number): Promise<IssuedQuote> {
+    // Prices include GST, so this is the order the quote would become; no contract amount can carry more.
+    if (unit * quantity > MAX_PAISE) throw new AppError('validation_failed', `An order can total at most ${formatInr(MAX_PAISE)}`);
     await tx.execute(sql`UPDATE quotes SET status = 'superseded' WHERE negotiation_id = ${s.id} AND status = 'active'`);
     const expiresAt = addSeconds(this.clock.now(), ttlSeconds);
     const q = await one<{ id: string }>(
@@ -204,36 +208,13 @@ export class NegotiationService {
     return { quoteId: q!.id, token, expiresAt, unit, quantity };
   }
 
-  private quoteView(s: SessionRow, q: IssuedQuote): QuoteView {
-    return {
-      quoteId: q.quoteId,
-      token: q.token,
-      negotiationId: s.id,
-      sku: s.sku,
-      productName: s.product_name,
-      quantity: q.quantity,
-      unitPricePaise: q.unit,
-      listUnitPricePaise: s.list_unit_paise,
-      totalPaise: q.unit * q.quantity,
-      currency: 'INR',
-      expiresAt: q.expiresAt.toISOString(),
-      status: 'active',
-      terms: [
-        'Prices include GST.',
-        `Single use; valid until ${q.expiresAt.toISOString()}.`,
-        ...(s.customization ? ['Personalised items are non-returnable.'] : []),
-        'Payment is confirmed by a person on the checkout page.',
-      ],
-    };
-  }
-
   private outcome({ s, state, decision, unit, quantity, quote, alternatives, reasons, ladder, round, lang }: OutcomeInput): NegotiationOutcome {
     const expiresAt = quote?.expiresAt ?? s.expires_at;
     return {
       negotiationId: s.id,
       state,
       decision,
-      quote: quote ? this.quoteView(s, quote) : null,
+      quote: quote ? quoteView(s, quote) : null,
       alternatives,
       round,
       roundsRemaining: Math.max(0, ladder.maxRounds - round),

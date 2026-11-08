@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { CartLineInput, CartView, CustomizationValues } from '@agentbazaar/contracts';
+import { formatInr, MAX_PAISE, type CartLineInput, type CartView, type CustomizationValues } from '@agentbazaar/contracts';
 import { sql } from 'drizzle-orm';
-import { one, rows, type Executor } from '../../../shared/db/database.js';
+import { inTransaction, one, rows, type Executor } from '../../../shared/db/database.js';
 import { json } from '../../../shared/db/sql-helpers.js';
 import { AppError, notFound } from '../../../shared/kernel/errors.js';
 import { DB } from '../../../shared/kernel/tokens.js';
@@ -78,24 +78,26 @@ export class CartService {
     );
     if ((count?.n ?? 0) >= MAX_LINES)
       throw new AppError('validation_failed', `A cart can hold at most ${MAX_LINES} lines`);
-    await this.db.execute(
-      sql`INSERT INTO cart_lines (cart_id, variant_id, sku, quantity, customization)
-          VALUES (${cartId}, ${variant.variantId}, ${variant.sku}, ${input.quantity}, ${values ? json(values) : null})`,
-    );
-    await this.db.execute(sql`UPDATE carts SET updated_at = now() WHERE id = ${cartId}`);
-    return this.get(cartId);
+    return inTransaction(this.db, async (tx) => {
+      await tx.execute(
+        sql`INSERT INTO cart_lines (cart_id, variant_id, sku, quantity, customization)
+            VALUES (${cartId}, ${variant.variantId}, ${variant.sku}, ${input.quantity}, ${values ? json(values) : null})`,
+      );
+      await tx.execute(sql`UPDATE carts SET updated_at = now() WHERE id = ${cartId}`);
+      return this.withinLimit(tx, cartId);
+    });
   }
 
   async updateLine(cartId: string, lineId: string, quantity: number): Promise<CartView> {
-    const r =
-      isUuid(cartId) && isUuid(lineId)
-        ? await one<{ id: string }>(
-            this.db,
-            sql`UPDATE cart_lines SET quantity = ${quantity} WHERE id = ${lineId} AND cart_id = ${cartId} RETURNING id`,
-          )
-        : undefined;
-    if (!r) throw notFound('Cart line');
-    return this.get(cartId);
+    if (!isUuid(cartId) || !isUuid(lineId)) throw notFound('Cart line');
+    return inTransaction(this.db, async (tx) => {
+      const r = await one<{ id: string }>(
+        tx,
+        sql`UPDATE cart_lines SET quantity = ${quantity} WHERE id = ${lineId} AND cart_id = ${cartId} RETURNING id`,
+      );
+      if (!r) throw notFound('Cart line');
+      return this.withinLimit(tx, cartId);
+    });
   }
 
   async removeLine(cartId: string, lineId: string): Promise<CartView> {
@@ -129,6 +131,13 @@ export class CartService {
 
   async clear(tx: Executor, cartId: string): Promise<void> {
     await tx.execute(sql`DELETE FROM cart_lines WHERE cart_id = ${cartId}`);
+  }
+
+  /** Prices include GST, so a cart over the contracts' money ceiling would make an order no contract can carry. */
+  private async withinLimit(tx: Executor, cartId: string): Promise<CartView> {
+    const v = view(cartId, await this.price(tx, cartId, false));
+    if (v.subtotalPaise > MAX_PAISE) throw new AppError('validation_failed', `A cart can total at most ${formatInr(MAX_PAISE)}`);
+    return v;
   }
 
   private async requireCart(ex: Executor, cartId: string): Promise<void> {

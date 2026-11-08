@@ -40,6 +40,34 @@ describe('@lite regression: API fuzzing findings', () => {
     expectEnvelope(await app.inject({ method: 'GET', url: '/api/v1/products/%E0%A4%A' }), 400, 'validation_failed');
   });
 
+  it('keeps a cart within the ₹1 crore every contract amount is capped at (it once answered a ₹1.38 crore subtotal)', async () => {
+    const { cartId } = ok<{ cartId: string }>(await call(app, 'POST', '/api/v1/carts'), 201);
+    const added = ok<{ lines: { lineId: string }[]; subtotalPaise: number }>(
+      await call(app, 'POST', `/api/v1/carts/${cartId}/lines`, { body: { sku: 'ZENTRIX-ZX7070-12G', quantity: 100 } }),
+      200,
+    );
+    expect(added.subtotalPaise).toBe(549_990_000);
+    const lineId = added.lines[0]!.lineId;
+    expectEnvelope(await call(app, 'PATCH', `/api/v1/carts/${cartId}/lines/${lineId}`, { body: { quantity: 200 } }), 400, 'validation_failed');
+    expectEnvelope(await call(app, 'POST', `/api/v1/carts/${cartId}/lines`, { body: { sku: 'ZENTRIX-ZX7070-12G', quantity: 100 } }), 400, 'validation_failed');
+    // Both rejected changes were rolled back.
+    expect(ok<{ lines: { quantity: number }[] }>(await call(app, 'GET', `/api/v1/carts/${cartId}`), 200).lines).toEqual([
+      expect.objectContaining({ quantity: 100 }),
+    ]);
+  });
+
+  it('refuses a quote whose total would pass the same ceiling, before issuing it', async () => {
+    await app.infra.database.query(
+      `UPDATE stock_levels SET on_hand = 5000 WHERE variant_id = (SELECT id FROM variants WHERE sku = 'ZENTRIX-ZX7070-12G')`,
+    );
+    const { clientId, clientSecret } = app.seed.agentClient;
+    const creds = { grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret };
+    const agent = ok<{ access_token: string }>(await call(app, 'POST', '/oauth/token', { body: creds }), 200).access_token;
+    const quote = (quantity: number) => call(app, 'POST', '/api/v1/quotes', { body: { sku: 'ZENTRIX-ZX7070-12G', quantity }, token: agent });
+    expectEnvelope(await quote(1000), 400, 'validation_failed');
+    expect(ok<{ quote: { totalPaise: number } }>(await quote(10), 201).quote.totalPaise).toBeLessThanOrEqual(1_000_000_000);
+  });
+
   it('answers customization validation and review decisions with the documented 200', async () => {
     const validated = await call(app, 'POST', '/api/v1/customization/MITTI-MUG-WHITE/validate', { body: { text: { name: 'Asha' } } });
     expect(ok<{ verdict: string }>(validated, 200).verdict).toBe('approved');

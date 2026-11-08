@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-const MAX_PAISE = 1_000_000_000;
+/** ₹1 crore: the largest amount any contract field carries, so also the largest order. */
+export const MAX_PAISE = 1_000_000_000;
 const RUPEE_STRING = /^\d{1,8}(?:\.\d{1,2})?$/;
 
 /**

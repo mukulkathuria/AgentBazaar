@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_PAISE } from './money.js';
 
 export const Uuid = z.uuid();
 export const Sku = z
@@ -16,7 +17,7 @@ export const Currency = z.literal('INR');
 export type Currency = z.infer<typeof Currency>;
 
 /** Money is always integer paise. ₹1 = 100 paise. Upper bound is ₹1 crore per amount. */
-export const Paise = z.number().int().min(0).max(1_000_000_000);
+export const Paise = z.number().int().min(0).max(MAX_PAISE);
 export const Quantity = z.number().int().min(1).max(1000);
 export const IsoDateTime = z.iso.datetime({ offset: true });
 
