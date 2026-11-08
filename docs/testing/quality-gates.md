@@ -111,18 +111,26 @@ newest run, saved even when the gate fails), so pull requests and later nights p
 Cold runs are much slower on Windows than on the CI runner: the laptop used here tested about 8 mutants a
 minute (roughly an hour for the critical scope), against 512 mutants in 3.5 minutes on `ubuntu-latest`.
 
-**Why the full scope runs in shards.** The full scope has 5,766 mutants, 5,112 of them testable (the rest are
-static). The first single-job run reached 4,055 of them in 320 minutes before the step time limit stopped
-it, without writing any results: about 7 hours for one run, more than a GitHub-hosted job may take.
-[`mutation.yml`](../../.github/workflows/mutation.yml) therefore runs five shards in parallel, chosen with
-`STRYKER_SHARD` (a list of modules, or `module/layer` for the agent module, which is split in two):
-`agent/application`; `agent/domain` with recommendations, analytics, notifications and tax; orders with
-payments; pricing, catalog and inventory; identity, customization, PII and search. A shard has no break
-threshold of its own: [`scripts/mutation-score.mjs`](../../scripts/mutation-score.mjs) merges the five JSON
-reports, prints the score per module, and fails the job under 70% overall or when a shard's report is
-missing. Each shard also runs under `timeout --signal=INT 270m`, so one that runs long is stopped inside the
-job limit; StrykerJS's interrupt handler then writes its partial incremental results, which the cache step
-keeps for the next night (a safeguard: no shard has needed it yet).
+**Why the full scope runs in shards.** The full scope has about 5,800 mutants, 5,100 of them testable (the
+rest are static). The first single-job run reached 4,055 of them in 320 minutes before the step time limit
+stopped it, without writing any results: about 7 hours for one run, more than a GitHub-hosted job may take.
+[`mutation.yml`](../../.github/workflows/mutation.yml) therefore runs the full scope in parallel shards,
+chosen with `STRYKER_SHARD` (a list of modules, or `module/layer` for the agent module, which is split in
+two). A shard has no break threshold of its own:
+[`scripts/mutation-score.mjs`](../../scripts/mutation-score.mjs) merges the shard reports, prints the score
+per module, and fails the job under 70% overall or when a shard's report is missing. Each shard runs under
+`timeout --signal=INT 270m`, so one that runs long is stopped inside the job limit; StrykerJS's interrupt
+handler then writes its partial incremental results, which the cache step keeps for the next night (a
+safeguard: no shard has needed it yet).
+
+The first sharded run used five shards. Three took 70 to 74 minutes, but the agent domain (with the small
+modules) took 203 and pricing with the catalog and inventory 228, because most end-to-end suites cover
+catalog and agent-domain code and every such mutant also reran the AI cost benchmark (120 priced
+conversations). There are now seven shards (`agent/application`; `agent/domain`; orders with payments;
+pricing with inventory; catalog; identity with customization; PII, search, recommendations, analytics,
+notifications and tax), and the two benchmark suites (`test/e2e/ai-cost.e2e.spec.ts` and
+`test/integration/search-benchmark.int.spec.ts`) are left out of mutant runs: they assert aggregates rather
+than behaviour.
 
 Decisions worth knowing:
 
@@ -177,3 +185,41 @@ Quote handling outside the critical scope (issuing, accepting and re-signing quo
 `pricing/application/negotiation.service.ts`) was measured on its own against its integration suite alone:
 **98.46%** (64 of 65 mutants killed; laptop run). The survivor removes the state-machine check before
 checkout, which is equivalent because only states that may move to checkout get that far.
+
+### Results: full scope
+
+**71.34%** (3,654 of 5,122 testable mutants detected), so the 70% gate passes. `Mutation (full scope)` run
+`42438759581` on main at `739deb2`: the first complete run, with five shards, a push to the workflow
+standing in for the nightly schedule. It finished in 3 hours 49 minutes of wall time, its longest shard
+taking 228 minutes. The other 654 of the 5,776 mutants are static and were not run (see above).
+
+| Module | Score | Detected of testable |
+| --- | --- | --- |
+| payments | 100.00% | 6 of 6 |
+| inventory | 92.16% | 94 of 102 |
+| notifications | 92.86% | 13 of 14 |
+| search | 89.09% | 98 of 110 |
+| pricing | 88.58% | 605 of 683 |
+| tax | 87.93% | 51 of 58 |
+| recommendations | 82.35% | 84 of 102 |
+| customization | 81.07% | 274 of 338 |
+| catalog | 80.86% | 283 of 350 |
+| analytics | 79.59% | 39 of 49 |
+| identity | 75.77% | 269 of 355 |
+| orders | 68.45% | 601 of 878 |
+| agent | 60.18% | 1,182 of 1,964 |
+| pii | 48.67% | 55 of 113 |
+
+Where the gap is, from the run's reports:
+
+- **agent** (782 undetected): reply templates (`agent/domain/replies.ts`, 21% detected), the chat
+  orchestration (`chat.service.ts`, 224 undetected) and the MCP tool layer (`mcp-tools.ts`, 107). The
+  conversation suites check outcomes (a deal, a checkout link, no floor leak) rather than wording and
+  every branch of the orchestration.
+- **orders** (277): `order-lifecycle.service.ts` has 124, mostly the hand-over to the payment saga and
+  payments that arrive after an order closed, which no in-process suite drives.
+- **pii** (58): `rewrap.ts` (moving data keys to OpenBao Transit) had no in-process test at all.
+
+The suites added after this run target PII (re-wrap against a stand-in Transit, the vault itself), identity
+(accounts, agent clients, tokens), customization (every buyer-facing message, previews), analytics and tax.
+They take part from the next nightly run on.
