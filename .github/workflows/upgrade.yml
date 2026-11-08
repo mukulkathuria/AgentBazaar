@@ -12,6 +12,12 @@ on:
         required: false
   push:
     tags: ['v*']
+    # Also whenever a migration or this suite changes on main: that is when an upgrade can break.
+    branches: [main]
+    paths:
+      - 'apps/api/migrations/**'
+      - 'scripts/upgrade-smoke.mjs'
+      - '.github/workflows/upgrade.yml'
   schedule:
     - cron: '30 0 * * *'
 
