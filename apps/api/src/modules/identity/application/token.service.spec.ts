@@ -58,7 +58,28 @@ describe('@lite built-in token issuer', () => {
     await expect(tokens.verify(t)).rejects.toMatchObject({ code: 'unauthorized', message: 'Invalid or expired token' });
   });
 
+  it('signs EdDSA JWTs whose claims record how the customer signed in', async () => {
+    const { tokens } = setup();
+    const part = (t: string, i: number) => JSON.parse(Buffer.from(t.split('.')[i]!, 'base64url').toString('utf8')) as Record<string, unknown>;
+    const withMfa = (await tokens.issueCustomer({ userId: 'u-1', customerToken: 'ctk-1', role: 'customer', mfa: true })).accessToken;
+    expect(part(withMfa, 0)).toEqual({ alg: 'EdDSA', typ: 'JWT' });
+    expect(part(withMfa, 1)).toMatchObject({ typ: 'customer', ctk: 'ctk-1', amr: ['pwd', 'otp'], sub: 'u-1', iss: ISSUER, aud: AUDIENCE });
+    const plain = (await tokens.issueCustomer({ userId: 'u-2', customerToken: 'ctk-2', role: 'customer', mfa: false })).accessToken;
+    expect(part(plain, 1).amr).toEqual(['pwd']);
+  });
+
   it('maps claims to principals conservatively', () => {
+    const unauthorized = (claims: Parameters<typeof toPrincipal>[0], message: string) => {
+      let caught: unknown;
+      try {
+        toPrincipal(claims);
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toMatchObject({ code: 'unauthorized', message });
+    };
+    unauthorized({ typ: 'agent' }, 'Token has no subject');
+    unauthorized({ typ: 'robot' as 'agent', sub: 'u', ctk: 'c' }, 'Unsupported token type');
     expect(() => toPrincipal({ typ: 'agent' })).toThrow('Token has no subject');
     expect(toPrincipal({ typ: 'agent', sub: 'b', qpm: 0 })).toMatchObject({ quotaPerMinute: 60 });
     expect(toPrincipal({ typ: 'agent', sub: 'b', qpm: -5 })).toMatchObject({ quotaPerMinute: 60 });
@@ -77,16 +98,24 @@ describe('@growth OIDC token verifier (Keycloak claims, local key set)', () => {
     const { privateKey, publicKey } = await generateKeyPair('ES256');
     const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
     const verifier = new OidcTokenVerifier(`${ISSUER}/realms/shop`, AUDIENCE, { keys: [jwk] });
-    const sign = (claims: JWTPayload & Record<string, unknown>) =>
+    const sign = (claims: JWTPayload & Record<string, unknown>, to = { iss: `${ISSUER}/realms/shop`, aud: AUDIENCE }) =>
       new SignJWT(claims)
         .setProtectedHeader({ alg: 'ES256', kid: 'k1' })
-        .setIssuer(`${ISSUER}/realms/shop`)
-        .setAudience(AUDIENCE)
+        .setIssuer(to.iss)
+        .setAudience(to.aud)
         .setIssuedAt()
         .setExpirationTime('5m')
         .sign(privateKey);
     return { verifier, sign };
   }
+
+  it('checks the issuer and the audience, not just the key', async () => {
+    const { verifier, sign } = await issuer();
+    const invalid = { code: 'unauthorized', message: 'Invalid or expired token' };
+    await expect(verifier.verify(await sign({ sub: 'kc-1' }, { iss: `${ISSUER}/realms/shop`, aud: 'another-api' }))).rejects.toMatchObject(invalid);
+    await expect(verifier.verify(await sign({ sub: 'kc-1' }, { iss: `${ISSUER}/realms/other`, aud: AUDIENCE }))).rejects.toMatchObject(invalid);
+    expect((await verifier.verify(await sign({ sub: 'kc-1' }))).kind).toBe('customer');
+  });
 
   it('maps a client-credentials token to an agent, by client_id or by azp with the agent role', async () => {
     const { verifier, sign } = await issuer();
