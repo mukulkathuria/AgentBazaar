@@ -43,11 +43,11 @@ gate. Leave `TEST_DATABASE_URL` unset; the job runs on PGlite.
 | Before (main at `5a5f919`, same merged run) | 86.01% (2,189 / 2,545) | **72.41%** (1,234 / 1,704) | 83.32% | 85.28% |
 | Behaviour specs, first batch (main at `7251947`, laptop run) | 90.15% (2,657 / 2,947) | 82.63% (1,618 / 1,958) | 88.46% | 89.26% |
 | Plus identity, customization and catalog suites (main at `887938e`, Quality workflow) | 91.33% | 85.30% | 89.82% | 90.39% |
-| Latest (main at `739deb2`, Quality workflow) | **91.58%** | **85.43%** | 90.10% | 90.56% |
+| After the survivor-killing suites (main at `f688714`, Quality workflow) | **92.62%** | **86.08%** | 91.17% | 91.36% |
 
 Main grew by about 400 measured lines between the first two runs (replica routing, sagas, tracing, the
 semantic cache), so the denominators differ. The unit project alone measures much lower, which is expected
-for the reason above. Other workstreams keep adding code under the gate, so the 5-point branch margin is
+for the reason above. Other workstreams keep adding code under the gate, so the 6-point branch margin is
 there on purpose.
 
 What closed the branch gap: behaviour specs, not padding. Every new test asserts an outcome.
@@ -83,7 +83,7 @@ until the background sweeper ran. The fix commits the expiry and raises the erro
 | --- | --- | --- | --- |
 | `packages/config` | 100% | 94.31% | Enforced (85 / 80): `pnpm --filter @agentbazaar/config test:coverage` |
 | `packages/contracts` | 98.34% | 85.18% | Enforced (85 / 80): `pnpm --filter @agentbazaar/contracts test:coverage` |
-| `services/ai` | 100% (467 statements) | 100% (96 branches) | Enforced: `pytest --cov --cov-branch` against the existing `fail_under = 90` (statements and branches combined). No workflow ran the Python tests before; the *Coverage gate (AI service)* job does now |
+| `services/ai` | 100% (475 statements) | 100% (100 branches) | Enforced: `pytest --cov --cov-branch` against the existing `fail_under = 90` (statements and branches combined). No workflow ran the Python tests before; the *Coverage gate (AI service)* job does now |
 | `packages/testkit` | 37.0% | 29.8% | Not enforced. It is test and demo tooling (catalog generator, scripted and adversarial buyer agents); its own spec covers the generator, and the agents are exercised by the API's end-to-end and negative suites, which do not count towards the package's own number |
 | `apps/web` (`src/lib`, `src/components`) | 26.1% | 27.4% | Not enforced. Pages and most components are covered by the Playwright journeys, not Vitest; reaching 85% would mean a component-test effort of its own |
 
