@@ -38,6 +38,24 @@ describe('@lite GST', () => {
     expect(() => gstForLine(100, 10_001, true)).toThrow(RangeError);
   });
 
+  it('names what is wrong, and accepts the edges of the valid range', () => {
+    for (const total of [-1, 10.5, Number.NaN]) {
+      expect(() => gstForLine(total, 1800, true)).toThrow(new RangeError('Line total must be non-negative paise'));
+    }
+    for (const rate of [-1, 10_001, 12.5]) {
+      expect(() => gstForLine(100, rate, false)).toThrow(new RangeError('GST rate out of range'));
+    }
+    expect(gstForLine(0, 1800, true)).toEqual({ taxablePaise: 0, taxPaise: 0, taxes: [{ kind: 'CGST', rateBps: 900, amountPaise: 0 }, { kind: 'SGST', rateBps: 900, amountPaise: 0 }] });
+    // 100% is the highest rate allowed: half of an inclusive 200 is tax.
+    expect(gstForLine(200, 10_000, false)).toEqual({ taxablePaise: 100, taxPaise: 100, taxes: [{ kind: 'IGST', rateBps: 10_000, amountPaise: 100 }] });
+    expect(gstForLine(118, 0, false).taxPaise).toBe(0);
+  });
+
+  it('pads the second half of the financial year to two digits across a century', () => {
+    expect(financialYear(new Date('2099-06-01T00:00:00Z'))).toBe('2099-00');
+    expect(financialYear(new Date('2108-06-01T00:00:00Z'))).toBe('2108-09');
+  });
+
   it('numbers invoices by Indian financial year in IST', () => {
     expect(financialYear(new Date('2026-11-05T10:00:00Z'))).toBe('2026-27');
     expect(financialYear(new Date('2027-03-31T18:00:00Z'))).toBe('2026-27');
