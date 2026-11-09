@@ -15,7 +15,7 @@
 
 AgentBazaar is an open-source (MIT) commerce platform where people **and** AI agents shop. Shoppers get a fast, server-rendered storefront; assistants such as Claude, Cursor or your own agent connect over **MCP** or **A2A**, search the catalog and haggle with a seller agent. Every price, discount, stock check and quote expiry is decided by code, behind a price floor that no prompt can talk its way under. The LLM only writes the words. It is built for India first (GST per line, UPI, cash on delivery, money in integer paise, English and Hindi, DPDP Act 2023 data rights), runs on one VPS or with no install at all on embedded Postgres, and moves to bigger infrastructure by switching a profile, not by rewriting code.
 
-> **Status: v0.9, lite release candidate, with the growth and scale profiles built.** The Phase 1 release gates (browser journeys, accessibility, Lighthouse budgets, API fuzzing, a ZAP scan, failure injection, LLM evals, coverage and mutation gates, an upgrade test), the growth milestones G1 to G5 and the scale milestones S1 to S6 are built and verified in CI: see [Growth and scale](#growth-and-scale) and [Testing and quality gates](#testing-and-quality-gates). The 8-hour lite soak and the full-scope mutation score are under [Measured results](#measured-results). Two scale runs are written and tested without AWS but have not run: the 10 lakh-user load test and the zone-failure drill need a real scale stack and the owner's approval of the spend. The Razorpay adapter is not yet verified against Razorpay's live sandbox, YouPI-PG is experimental, and there has been no independent penetration test. Do not take real money with it yet. See [Known limits and owner steps](#known-limits-and-owner-steps) and [Legal, compliance and security](#legal-compliance-and-security).
+> **Status: v0.9, lite release candidate, with the growth and scale profiles built.** The Phase 1 release gates (browser journeys, accessibility, Lighthouse budgets, API fuzzing, a ZAP scan, failure injection, LLM evals, coverage and mutation gates, an upgrade test), the growth milestones G1 to G5 and the scale milestones S1 to S6 are built and verified in CI: see [Growth and scale](#growth-and-scale) and [Testing and quality gates](#testing-and-quality-gates). The 8-hour lite soak and the full-scope mutation score are under [Measured results](#measured-results). Two scale runs are written and tested without AWS but have not run: the 10 lakh-user load test and the zone-failure drill need a real scale stack on AWS, which the owner has deferred (no cloud spend for now). The Razorpay adapter is not yet verified against Razorpay's live sandbox, YouPI-PG is experimental, and there has been no independent penetration test. Do not take real money with it yet. See [Known limits and owner steps](#known-limits-and-owner-steps) and [Legal, compliance and security](#legal-compliance-and-security).
 
 ## Contents
 
@@ -710,7 +710,9 @@ C_month = 360 × [0.7 × (6,000·P_in,small + 400·P_out,small) + 0.3 × (12,000
 
 **Known limits.** Each is documented on the page linked.
 
-- **Scale proof needs AWS.** The 10 lakh-user load profile and the zone-failure drill have not run ([runbook](docs/runbooks/scale-load-and-zone-drill.md)); a failover on real cloud infrastructure and Terratest wait for AWS too.
+- **Scale proof on AWS is deferred.** The owner decided not to spend on AWS for now, so the 10 lakh-user load profile and the zone-failure drill have not run; their scripts, Terraform and [runbook](docs/runbooks/scale-load-and-zone-drill.md) are ready and tested at small scale. A failover on real cloud infrastructure and Terratest are deferred with them.
+- **No clean 8-hour soak yet.** The laptop run passed every threshold with no growth but was interrupted by host suspension; the weekly 5-hour soak on GitHub's runners passes cleanly ([soak-lite.md](docs/benchmarks/soak-lite.md)).
+- **Full-scope mutation score not re-checked after the last test fix.** It is 73.91% at `f688714`; a later nightly run stopped on a timing-dependent test, fixed in `1f46b4b`, and that nightly re-check was skipped by the owner's decision. Every push-triggered workflow is green.
 - **One process on embedded PGlite saturates at about 10 agent conversations a second** ([agent spike](docs/benchmarks/agent-spike.md)). Growth and scale scale out with API replicas and the agent pool.
 - **The agent pool autoscales on CPU.** Scaling on request rate needs prometheus-adapter: documented, not exercised. APISIX rate limits are counted per gateway replica ([kubernetes.md](docs/operations/kubernetes.md#agent-pool-s6)).
 - **The GPU classifier needs an image you build** with the `ml` extra and CUDA PyTorch; the published AI-service image is CPU-only.
@@ -723,9 +725,9 @@ C_month = 360 × [0.7 × (6,000·P_in,small + 400·P_out,small) + 0.3 × (12,000
 
 **Steps only the owner can take.**
 
-- Turn on the repository's **Dependency graph** (Settings > Code security) so dependency review enforces instead of warning ([supply-chain.md](docs/security/supply-chain.md)).
+- Turn on the repository's **Dependency graph** (Settings > Code security) so dependency review enforces instead of warning ([supply-chain.md](docs/security/supply-chain.md)). It needs admin rights on the repository, which the CLI account used for this work does not have.
 - Upload `docs/assets/social-preview.png` as the social preview, and host the live demo (`demo.agentbazaar.dev` is a placeholder).
-- Approve AWS spend and credentials for the 10 lakh-user load test, the zone-failure drill, a growth failover on real infrastructure and Terratest ([cost](docs/runbooks/scale-load-and-zone-drill.md#cost)).
+- When AWS spend is approved (deferred for now): run the 10 lakh-user load test, the zone-failure drill, a growth failover on real infrastructure and Terratest ([cost](docs/runbooks/scale-load-and-zone-drill.md#cost)).
 - Run the Razorpay adapter against Razorpay's test mode, check the YouPI-PG adapter against YouPI-PG's real API contract, have counsel review the DPDP notice and consent wording, GST invoices and terms, and commission an independent penetration test.
 - On every lite deployment set `CROWDSEC_BOUNCER_KEY`; behind PgBouncer set the role's `statement_timeout`.
 - For a GPU classifier build a CUDA image; for request-rate autoscaling install prometheus-adapter.
