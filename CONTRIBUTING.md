@@ -35,7 +35,7 @@ The API reads settings from the process environment only; it does not load `.env
 cd services/ai && uv sync && uv run pytest && uv run ruff check && uv run mypy
 ```
 
-Tests use PGlite by default. Set `TEST_DATABASE_URL` to a Postgres URL (for example the `pgvector/pgvector:pg19` image) to run integration and end-to-end suites against a real server, as CI does. If your machine is short on memory, lower `VITEST_MAX_WORKERS`: each PGlite instance takes roughly 100 MB.
+Tests use PGlite by default. Set `TEST_DATABASE_URL` to a Postgres URL (the project's image: `docker build -t agentbazaar-postgres deploy/postgres`, PostgreSQL 18 with Apache AGE and pgvector; the recommendations suite expects AGE there) to run integration and end-to-end suites against a real server, as CI does. If your machine is short on memory, lower `VITEST_MAX_WORKERS`: each PGlite instance takes roughly 100 MB.
 
 ## How we work
 

@@ -19,10 +19,11 @@ An ADR records one significant decision: the context, what we chose, what it cos
 | [0013](0013-time-partitioned-event-logs.md) | Partition the event logs by month, archive whole months, and keep orders in one table | Accepted |
 | [0014](0014-platform-at-scale-analytics-edge-siem.md) | Platform at scale: ClickHouse analytics from the outbox, a layered edge, Wazuh as a separate service | Accepted |
 | [0015](0015-growth-platform-on-kubernetes.md) | Growth platform on Kubernetes: APISIX in standalone mode, an agent pool, conftest policies, opt-in tracing | Accepted |
+| [0016](0016-product-graph-on-apache-age.md) | Read the product graph with Apache AGE inside the same PostgreSQL (18), with joins as the fallback | Accepted |
 
 ## Template
 
-Copy this into `docs/adr/NNNN-short-title.md`, using the next number after the highest in the table (0016); 0011 stays unused.
+Copy this into `docs/adr/NNNN-short-title.md`, using the next number after the highest in the table (0017); 0011 stays unused.
 
 ```markdown
 # ADR NNNN: Short title in the imperative

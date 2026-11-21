@@ -74,7 +74,7 @@ Copy `examples/<profile>.tfvars`, replace every placeholder, and keep the file o
 | `profile` | must match the root module you apply (guards against applying the wrong tfvars) |
 | `admin_cidrs` | lite: SSH sources; growth/scale: who may reach the EKS API endpoint (empty = private only) |
 | `monthly_budget_usd`, `budget_alert_email` | AWS Budgets alarm at 80% actual / 100% forecast (on by default) |
-| `postgres_major_version` | lite: `"19"` (documents the Compose Postgres); growth/scale: `null` means 18 for RDS/Aurora, 19 for `database_deployment = "self-managed"` |
+| `postgres_major_version` | growth/scale: `null` means 18 (RDS/Aurora, and self-managed, which should run the `deploy/postgres` image). Lite's Compose stack builds that image, PostgreSQL 18 with Apache AGE |
 
 Sizing overrides (instance types, node counts, database class, cache/search/Kafka sizes) are listed in
 each profile's `variables.tf` with their defaults. Secrets never go in variables: the stacks create
@@ -254,16 +254,17 @@ infracost breakdown --path deploy/terraform/profiles/growth --terraform-var-file
   if media must survive a regional loss.
 - Test restores on a schedule; a backup you have not restored is a hope, not a backup.
 
-## PostgreSQL 19
+## PostgreSQL versions and Apache AGE
 
-`postgres_major_version` defaults to **18** for managed services (RDS/Aurora) and **19** for self-managed
-hosts (lite's Compose stack, or `database_deployment = "self-managed"` where you run Postgres yourself,
-e.g. CloudNativePG). Managed services usually lag community releases by months: until AWS offers 19,
-an RDS/Aurora apply with `"19"` fails at the API (no engine version, no `postgres19` parameter group
-family). Check availability with
+`postgres_major_version` defaults to **18** everywhere. Self-managed databases (lite's Compose stack, or
+`database_deployment = "self-managed"` where you run Postgres yourself, e.g. CloudNativePG) should run the
+project's image, `deploy/postgres` (published as `agentbazaar-postgres`): PostgreSQL 18 with Apache AGE, whose
+newest release supports 18, not 19. RDS and Aurora do not offer AGE; there the app reads the product graph with
+plain joins, with the same results ([ADR 0016](../../docs/adr/0016-product-graph-on-apache-age.md)). An RDS/Aurora
+apply with `"19"` works once AWS offers 19 (until then it fails at the API: no engine version, no `postgres19`
+parameter group family); check with
 `aws rds describe-db-engine-versions --engine postgres --query "DBEngineVersions[?starts_with(EngineVersion,'19')].EngineVersion"`.
-PostgreSQL 19.0 does not include SQL/PGQ (property graph queries); the app detects it by the `GRAPH_TABLE`
-keyword at startup and uses plain joins without it, so 18 and 19 are both supported. Major upgrades: change `postgres_major_version`, snapshot, and apply in
+Major upgrades: change `postgres_major_version`, snapshot, and apply in
 a maintenance window (`allow_major_version_upgrade` is on; the versioned parameter group is created before
 the old one is removed).
 
@@ -326,8 +327,7 @@ These are app-side follow-ups; the infrastructure keeps the secure setting and o
 - **OpenSearch (scale)** has fine-grained access control with IAM: requests must be SigV4-signed by an IAM
   principal mapped in OpenSearch security (e.g. a Pod Identity role for the API). The admin role is
   `terraform output opensearch_admin_role_arn`.
-- **Lite Postgres version**: `deploy/compose/docker-compose.yml` uses
-  `pgvector/pgvector:pg${POSTGRES_MAJOR_VERSION:-19}`, and Terraform writes `postgres_major_version` to `.env`
-  as `POSTGRES_MAJOR_VERSION`, so the setting picks the image. Moving an existing host to a new major needs
-  a dump and restore (or `pg_upgrade`): the new image starts an empty data directory beside the old one.
+- **Apache AGE on RDS/Aurora**: managed services do not offer the extension, so the app reads the product graph
+  with joins there. Lite's Compose stack builds `deploy/postgres` (PostgreSQL 18 with AGE and pgvector) for its
+  primary and replica; a self-managed growth or scale database should run that image too.
 - **Migrations**: the Helm hook runs `node dist/cli/index.js migrate` in the API image.

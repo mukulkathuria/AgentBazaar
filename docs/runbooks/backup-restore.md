@@ -11,7 +11,7 @@
 
 | Item | Where | How | Notes |
 | --- | --- | --- | --- |
-| Postgres database `agentbazaar` | Compose volume `pgdata` (image `pgvector/pgvector:pg18`) | `pg_dump` (below) | Everything: catalog, orders, invoices, encrypted PII, audit trail |
+| Postgres database `agentbazaar` | Compose volume `pgdata` (image `agentbazaar-postgres`, PostgreSQL 18 with Apache AGE: `deploy/postgres`) | `pg_dump` (below) | Everything: catalog, orders, invoices, encrypted PII, audit trail, and the AGE product graph, which `cli graph rebuild` can also refill from `product_edges` |
 | Secrets in `.env` | The host | Copy to a password manager or secrets manager | **Store separately from database backups** (see below) |
 | Caddy data | Compose volume `caddy_data` | Volume copy | TLS certificates and ACME account; can be re-issued, so optional |
 | Valkey | Compose service `valkey` | Not needed | Runs with persistence off (`--save ''`, `--appendonly no`); holds only cache, rate-limit and quota counters |

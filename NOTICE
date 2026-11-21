@@ -74,6 +74,9 @@ Optional extras, installed only with `uv sync --extra ml` or `--extra presidio`:
 
 PostgreSQL                      PostgreSQL License
 pgvector                        PostgreSQL License
+Apache AGE                      Apache-2.0     (graph extension inside the database
+                                               image, deploy/postgres/Dockerfile;
+                                               runs in PostgreSQL, never linked)
 Valkey                          BSD-3-Clause
 Caddy                           Apache-2.0
   built with coraza-caddy,      Apache-2.0     (deploy/compose/caddy/Dockerfile:
