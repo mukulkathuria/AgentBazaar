@@ -270,6 +270,16 @@ describe('@lite recommendations module (graph, learner, REST)', () => {
     expect((await recs.compatible(GPU)).length).toBeGreaterThan(0);
   });
 
+  // A preloaded AGE 1.8.0 makes TRUNCATE fail in databases without the extension; the app loads it per transaction.
+  it.runIf(usingRealPostgres())('leaves other databases on the server untouched by AGE', async () => {
+    const other = await createTestDb({ poolMax: 1 });
+    try {
+      await other.database.query('TRUNCATE search_documents');
+    } finally {
+      await other.cleanup();
+    }
+  });
+
   // Runs on the rebuilt graph, so it also checks the backfill an upgraded database gets on first start.
   it.runIf(usingRealPostgres())(
     'answers exactly as the joins do, related and two hops, for every product',

@@ -47,11 +47,11 @@ describe('@lite Apache AGE detection and fallback', () => {
     expect(s.ran('CREATE EXTENSION')).toBe(false);
   });
 
-  it('treats an unreadable preload setting as no AGE', async () => {
+  it('treats a failed availability check as no AGE', async () => {
     expect(await hasAge(fakeServer(true, 'pg_available_extensions').db)).toBe(false);
   });
 
-  it('installs the extension and graph, then reads with Cypher', async () => {
+  it('installs the extension and graph, then reads with Cypher after loading AGE in the transaction', async () => {
     const s = fakeServer(true);
     const repo = await createGraphRepository(s.db);
     expect(repo.engine).toBe('age');
@@ -61,7 +61,15 @@ describe('@lite Apache AGE detection and fallback', () => {
       'CREATE UNIQUE INDEX product_id_idx',
     ])
       expect(s.ran(step)).toBe(true);
-    expect(s.ran("ag_catalog.cypher('catalog', $$ MATCH (p:product)-[e]->(o:product)")).toBe(true);
+    const read = s.statements.findIndex((q) => q.sql.includes('MATCH (p:product)-[e]->(o:product)'));
+    expect(s.statements.slice(read - 2, read).map((q) => q.sql.slice(0, 30))).toEqual([
+      "LOAD 'age'",
+      "SELECT set_config('search_path",
+    ]);
+  });
+
+  it('falls back to joins when AGE cannot be loaded (no superuser)', async () => {
+    expect((await createGraphRepository(fakeServer(true, "LOAD 'age'").db)).engine).toBe('sql');
   });
 
   it('binds values in the agtype map and never splices them into Cypher', async () => {

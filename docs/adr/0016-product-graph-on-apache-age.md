@@ -20,11 +20,13 @@ AGE, and PGlite (the demo and the default test database) cannot load it.
 - **One database image, PostgreSQL 18 with AGE 1.8.0 and pgvector 0.8.7** (`deploy/postgres/Dockerfile`, both
   bases pinned by digest; AGE's three files are copied from its official PG18 image). Compose, CI, the test stacks
   and the cluster test run it, and the release workflow publishes and signs it as `agentbazaar-postgres`. The
-  stack goes back from 19 to 18 until AGE releases for 19. The image preloads AGE (`shared_preload_libraries`), so
-  the app never runs `LOAD`.
+  stack goes back from 19 to 18 until AGE releases for 19. The image does not preload AGE: with its hooks in every
+  backend, `TRUNCATE` fails in any database that lacks the extension (AGE 1.8.0; the Services suite found it).
+  Instead each Cypher transaction starts with `LOAD 'age'`, a no-op once the backend has it, so the hooks only
+  exist in backends of the database that uses AGE.
 - **`product_edges` stays the source of truth; AGE is a mirror read through the same port.** `AgeGraphRepository`
   (engine `age`) replaces the SQL/PGQ adapter; `SqlGraphRepository` (engine `sql`) stays for PGlite, RDS and Aurora.
-  At startup the app uses AGE only when the server lists it and preloads it, then, in one transaction under an
+  At startup the app uses AGE only when the server lists it (`pg_available_extensions`), then, in one transaction under an
   advisory lock, creates the extension and the graph `catalog` if missing and fills an empty graph from
   `product_edges`. Any failure falls back to joins; a request never fails because of the choice.
 - **Writes keep both stores in one transaction.** The seed import and the `bought_together` learner call
@@ -50,13 +52,13 @@ AGE, and PGlite (the demo and the default test database) cannot load it.
 - The database is PostgreSQL 18, not 19. An install that already ran 19 (only possible from commit `12e18b5`) must
   dump and restore into the 18 image. Moving to 19 waits for an AGE release for it.
 - RDS, Aurora and PGlite read with joins, with the same results; the two-hop query is a self-join there.
-- The app needs a role that can read `shared_preload_libraries` (a superuser or `pg_read_all_settings`) and create
-  the extension, or an administrator who creates it; otherwise it uses joins.
+- The app needs a superuser role to create the extension and `LOAD` it; otherwise installing fails and it uses
+  joins. (A non-superuser can `LOAD` a library under `$libdir/plugins`; the image does not set that up.)
 - The first start after an upgrade fills the graph from `product_edges` (the 675 edges of the 300-product demo
   catalog take about 0.3 s on a laptop).
   Instances still running an older version during a rolling upgrade write only `product_edges`; run
   `cli graph rebuild` once they are gone.
-- Every Cypher statement costs an extra round trip for `set_config`. JIT is off in those transactions, because
+- Every Cypher read costs two extra round trips, for `LOAD` and `set_config`. JIT is off in those transactions, because
   AGE's row estimates can push simple index lookups over the JIT threshold.
 
 ## Alternatives considered
@@ -68,4 +70,4 @@ AGE, and PGlite (the demo and the default test database) cannot load it.
 - **Keep only the joins.** They stay as the fallback, but the owner wants openCypher on the same database, and new
   multi-hop queries are clearer in Cypher.
 - **Triggers on `product_edges` that write the graph.** They would also catch writes outside the app, but a server
-  that loses AGE (a restore without the preload) would then fail every write to `product_edges`.
+  that loses AGE (a restore into a server without it) would then fail every write to `product_edges`.

@@ -10,8 +10,10 @@ import { rankRelated, rankSetup, SqlGraphRepository } from './sql-graph.reposito
  * Apache AGE: openCypher inside the same Postgres. The graph `catalog` mirrors product_edges, which stays the source
  * of truth: a vertex per product and, because every relation is symmetric and AGE plans an undirected pattern as a
  * scan of every edge, a directed edge each way per related pair, carrying the pair's larger weight.
- * AGE resolves its operators through search_path, so each statement runs in a transaction that puts ag_catalog first
- * with set_config(..., true): transaction-local, which PgBouncer's transaction pooling keeps.
+ * Each Cypher transaction starts with LOAD 'age' (a no-op once loaded) instead of the server preloading AGE: with its
+ * hooks in every backend, TRUNCATE fails in databases without the extension (AGE 1.8.0). AGE resolves its operators
+ * through search_path, so ag_catalog goes first with set_config(..., true): transaction-local, which PgBouncer's
+ * transaction pooling keeps.
  * Cypher text is fixed in this file; values travel only in the bound agtype map (cypher()'s third argument).
  */
 const GRAPH = 'catalog';
@@ -30,10 +32,11 @@ const merge = (kind: EdgeKind) =>
 const cypher = (query: string, params: object, columns: string): SQL =>
   sql`ag_catalog.cypher(${sql.raw(`'${GRAPH}', $$ ${query} $$`)}, ${JSON.stringify(params)}) AS (${sql.raw(columns)})`;
 
-const AGE_PATH = sql`set_config('search_path', 'ag_catalog, ' || current_setting('search_path'), true)`;
+const LOAD_AGE = sql.raw(`LOAD 'age'`);
 
-/** Runs `fn` with ag_catalog first on the search path, then restores the caller's path for the rest of its transaction. */
-async function withAgePath<T>(tx: Executor, fn: () => Promise<T>): Promise<T> {
+/** Runs `fn` with AGE loaded and ag_catalog first on the search path, then restores the caller's path. */
+async function withAge<T>(tx: Executor, fn: () => Promise<T>): Promise<T> {
+  await tx.execute(LOAD_AGE);
   const { prev } = (await one<{ prev: string }>(
     tx,
     sql`SELECT prev, set_config('search_path', 'ag_catalog, ' || prev, true)
@@ -55,7 +58,7 @@ async function syncEdges(tx: Executor, edges: readonly EdgeKey[]): Promise<void>
         JOIN product_edges e ON e.kind = p.kind AND ((e.a_id = p.a AND e.b_id = p.b) OR (e.a_id = p.b AND e.b_id = p.a))
         GROUP BY p.a, p.b, p.kind`,
   );
-  await withAgePath(tx, async () => {
+  await withAge(tx, async () => {
     // Plain SQL so ON CONFLICT on the unique id index makes concurrent syncs safe; Cypher MERGE would race.
     const ids = pgArray([...new Set(pairs.flatMap((p) => [p.a, p.b]))], 'text');
     await tx.execute(sql`INSERT INTO ${sql.raw(GRAPH)}.product (properties)
@@ -100,13 +103,12 @@ async function createGraph(tx: Executor): Promise<void> {
   );
 }
 
-/** True when the server has AGE and preloads it, so every pooled connection can run Cypher without LOAD. */
+/** True when the server can install AGE. LOAD needs a superuser: without one, installing fails and joins serve. */
 export async function hasAge(db: Executor): Promise<boolean> {
   const r = await one<{ ok: boolean }>(
     db,
-    sql`SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'age')
-          AND concat_ws(',', current_setting('shared_preload_libraries'), current_setting('session_preload_libraries')) ~ '\\mage\\M' AS ok`,
-  ).catch(() => undefined); // e.g. a role that may not read shared_preload_libraries
+    sql`SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'age') AS ok`,
+  ).catch(() => undefined);
   return r?.ok === true;
 }
 
@@ -121,7 +123,7 @@ export async function installGraph(db: Executor, rebuild = false): Promise<numbe
     await tx.execute(sql`SELECT set_config('statement_timeout', '10min', true)`);
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('agentbazaar.product_graph'))`);
     await tx.execute(sql`CREATE EXTENSION IF NOT EXISTS age`);
-    return withAgePath(tx, async () => {
+    return withAge(tx, async () => {
       const g = await one<{ exists: boolean }>(
         tx,
         sql`SELECT EXISTS (SELECT 1 FROM ag_catalog.ag_graph WHERE name = ${GRAPH}) AS exists`,
@@ -166,7 +168,10 @@ export class AgeGraphRepository implements GraphRepository {
   private read<T>(query: SQL): Promise<T[]> {
     return inTransaction(this.db, async (tx) => {
       // JIT costs more than these index lookups whenever AGE's row estimates run high.
-      await tx.execute(sql`SELECT ${AGE_PATH}, set_config('jit', 'off', true)`);
+      await tx.execute(LOAD_AGE);
+      await tx.execute(
+        sql`SELECT set_config('search_path', 'ag_catalog, ' || current_setting('search_path'), true), set_config('jit', 'off', true)`,
+      );
       return rows<T>(tx, query);
     });
   }

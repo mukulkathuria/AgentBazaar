@@ -55,8 +55,7 @@ services:
     # Reaps orphaned healthcheck processes, which the postmaster would otherwise treat as crashed backends.
     init: true
     # Same rules as the image's default, plus password-authenticated streaming replication for postgres-replica.
-    # AGE is preloaded here too, for data directories created before the image set it (pgvector/pgvector:pg18).
-    command: ['postgres', '-c', 'hba_file=/etc/postgresql/pg_hba.conf', '-c', 'shared_preload_libraries=age']
+    command: ['postgres', '-c', 'hba_file=/etc/postgresql/pg_hba.conf']
     environment:
       POSTGRES_DB: agentbazaar
       POSTGRES_USER: agentbazaar
@@ -157,7 +156,7 @@ services:
         if [ ! -s "$$PGDATA/PG_VERSION" ]; then
           until pg_basebackup -h postgres -U agentbazaar -D "$$PGDATA" -X stream -R; do sleep 2; done
         fi
-        exec postgres -c shared_preload_libraries=age
+        exec postgres
     volumes: [pgreplica:/var/lib/postgresql]
     depends_on: { postgres: { condition: service_healthy } }
     healthcheck: { test: ['CMD-SHELL', 'pg_isready -U agentbazaar'], interval: 5s, timeout: 5s, retries: 20 }
