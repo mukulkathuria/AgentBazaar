@@ -6,6 +6,7 @@ import { createApp, type RunningApp } from '../bootstrap/create-app.js';
 import { createDatabase, MIGRATIONS_DIR } from '../bootstrap/infra.js';
 import { AccountService, AgentClientService } from '../modules/identity/index.js';
 import { CheckoutSagaSteps, loadSagaWorker } from '../modules/orders/index.js';
+import { rebuildGraph } from '../modules/recommendations/index.js';
 import { SearchIndexer } from '../modules/search/index.js';
 import { generateKeyEnv } from '../shared/crypto/keyring.js';
 import { loadMigrations, migrate } from '../shared/db/migrator.js';
@@ -19,6 +20,7 @@ const USAGE = `Usage: pnpm --filter @agentbazaar/api cli <command> [options]
   seed [--products 300] [--admin-email E] [--admin-password P]
                                                Demo catalog, GST rates, an MFA admin and a demo agent client
   reindex                                      Rebuild the search index
+  graph rebuild                                Rebuild the Apache AGE product graph from product_edges
   workflow-worker                              Run the checkout saga worker (WORKFLOW_ENGINE=temporal)
   keys                                         Print fresh secrets as .env lines
   create-admin --email E --password P [--name N]
@@ -140,6 +142,16 @@ async function archive(v: Values): Promise<void> {
   }
 }
 
+async function graphRebuild(): Promise<void> {
+  const database = await createDatabase(loadConfig());
+  try {
+    const n = await rebuildGraph(database.db);
+    console.log(n === null ? 'This database has no Apache AGE; the product graph is read with joins.' : `Product graph rebuilt from ${n} edges.`);
+  } finally {
+    await database.close();
+  }
+}
+
 /** Runs until SIGINT or SIGTERM; the worker drains its running steps, then the app closes. */
 async function runWorkflowWorker(running: RunningApp): Promise<void> {
   const env = running.infra.config.env;
@@ -154,9 +166,13 @@ async function runWorkflowWorker(running: RunningApp): Promise<void> {
   });
 }
 
+/** `pii rewrap` and `graph rebuild` are the two-word commands. */
+function splitCommand(argv: string[]): [string | undefined, string[]] {
+  return argv[0] === 'pii' || argv[0] === 'graph' ? [`${argv[0]} ${argv[1] ?? ''}`, argv.slice(2)] : [argv[0], argv.slice(1)];
+}
+
 async function main(argv: string[]): Promise<void> {
-  // `pii rewrap` is the one two-word command.
-  const [command, ...rest] = argv[0] === 'pii' ? [`pii ${argv[1] ?? ''}`, ...argv.slice(2)] : argv;
+  const [command, rest] = splitCommand(argv);
   const { values } = parseArgs({ args: rest, options: OPTIONS, strict: true });
   switch (command) {
     case 'keys':
@@ -179,6 +195,8 @@ async function main(argv: string[]): Promise<void> {
       return withApp((r) => createAgentClient(r, values));
     case 'pii rewrap':
       return rewrap(values);
+    case 'graph rebuild':
+      return graphRebuild();
     case 'archive':
       return archive(values);
     default:

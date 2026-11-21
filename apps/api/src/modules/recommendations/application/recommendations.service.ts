@@ -8,7 +8,7 @@ import { notFound } from '../../../shared/kernel/errors.js';
 import type { Subscription } from '../../../shared/outbox/outbox.js';
 import { CatalogService } from '../../catalog/index.js';
 import { coPurchasePairs, inStockFirst } from '../domain/graph.js';
-import { GRAPH_REPOSITORY, type GraphRepository, type RelatedProduct } from './graph-repository.js';
+import { type EdgeKey, GRAPH_REPOSITORY, type GraphRepository } from './graph-repository.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -34,6 +34,13 @@ export class RecommendationsService {
     return (await this.summaries(id, related)).slice(0, limit);
   }
 
+  /** Complete the setup: items bought with the things that fit this product, two hops out, in-stock first. */
+  async completeTheSetup(slugOrSku: string, limit = 12): Promise<ProductSummary[]> {
+    const id = await this.productId(slugOrSku);
+    const ranked = await this.graph.completeTheSetup(id, limit * 3);
+    return inStockFirst(await this.summaries(id, ranked)).slice(0, limit);
+  }
+
   /** Bulk seed import. Edges whose products are unknown are skipped. Returns the edges inserted. */
   async importEdges(tx: Executor, edges: readonly SeedEdge[], slugToId: ReadonlyMap<string, string>): Promise<number> {
     const resolved = edges.flatMap((e) => {
@@ -43,15 +50,16 @@ export class RecommendationsService {
     let inserted = 0;
     for (let i = 0; i < resolved.length; i += 500) {
       const chunk = resolved.slice(i, i + 500);
-      const r = await rows<{ id: string }>(
+      const r = await rows<EdgeKey>(
         tx,
         sql`INSERT INTO product_edges (a_id, b_id, kind, rule, weight)
             VALUES ${sql.join(
               chunk.map((e) => sql`(${e.a}, ${e.b}, ${e.kind}, ${e.rule}, ${e.weight})`),
               sql`, `,
             )}
-            ON CONFLICT (a_id, b_id, kind) DO NOTHING RETURNING id`,
+            ON CONFLICT (a_id, b_id, kind) DO NOTHING RETURNING a_id AS a, b_id AS b, kind`,
       );
+      await this.graph.upsertEdges(tx, r);
       inserted += r.length;
     }
     return inserted;
@@ -81,6 +89,7 @@ export class RecommendationsService {
       INSERT INTO product_edges (a_id, b_id, kind, weight)
       SELECT a, b, 'bought_together', 1 FROM pairs p WHERE NOT EXISTS (SELECT 1 FROM bumped x WHERE x.a = p.a AND x.b = p.b)
       ON CONFLICT (a_id, b_id, kind) DO UPDATE SET weight = product_edges.weight + 1`);
+    await this.graph.upsertEdges(tx, pairs.map(([a, b]) => ({ a, b, kind: 'bought_together' })));
     return pairs.length;
   }
 
@@ -104,7 +113,7 @@ export class RecommendationsService {
     return id;
   }
 
-  private summaries(self: string, related: readonly RelatedProduct[]): Promise<ProductSummary[]> {
+  private summaries(self: string, related: readonly { productId: string }[]): Promise<ProductSummary[]> {
     return this.catalog.summaries([...new Set(related.map((r) => r.productId))].filter((id) => id !== self));
   }
 }

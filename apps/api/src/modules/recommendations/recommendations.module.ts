@@ -6,7 +6,7 @@ import type { EventBus } from '../../shared/outbox/outbox.js';
 import { CatalogModule } from '../catalog/index.js';
 import { GRAPH_REPOSITORY } from './application/graph-repository.js';
 import { RecommendationsService } from './application/recommendations.service.js';
-import { createGraphRepository } from './infrastructure/pgq-graph.repository.js';
+import { createGraphRepository } from './infrastructure/age-graph.repository.js';
 import { RecommendationsController } from './interfaces/recommendations.controller.js';
 
 @Module({
@@ -17,7 +17,7 @@ import { RecommendationsController } from './interfaces/recommendations.controll
       provide: GRAPH_REPOSITORY,
       inject: [DB, LOGGER, READ_DB],
       useFactory: async (db: Executor, logger: Logger, reads: Executor) => {
-        const repo = await createGraphRepository(db, reads);
+        const repo = await createGraphRepository(db, reads, logger);
         logger.info({ engine: repo.engine }, 'product graph ready');
         return repo;
       },
