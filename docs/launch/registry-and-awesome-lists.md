@@ -25,7 +25,7 @@ Before publishing:
       `v` (for example `0.9.0`).
 - [ ] `remotes[0].type` is `streamable-http` and the URL is `https://`.
 - [ ] `repository` is `{ "url": "https://github.com/mukulkathuria/AgentBazaar", "source": "github" }`.
-- [ ] From another machine, an MCP client lists the 12 tools at that URL.
+- [ ] From another machine, an MCP client lists the 13 tools at that URL.
 
 Publish (per the registry quickstart at the time of writing):
 

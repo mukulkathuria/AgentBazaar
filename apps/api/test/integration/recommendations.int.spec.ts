@@ -295,7 +295,7 @@ describe('@lite recommendations module (graph, learner, REST)', () => {
   );
 
   it('serves the REST endpoints and 404s unknown products', async () => {
-    for (const path of ['compatible', 'recommendations']) {
+    for (const path of ['compatible', 'recommendations', 'complete-the-setup']) {
       const res = await ctx.app.inject({ method: 'GET', url: `/api/v1/products/${GPU}/${path}` });
       expect(res.statusCode).toBe(200);
       expect(z.array(ProductSummary).parse(res.json()).length).toBeGreaterThan(0);

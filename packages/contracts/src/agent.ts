@@ -30,6 +30,7 @@ export const McpToolInputs = {
   }),
   get_recommendations: z.object({ sku: SkuArg, limit: z.number().int().min(1).max(10).default(5) }),
   get_compatible_items: z.object({ sku: SkuArg, limit: z.number().int().min(1).max(10).default(5) }),
+  complete_the_setup: z.object({ sku: SkuArg, limit: z.number().int().min(1).max(10).default(5) }),
   request_quote: z.object({
     sku: SkuArg,
     quantity: Quantity,
@@ -57,6 +58,7 @@ export const MCP_TOOL_SCOPES: Record<McpToolName, AgentScope> = {
   validate_customization: 'catalog:read',
   get_recommendations: 'catalog:read',
   get_compatible_items: 'catalog:read',
+  complete_the_setup: 'catalog:read',
   request_quote: 'quote:create',
   make_offer: 'quote:create',
   accept_quote: 'order:create',

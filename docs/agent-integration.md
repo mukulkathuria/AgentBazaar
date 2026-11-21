@@ -22,6 +22,7 @@ Tool input schemas are generated from the Zod definitions in [`packages/contract
 | `validate_customization` | Checks personalisation text and a design choice before quoting | `catalog:read` |
 | `get_recommendations` | Bought-together items and alternatives | `catalog:read` |
 | `get_compatible_items` | Items that fit, from the product graph (for example a PSU for a GPU) | `catalog:read` |
+| `complete_the_setup` | Items bought with the things that fit a SKU, two hops through the product graph | `catalog:read` |
 | `request_quote` | Opens a negotiation and returns a signed, expiring quote plus volume alternatives | `quote:create` |
 | `make_offer` | Counter-offers a unit price (and optionally a new quantity) within the band's rounds | `quote:create` |
 | `accept_quote` | Locks the quoted price and reserves stock in a checkout session | `order:create` |

@@ -19,4 +19,10 @@ export class RecommendationsController {
   compatible(@Param(new ZodPipe(Routes.compatibleItems.params)) p: { slug: string }) {
     return this.recs.compatible(p.slug);
   }
+
+  @Get('api/v1/products/:slug/complete-the-setup')
+  @Auth('public')
+  completeTheSetup(@Param(new ZodPipe(Routes.completeTheSetup.params)) p: { slug: string }) {
+    return this.recs.completeTheSetup(p.slug);
+  }
 }

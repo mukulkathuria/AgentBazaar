@@ -3258,6 +3258,526 @@
         }
       }
     },
+    "/api/v1/products/{slug}/complete-the-setup": {
+      "get": {
+        "operationId": "completeTheSetup",
+        "summary": "Items bought with what fits this product (two hops in the product graph)",
+        "tags": [
+          "catalog"
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "slug": {
+                        "type": "string",
+                        "maxLength": 160,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "brand": {
+                        "type": "string"
+                      },
+                      "categoryPath": {
+                        "type": "string"
+                      },
+                      "band": {
+                        "type": "string",
+                        "enum": [
+                          "fixed",
+                          "standard",
+                          "premium"
+                        ]
+                      },
+                      "minPricePaise": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000
+                      },
+                      "maxPricePaise": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000
+                      },
+                      "inStock": {
+                        "type": "boolean"
+                      },
+                      "image": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "customizable": {
+                        "type": "boolean"
+                      },
+                      "defaultSku": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "slug",
+                      "name",
+                      "brand",
+                      "categoryPath",
+                      "band",
+                      "minPricePaise",
+                      "maxPricePaise",
+                      "inStock",
+                      "image",
+                      "customizable",
+                      "defaultSku"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "validation_failed",
+                            "unauthorized",
+                            "forbidden",
+                            "not_found",
+                            "conflict",
+                            "out_of_stock",
+                            "price_changed",
+                            "quote_invalid",
+                            "quote_expired",
+                            "quote_used",
+                            "negotiation_closed",
+                            "idempotency_conflict",
+                            "rate_limited",
+                            "budget_exceeded",
+                            "payment_failed",
+                            "amount_mismatch",
+                            "invalid_signature",
+                            "illegal_transition",
+                            "pricing_misconfigured",
+                            "unavailable",
+                            "internal"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {},
+                        "requestId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "431": {
+            "description": "Request line and headers over 16 KB, rejected by the HTTP server before the API runs"
+          }
+        }
+      }
+    },
     "/api/v1/customization/{sku}": {
       "get": {
         "operationId": "customizationOptions",

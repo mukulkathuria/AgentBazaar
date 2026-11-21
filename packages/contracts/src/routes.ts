@@ -73,6 +73,7 @@ export const Routes = {
   checkAvailability: { method: 'get', path: '/api/v1/availability/{sku}', summary: 'Stock check for a variant', tag: 'catalog', auth: 'public', params: SkuParam, query: z.object({ quantity: z.coerce.number().int().min(1).max(1000).default(1) }), response: Availability },
   recommendations: { method: 'get', path: '/api/v1/products/{slug}/recommendations', summary: 'Bought together and alternatives', tag: 'catalog', auth: 'public', params: SlugParam, response: z.array(ProductSummary) },
   compatibleItems: { method: 'get', path: '/api/v1/products/{slug}/compatible', summary: 'Compatible items from the product graph', tag: 'catalog', auth: 'public', params: SlugParam, response: z.array(ProductSummary) },
+  completeTheSetup: { method: 'get', path: '/api/v1/products/{slug}/complete-the-setup', summary: 'Items bought with what fits this product (two hops in the product graph)', tag: 'catalog', auth: 'public', params: SlugParam, response: z.array(ProductSummary) },
   // Customization
   customizationOptions: { method: 'get', path: '/api/v1/customization/{sku}', summary: 'Allowed text fields and designs', tag: 'customization', auth: 'public', params: SkuParam, response: CustomizationOptions },
   validateCustomization: { method: 'post', path: '/api/v1/customization/{sku}/validate', summary: 'Validate text and design choice', tag: 'customization', auth: 'public', params: SkuParam, body: CustomizationValues, response: CustomizationValidation },

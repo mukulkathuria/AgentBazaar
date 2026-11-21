@@ -64,6 +64,9 @@ describe('@lite MCP server (demo mode, official client)', () => {
     expect(compatible.ok).toBe(true);
     expect((compatible.data.items as { name: string }[]).length).toBeGreaterThan(0);
     expect((await mcp.call('get_recommendations', { sku: 'ZENTRIX-ZX9090TI-24G', limit: 3 })).ok).toBe(true);
+    const setup = await mcp.call('complete_the_setup', { sku: 'ZENTRIX-ZX9090TI-24G', limit: 3 });
+    expect((setup.data.items as { sku: string }[]).length).toBeGreaterThan(0);
+    expect((setup.data.items as { sku: string }[]).map((i) => i.sku)).not.toContain('ZENTRIX-ZX9090TI-24G');
   });
 
   it('negotiates, accepts, links to checkout and reports the order status', async () => {

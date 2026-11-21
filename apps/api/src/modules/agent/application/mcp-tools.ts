@@ -140,6 +140,17 @@ export class McpTools {
         return { data: { items }, summary: items.map((i) => `${i.name} (SKU ${i.sku})`).join('; ') || 'No compatible items found.' };
       },
     },
+    complete_the_setup: {
+      title: 'Complete the setup',
+      description:
+        'Items people buy with the things that fit a SKU, two hops through the product graph: e.g. for a graphics card, what is ' +
+        'bought with its compatible power supplies and cases. Excludes the SKU itself and its direct compatible items and recommendations.',
+      readOnly: true,
+      run: async (a) => {
+        const items = (await this.shop.recommendations.completeTheSetup(a.sku, a.limit)).map(views.productSummaryView);
+        return { data: { items }, summary: items.map((i) => `${i.name} (SKU ${i.sku})`).join('; ') || 'Nothing to add to this setup.' };
+      },
+    },
     request_quote: {
       title: 'Request a quote',
       description:

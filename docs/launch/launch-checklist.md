@@ -21,7 +21,7 @@ Release: `v0.9.0` (lite release candidate). Release commit: `________`. Checked 
       If `pnpm demo` needs a `pnpm build` first, either fix the demo script or change the README.
 - [ ] The Docker path works: `docker compose -f deploy/compose/docker-compose.yml --profile demo up --build`
       serves the storefront at http://localhost:3000, `tools/list` on http://localhost:4000/mcp returns all
-      12 tools, and http://localhost:4000/.well-known/agent-card.json returns the Agent Card.
+      13 tools, and http://localhost:4000/.well-known/agent-card.json returns the Agent Card.
 - [ ] Every Dockerfile the Compose file and the release matrix build exists and builds:
       `apps/api/Dockerfile`, `apps/web/Dockerfile`, `services/ai/Dockerfile`.
 - [ ] At least one real MCP client (Claude, Cursor or VS Code) connected to a running store, searched,
