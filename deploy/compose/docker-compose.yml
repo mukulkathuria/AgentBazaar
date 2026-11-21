@@ -47,18 +47,21 @@ services:
 
   # ---------- lite: one VPS ----------
   postgres:
-    image: pgvector/pgvector:pg${POSTGRES_MAJOR_VERSION:-19}
+    # PostgreSQL 18 with Apache AGE (the product graph) and pgvector: deploy/postgres/Dockerfile.
+    build: { context: ../postgres }
+    image: ghcr.io/mukulkathuria/agentbazaar-postgres:${APP_VERSION:-latest}
     profiles: [lite, growth, scale]
     restart: unless-stopped
     # Reaps orphaned healthcheck processes, which the postmaster would otherwise treat as crashed backends.
     init: true
     # Same rules as the image's default, plus password-authenticated streaming replication for postgres-replica.
-    command: ['postgres', '-c', 'hba_file=/etc/postgresql/pg_hba.conf']
+    # AGE is preloaded here too, for data directories created before the image set it (pgvector/pgvector:pg18).
+    command: ['postgres', '-c', 'hba_file=/etc/postgresql/pg_hba.conf', '-c', 'shared_preload_libraries=age']
     environment:
       POSTGRES_DB: agentbazaar
       POSTGRES_USER: agentbazaar
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-    # pg18+ images keep PGDATA at /var/lib/postgresql/<major>/docker, so the volume must cover /var/lib/postgresql.
+    # pg18 images keep PGDATA at /var/lib/postgresql/18/docker, so the volume must cover /var/lib/postgresql.
     volumes: [pgdata:/var/lib/postgresql, './pg_hba.conf:/etc/postgresql/pg_hba.conf:ro']
     healthcheck: { test: ['CMD-SHELL', 'pg_isready -U agentbazaar'], interval: 5s, timeout: 5s, retries: 20 }
   valkey:
@@ -140,7 +143,8 @@ services:
   # Hot standby cloned from the primary on first start; the API reads from it through DATABASE_REPLICA_URLS
   # (postgres://agentbazaar:<password>@postgres-replica:5432/agentbazaar). Failover: docs/runbooks/database-failover.md.
   postgres-replica:
-    image: pgvector/pgvector:pg${POSTGRES_MAJOR_VERSION:-19}
+    # The primary's image (built by the postgres service): the replica serves product graph reads with AGE too.
+    image: ghcr.io/mukulkathuria/agentbazaar-postgres:${APP_VERSION:-latest}
     profiles: [growth]
     restart: unless-stopped
     init: true
@@ -153,7 +157,7 @@ services:
         if [ ! -s "$$PGDATA/PG_VERSION" ]; then
           until pg_basebackup -h postgres -U agentbazaar -D "$$PGDATA" -X stream -R; do sleep 2; done
         fi
-        exec postgres
+        exec postgres -c shared_preload_libraries=age
     volumes: [pgreplica:/var/lib/postgresql]
     depends_on: { postgres: { condition: service_healthy } }
     healthcheck: { test: ['CMD-SHELL', 'pg_isready -U agentbazaar'], interval: 5s, timeout: 5s, retries: 20 }

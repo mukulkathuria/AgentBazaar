@@ -47,11 +47,12 @@ jobs:
         run: |
           k3d cluster create ab-t6 --image rancher/k3s:v1.35.9-k3s1 -p '18080:80@loadbalancer' --wait --timeout 180s
           kubectl get nodes -o wide
-      - name: Build the api and web images
+      - name: Build the api, web and database images
         run: |
           docker build -f apps/api/Dockerfile -t agentbazaar-api:ci .
           docker build -f apps/web/Dockerfile --build-arg NEXT_PUBLIC_API_URL=http://api.agentbazaar.test -t agentbazaar-web:ci .
-          k3d image import agentbazaar-api:ci agentbazaar-web:ci -c ab-t6
+          docker build -t agentbazaar-postgres:ci deploy/postgres
+          k3d image import agentbazaar-api:ci agentbazaar-web:ci agentbazaar-postgres:ci -c ab-t6
       - name: Start Postgres, Valkey, Meilisearch, NATS JetStream and OpenBao
         run: |
           kubectl create namespace "$NS"

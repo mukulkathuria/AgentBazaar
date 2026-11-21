@@ -6,7 +6,7 @@
 locals {
   is_prod  = module.naming.is_production
   protect  = var.deletion_protection == null ? module.naming.is_production : var.deletion_protection
-  pg_major = coalesce(var.postgres_major_version, var.database_deployment == "self-managed" ? "19" : "18")
+  pg_major = coalesce(var.postgres_major_version, "18")
   app_sgs  = [module.eks.cluster_security_group_id]
 }
 

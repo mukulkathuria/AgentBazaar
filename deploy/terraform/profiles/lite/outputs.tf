@@ -63,11 +63,6 @@ output "ci_role_arn" {
   value       = one(module.ci_oidc[*].role_arn)
 }
 
-output "postgres_major_version" {
-  description = "PostgreSQL major version the host's Compose stack is expected to run."
-  value       = var.postgres_major_version
-}
-
 output "tags" {
   description = "Tags applied to every resource."
   value       = module.naming.tags

@@ -7,7 +7,9 @@ name: ab-svc
 
 services:
   postgres:
-    image: pgvector/pgvector:pg19
+    # PostgreSQL 18 with Apache AGE and pgvector, built from deploy/postgres on first `up`.
+    build: ../../deploy/postgres
+    image: agentbazaar-postgres:dev
     # Reaps orphaned healthcheck processes, which the postmaster would otherwise treat as crashed backends.
     init: true
     environment: { POSTGRES_PASSWORD: postgres }

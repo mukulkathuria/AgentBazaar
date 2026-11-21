@@ -168,7 +168,7 @@ run "postgres_19" {
   }
 }
 
-run "self_managed_postgres_defaults_to_19" {
+run "self_managed_postgres_defaults_to_18" {
   command = plan
 
   variables {
@@ -176,8 +176,8 @@ run "self_managed_postgres_defaults_to_19" {
   }
 
   assert {
-    condition     = output.database.postgres_major_version == "19" && output.database.parameter_group_family == null
-    error_message = "Self-managed Postgres defaults to 19 and creates no parameter group."
+    condition     = output.database.postgres_major_version == "18" && output.database.parameter_group_family == null
+    error_message = "Self-managed Postgres defaults to 18 (Apache AGE's newest release) and creates no parameter group."
   }
 }
 

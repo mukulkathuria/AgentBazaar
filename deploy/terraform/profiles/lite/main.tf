@@ -101,14 +101,13 @@ module "compute" {
   log_group_arn          = module.observability.log_group_arns["app"]
   # Non-secret .env for deploy/compose/docker-compose.yml (Caddy reads SITE_DOMAIN and API_DOMAIN).
   app_env = merge({
-    PROFILE                = "lite"
-    NODE_ENV               = "production"
-    PUBLIC_WEB_URL         = module.edge.web_url
-    PUBLIC_API_URL         = module.edge.api_url
-    CORS_ORIGINS           = module.edge.web_url
-    SITE_DOMAIN            = var.domain_name
-    API_DOMAIN             = "api.${var.domain_name}"
-    POSTGRES_MAJOR_VERSION = var.postgres_major_version
+    PROFILE        = "lite"
+    NODE_ENV       = "production"
+    PUBLIC_WEB_URL = module.edge.web_url
+    PUBLIC_API_URL = module.edge.api_url
+    CORS_ORIGINS   = module.edge.web_url
+    SITE_DOMAIN    = var.domain_name
+    API_DOMAIN     = "api.${var.domain_name}"
   }, var.extra_app_env)
 }
 

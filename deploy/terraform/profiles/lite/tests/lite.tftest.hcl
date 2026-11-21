@@ -78,11 +78,6 @@ run "plans_with_defaults" {
     }
     error_message = "Every resource must carry Project, Environment, Profile and ManagedBy tags."
   }
-
-  assert {
-    condition     = output.postgres_major_version == "19"
-    error_message = "Lite runs a self-managed Postgres; the documented default is 19."
-  }
 }
 
 run "names_follow_project_name" {
@@ -137,32 +132,6 @@ run "budget_can_be_turned_off" {
   assert {
     condition     = module.budget.budget_name == null
     error_message = "enable_budget = false must remove the budget."
-  }
-}
-
-run "postgres_18" {
-  command = plan
-
-  variables {
-    postgres_major_version = "18"
-  }
-
-  assert {
-    condition     = output.postgres_major_version == "18"
-    error_message = "postgres_major_version must pass through."
-  }
-}
-
-run "postgres_19" {
-  command = plan
-
-  variables {
-    postgres_major_version = "19"
-  }
-
-  assert {
-    condition     = output.postgres_major_version == "19"
-    error_message = "postgres_major_version must pass through."
   }
 }
 

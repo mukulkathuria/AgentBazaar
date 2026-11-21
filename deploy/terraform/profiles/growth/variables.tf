@@ -128,7 +128,7 @@ variable "database_deployment" {
 }
 
 variable "postgres_major_version" {
-  description = "PostgreSQL major version. Null: 18 for RDS/Aurora, 19 for self-managed."
+  description = "PostgreSQL major version. Null: 18 (RDS/Aurora; self-managed runs deploy/postgres, PostgreSQL 18 with Apache AGE)."
   type        = string
   default     = null
 }

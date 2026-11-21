@@ -121,17 +121,6 @@ variable "extra_app_env" {
   default     = {}
 }
 
-variable "postgres_major_version" {
-  description = "PostgreSQL major version on the host (self-managed default: 19). Written to .env as POSTGRES_MAJOR_VERSION, which picks the Compose Postgres image (pgvector/pgvector:pg<major>)."
-  type        = string
-  default     = "19"
-
-  validation {
-    condition     = can(regex("^[0-9]{2}$", var.postgres_major_version))
-    error_message = "postgres_major_version must be a major version such as \"19\"."
-  }
-}
-
 variable "enable_cdn" {
   description = "Serve media through CloudFront at media.<domain>."
   type        = bool

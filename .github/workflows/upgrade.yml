@@ -33,15 +33,6 @@ jobs:
     name: Upgrade from the previous release
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    services:
-      postgres:
-        image: pgvector/pgvector:pg19
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       DATABASE_DRIVER: postgres
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
@@ -53,6 +44,13 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+      # This commit's database image (PostgreSQL 18 + Apache AGE + pgvector) for both versions; a service container
+      # cannot be built. The upgraded API then backfills the AGE graph from the previous release's product_edges.
+      - name: Start PostgreSQL (deploy/postgres)
+        run: |
+          docker build -q -t agentbazaar-postgres:ci deploy/postgres
+          docker run -d --name pg -p 5432:5432 -e POSTGRES_PASSWORD=postgres agentbazaar-postgres:ci
+          timeout 120 sh -c 'until docker exec pg pg_isready -U postgres -h 127.0.0.1; do sleep 1; done'
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
@@ -97,6 +95,8 @@ jobs:
           for i in $(seq 1 60); do curl -fs 127.0.0.1:4000/readyz > /dev/null && break; sleep 1; done
           node "$GITHUB_WORKSPACE/scripts/upgrade-smoke.mjs" after "$RUNNER_TEMP/state.json"
           kill "$pid"; wait "$pid" || true
+          # On first start the API filled the (new) Apache AGE graph from the previous release's product_edges.
+          test "$(docker exec pg psql -U postgres -tAc 'SELECT count(*) FROM catalog.product')" -gt 0
       - name: API logs
         if: failure()
         run: tail -n 100 "$RUNNER_TEMP/previous.log" "$RUNNER_TEMP/current.log" 2>/dev/null || true

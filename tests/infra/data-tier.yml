@@ -7,7 +7,9 @@
 name: ab-dt
 
 x-postgres: &postgres
-  image: pgvector/pgvector:pg19
+  # PostgreSQL 18 with Apache AGE and pgvector, built from deploy/postgres on first `up`; standbys clone its config.
+  build: ../../deploy/postgres
+  image: agentbazaar-postgres:dev
   # An init reaps orphaned healthcheck processes. Without it they are reparented to the postmaster (PID 1),
   # which treats a timed-out pg_isready exiting as a crashed backend and restarts the whole server.
   init: true

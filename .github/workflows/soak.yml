@@ -25,20 +25,18 @@ jobs:
     name: Lite soak (k6 + minute sampler)
     runs-on: ubuntu-latest
     timeout-minutes: 345
-    services:
-      postgres:
-        image: pgvector/pgvector:pg19
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/agentbazaar_soak
       BASE_URL: http://localhost:4000
       DURATION: ${{ inputs.duration || '5h' }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # The project's database image (PostgreSQL 18 + Apache AGE + pgvector); a service container cannot be built.
+      - name: Start PostgreSQL (deploy/postgres)
+        run: |
+          docker build -q -t agentbazaar-postgres:ci deploy/postgres
+          docker run -d --name pg -p 5432:5432 -e POSTGRES_PASSWORD=postgres agentbazaar-postgres:ci
+          timeout 120 sh -c 'until docker exec pg pg_isready -U postgres -h 127.0.0.1; do sleep 1; done'
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:

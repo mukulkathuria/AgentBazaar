@@ -1,5 +1,6 @@
 # What values-growth.yaml expects next to the chart, for the fresh-cluster install test (.github/workflows/cluster.yml):
-# Postgres with pgvector, Valkey, Meilisearch, NATS JetStream and OpenBao in dev mode. Same images as tests/infra.
+# Postgres (deploy/postgres: 18 with Apache AGE and pgvector), Valkey, Meilisearch, NATS JetStream and OpenBao in dev
+# mode. Same images as tests/infra.
 # Throwaway test infrastructure with obviously fake credentials and no persistence: nothing here is for production.
 apiVersion: apps/v1
 kind: Deployment
@@ -11,7 +12,9 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: pgvector/pgvector:pg19
+          # deploy/postgres (PostgreSQL 18 + Apache AGE + pgvector), built and imported by the workflow.
+          image: agentbazaar-postgres:ci
+          imagePullPolicy: Never
           args: ['-c', 'fsync=off', '-c', 'synchronous_commit=off', '-c', 'max_connections=300']
           env:
             - { name: POSTGRES_PASSWORD, value: ci-only-postgres }

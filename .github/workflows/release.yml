@@ -20,6 +20,8 @@ jobs:
           - { name: ai, file: services/ai/Dockerfile, context: services/ai }
           # Temporal saga worker (scale profile): Debian slim stage, since Temporal ships no musl worker build.
           - { name: workflow-worker, file: apps/api/Dockerfile, context: ., target: workflow-worker }
+          # PostgreSQL 18 with Apache AGE and pgvector, for Compose and self-managed databases.
+          - { name: postgres, file: deploy/postgres/Dockerfile, context: deploy/postgres }
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
