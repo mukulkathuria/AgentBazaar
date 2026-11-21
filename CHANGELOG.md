@@ -60,6 +60,8 @@ The lite release candidate: a complete, agent-ready store on one VPS. It also ca
 
 ### Changed
 
+- **PostgreSQL 19 by default.** CI, the test stacks and the lite and growth Compose profiles run `pgvector/pgvector:pg19` (pgvector 0.8.7); the integration and end-to-end suites pass on 19.0. The Compose image follows `POSTGRES_MAJOR_VERSION` (default 19). An existing lite install on 18 must either set `POSTGRES_MAJOR_VERSION=18` or move its data with `pg_dump` and `pg_restore` first, because the 19 image starts an empty data directory (`/var/lib/postgresql/19/docker`) beside the old one. Managed RDS and Aurora still default to 18.
+- **SQL/PGQ is detected by feature, not by version.** PostgreSQL 19.0 shipped without SQL/PGQ (its grammar has no `GRAPH_TABLE`), so the product graph no longer attempts `CREATE PROPERTY GRAPH` on 19. It keeps using its indexed joins and switches to a property graph on any server whose grammar has `GRAPH_TABLE`.
 - **Breaking for lite: set `CROWDSEC_BOUNCER_KEY` in `.env`.** Caddy is now built with the Coraza WAF and the CrowdSec bouncer and refuses to start without the key. Generate one with `openssl rand -hex 32`.
 - **OpenSearch indexes created before `4aa12b7` and `074c55a` must be rebuilt.** They keep their old mapping (split SKUs, no id sort key): delete the index and run `cli reindex`.
 - **Migration 0051 locks the event tables while it copies them into partitions**, about 25 to 37 s per million order events on a laptop. Large installs should upgrade in a maintenance window.

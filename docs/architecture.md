@@ -153,7 +153,7 @@ Personal data lives only in the `pii` schema. Each customer has a random data ke
 
 ## Product graph
 
-`product_edges` holds fixed-hop relations between products. On PostgreSQL 19, a SQL/PGQ property graph can be created over the table; on older versions, including today's Compose image (`pgvector/pgvector:pg18`) and managed services that lag behind, the same queries run as plain joins. The category tree stays in `ltree`, because the first version of SQL/PGQ has no variable-length paths.
+`product_edges` holds fixed-hop relations between products, read in both directions as plain joins over two indexes (`product_edges_a_idx`, `product_edges_b_idx`). SQL/PGQ property graphs were expected in PostgreSQL 19, but 19.0 shipped without them: its grammar has no `GRAPH_TABLE` (checked on a 19.0 server on 2026-11-21). So the app detects SQL/PGQ by that keyword, not by version; on 19.0, 18 and PGlite it uses the joins, and on a server that has SQL/PGQ it creates a property graph over the table and queries it with `GRAPH_TABLE`, falling back to the joins if either step fails. The category tree stays in `ltree`, because the first version of SQL/PGQ has no variable-length paths.
 
 ## Observability and resilience
 

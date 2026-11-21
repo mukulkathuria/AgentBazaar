@@ -262,8 +262,8 @@ e.g. CloudNativePG). Managed services usually lag community releases by months: 
 an RDS/Aurora apply with `"19"` fails at the API (no engine version, no `postgres19` parameter group
 family). Check availability with
 `aws rds describe-db-engine-versions --engine postgres --query "DBEngineVersions[?starts_with(EngineVersion,'19')].EngineVersion"`.
-The app detects SQL/PGQ (property graph queries, new in 19) at startup and falls back to plain joins on
-18, so both versions are supported. Major upgrades: change `postgres_major_version`, snapshot, and apply in
+PostgreSQL 19.0 does not include SQL/PGQ (property graph queries); the app detects it by the `GRAPH_TABLE`
+keyword at startup and uses plain joins without it, so 18 and 19 are both supported. Major upgrades: change `postgres_major_version`, snapshot, and apply in
 a maintenance window (`allow_major_version_upgrade` is on; the versioned parameter group is created before
 the old one is removed).
 
@@ -326,8 +326,8 @@ These are app-side follow-ups; the infrastructure keeps the secure setting and o
 - **OpenSearch (scale)** has fine-grained access control with IAM: requests must be SigV4-signed by an IAM
   principal mapped in OpenSearch security (e.g. a Pod Identity role for the API). The admin role is
   `terraform output opensearch_admin_role_arn`.
-- **Lite Postgres version**: `deploy/compose/docker-compose.yml` pins `pgvector/pgvector:pg18`, while
-  `postgres_major_version` documents 19 for self-managed hosts. Parameterise the image
-  (`pgvector/pgvector:pg${POSTGRES_MAJOR_VERSION:-18}`; Terraform already writes that variable to `.env`)
-  to make the setting take effect.
+- **Lite Postgres version**: `deploy/compose/docker-compose.yml` uses
+  `pgvector/pgvector:pg${POSTGRES_MAJOR_VERSION:-19}`, and Terraform writes `postgres_major_version` to `.env`
+  as `POSTGRES_MAJOR_VERSION`, so the setting picks the image. Moving an existing host to a new major needs
+  a dump and restore (or `pg_upgrade`): the new image starts an empty data directory beside the old one.
 - **Migrations**: the Helm hook runs `node dist/cli/index.js migrate` in the API image.

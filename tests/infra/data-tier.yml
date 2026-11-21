@@ -7,7 +7,7 @@
 name: ab-dt
 
 x-postgres: &postgres
-  image: pgvector/pgvector:pg18
+  image: pgvector/pgvector:pg19
   # An init reaps orphaned healthcheck processes. Without it they are reparented to the postmaster (PID 1),
   # which treats a timed-out pg_isready exiting as a crashed backend and restarts the whole server.
   init: true

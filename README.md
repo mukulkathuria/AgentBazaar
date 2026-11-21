@@ -394,7 +394,7 @@ DATABASE_DRIVER=pglite PGLITE_DATA_DIR=./data/dev.pglite pnpm --filter @agentbaz
 # PowerShell: $env:DATABASE_DRIVER='pglite'; $env:PGLITE_DATA_DIR='./data/dev.pglite'; pnpm --filter @agentbazaar/api dev
 ```
 
-Or point `DATABASE_URL` at any PostgreSQL 18+ that has the `vector` extension (the `pgvector/pgvector:pg18` image works). `pnpm dev` starts the API on port 4000 and the storefront on port 3000 together. The API reads its settings from the process environment and does not load `.env` files itself: export them in your shell, or use Docker Compose, which passes `.env` through `env_file`.
+Or point `DATABASE_URL` at any PostgreSQL 18 or 19 that has the `vector` extension (the `pgvector/pgvector:pg19` image works). `pnpm dev` starts the API on port 4000 and the storefront on port 3000 together. The API reads its settings from the process environment and does not load `.env` files itself: export them in your shell, or use Docker Compose, which passes `.env` through `env_file`.
 
 The optional AI service (Python):
 

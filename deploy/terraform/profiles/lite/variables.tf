@@ -122,7 +122,7 @@ variable "extra_app_env" {
 }
 
 variable "postgres_major_version" {
-  description = "PostgreSQL major version expected on the host (self-managed default: 19). Documentation only: the Compose file pins its Postgres image; also written to .env as POSTGRES_MAJOR_VERSION."
+  description = "PostgreSQL major version on the host (self-managed default: 19). Written to .env as POSTGRES_MAJOR_VERSION, which picks the Compose Postgres image (pgvector/pgvector:pg<major>)."
   type        = string
   default     = "19"
 

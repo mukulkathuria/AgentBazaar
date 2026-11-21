@@ -50,14 +50,14 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - name: Start Postgres 18 on the disk with the most room
+      - name: Start Postgres 19 on the disk with the most room
         run: |
           avail() { df --output=avail -B1G "$1" | tail -1 | tr -d ' '; }
           dir=$HOME/pgdata
           if [ -d /mnt ] && [ "$(avail /mnt)" -gt "$(avail /)" ]; then dir=/mnt/pgdata; fi
           sudo mkdir -p "$dir"
           docker run -d --name pg --shm-size=2g -p 5432:5432 -e POSTGRES_PASSWORD=postgres -v "$dir":/var/lib/postgresql \
-            pgvector/pgvector:pg18 postgres -c shared_buffers=4GB -c maintenance_work_mem=2GB -c work_mem=64MB \
+            pgvector/pgvector:pg19 postgres -c shared_buffers=4GB -c maintenance_work_mem=2GB -c work_mem=64MB \
             -c max_parallel_maintenance_workers=3 -c max_wal_size=8GB -c fsync=off -c synchronous_commit=off \
             -c full_page_writes=off -c max_connections=50
           for i in $(seq 1 60); do docker exec pg pg_isready -U postgres && break; sleep 2; done

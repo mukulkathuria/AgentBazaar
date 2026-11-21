@@ -11,7 +11,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: pgvector/pgvector:pg18
+          image: pgvector/pgvector:pg19
           args: ['-c', 'fsync=off', '-c', 'synchronous_commit=off', '-c', 'max_connections=300']
           env:
             - { name: POSTGRES_PASSWORD, value: ci-only-postgres }
