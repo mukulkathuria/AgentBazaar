@@ -2,12 +2,13 @@ import { sql } from 'drizzle-orm';
 import { inTransaction, one, rows, type Executor } from '../../../shared/db/database.js';
 import { pgArray } from '../../../shared/db/sql-helpers.js';
 import type { GraphRepository, RelatedProduct } from '../application/graph-repository.js';
-import { supportsPgq, type EdgeKind } from '../domain/graph.js';
+import type { EdgeKind } from '../domain/graph.js';
 import { SqlGraphRepository } from './sql-graph.repository.js';
 
 /*
- * UNVERIFIED: SQL/PGQ needs PostgreSQL 19. Local development and CI run PostgreSQL 18 and PGlite,
- * where detection below falls back to SqlGraphRepository, so only that path is exercised.
+ * SQL/PGQ did not ship in PostgreSQL 19.0: its grammar has no GRAPH_TABLE (checked on 19.0 on
+ * 2026-11-21), so detection is by keyword, not version, and 19 and PGlite use SqlGraphRepository.
+ * This path turns on by itself on a server that has it; the integration suite then runs on it.
  * Element labels are static per table, so the edge kind is a property filtered in SQL rather than
  * a label (`IS related` + kind instead of `IS compatible_with`).
  */
@@ -41,13 +42,21 @@ export class PgqGraphRepository implements GraphRepository {
   }
 }
 
+/** True when the server's grammar has SQL/PGQ (the GRAPH_TABLE keyword). */
+export async function hasSqlPgq(db: Executor): Promise<boolean> {
+  const r = await one<{ ok: boolean }>(
+    db,
+    sql`SELECT EXISTS (SELECT 1 FROM pg_get_keywords() WHERE word = 'graph_table') AS ok`,
+  );
+  return r?.ok === true;
+}
+
 /**
  * (Re)creates the property graph when the server supports SQL/PGQ. Runs in its own transaction
  * (a savepoint when called inside one), so a failed CREATE leaves nothing behind.
  */
 export async function installPropertyGraph(db: Executor): Promise<boolean> {
-  const v = await one<{ n: number }>(db, sql`SELECT current_setting('server_version_num')::int AS n`);
-  if (!supportsPgq(v?.n ?? 0)) return false;
+  if (!(await hasSqlPgq(db))) return false;
   try {
     await inTransaction(db, async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('agentbazaar.catalog_graph'))`);

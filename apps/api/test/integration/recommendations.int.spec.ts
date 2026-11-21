@@ -17,7 +17,10 @@ import {
   RecommendationsService,
   type GraphRepository,
 } from '../../src/modules/recommendations/index.js';
-import { installPropertyGraph } from '../../src/modules/recommendations/infrastructure/pgq-graph.repository.js';
+import {
+  hasSqlPgq,
+  installPropertyGraph,
+} from '../../src/modules/recommendations/infrastructure/pgq-graph.repository.js';
 import { inTransaction, one, rows } from '../../src/shared/db/database.js';
 import { AuthGuard, TOKEN_VERIFIER } from '../../src/shared/http/auth.js';
 import { ErrorFilter } from '../../src/shared/http/error.filter.js';
@@ -39,12 +42,18 @@ async function bootModules(modules: Type[], env: Record<string, string> = {}) {
     RATE_LIMIT_PER_MINUTE: '100000',
     ...env,
   });
-  const infra: Infra = await createInfra(config, { database: testDb.database, logger: createLogger('silent') });
+  const infra: Infra = await createInfra(config, {
+    database: testDb.database,
+    logger: createLogger('silent'),
+  });
   // Every route under test is public, so bearer tokens are simply rejected instead of wiring identity.
   const verifier = { verify: () => Promise.reject(new AppError('unauthorized', 'No tokens in this test')) };
   @Module({
     imports: [InfraModule.register(infra), ...modules],
-    providers: [{ provide: TOKEN_VERIFIER, useValue: verifier }, { provide: APP_GUARD, useClass: AuthGuard }],
+    providers: [
+      { provide: TOKEN_VERIFIER, useValue: verifier },
+      { provide: APP_GUARD, useClass: AuthGuard },
+    ],
   })
   class TestApiModule {}
   const app = await NestFactory.create<NestFastifyApplication>(TestApiModule, new FastifyAdapter(), {
@@ -54,12 +63,19 @@ async function bootModules(modules: Type[], env: Record<string, string> = {}) {
   app.useGlobalFilters(new ErrorFilter(infra.logger));
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
-  return { app, infra, drain: () => infra.relay.drain(), close: async () => (await app.close(), await testDb.cleanup()) };
+  return {
+    app,
+    infra,
+    drain: () => infra.relay.drain(),
+    close: async () => (await app.close(), await testDb.cleanup()),
+  };
 }
 
 const GPU = 'zentrix-zx7070-12gb';
 const neighbours = (seed: SeedCatalog, slug: string, kind: string) =>
-  seed.edges.filter((e) => e.kind === kind && (e.from === slug || e.to === slug)).map((e) => (e.from === slug ? e.to : e.from));
+  seed.edges
+    .filter((e) => e.kind === kind && (e.from === slug || e.to === slug))
+    .map((e) => (e.from === slug ? e.to : e.from));
 
 describe('@lite recommendations module (graph, learner, REST)', () => {
   let ctx: Awaited<ReturnType<typeof bootModules>>;
@@ -68,13 +84,11 @@ describe('@lite recommendations module (graph, learner, REST)', () => {
   let ids: Map<string, string>;
 
   const weightBetween = async (a: string, b: string) =>
-    (
-      await one<{ w: number }>(
-        ctx.infra.db,
-        sql`SELECT coalesce(sum(weight), 0)::float8 AS w FROM product_edges
+    (await one<{ w: number }>(
+      ctx.infra.db,
+      sql`SELECT coalesce(sum(weight), 0)::float8 AS w FROM product_edges
             WHERE kind = 'bought_together' AND ((a_id = ${a} AND b_id = ${b}) OR (a_id = ${b} AND b_id = ${a}))`,
-      )
-    )!.w;
+    ))!.w;
 
   beforeAll(async () => {
     ctx = await bootModules([RecommendationsModule]);
@@ -88,14 +102,19 @@ describe('@lite recommendations module (graph, learner, REST)', () => {
   }, 120_000);
   afterAll(async () => ctx.close());
 
-  it('falls back to plain SQL joins below PostgreSQL 19', async () => {
-    expect(await installPropertyGraph(ctx.infra.db)).toBe(false);
-    expect(ctx.app.get<GraphRepository>(GRAPH_REPOSITORY).engine).toBe('sql');
+  it('uses SQL/PGQ only when the server has it (PostgreSQL 19.0 and PGlite do not)', async () => {
+    const pgq = await hasSqlPgq(ctx.infra.db);
+    expect(await installPropertyGraph(ctx.infra.db)).toBe(pgq);
+    expect(ctx.app.get<GraphRepository>(GRAPH_REPOSITORY).engine).toBe(pgq ? 'pgq' : 'sql');
   });
 
   it('imports seed edges idempotently and skips unknown products', async () => {
-    const extra = [{ from: GPU, to: 'no-such-product', kind: 'compatible_with' as const, rule: null, weight: 1 }];
-    await inTransaction(ctx.infra.db, async (tx) => expect(await recs.importEdges(tx, [...seed.edges, ...extra], ids)).toBe(0));
+    const extra = [
+      { from: GPU, to: 'no-such-product', kind: 'compatible_with' as const, rule: null, weight: 1 },
+    ];
+    await inTransaction(ctx.infra.db, async (tx) =>
+      expect(await recs.importEdges(tx, [...seed.edges, ...extra], ids)).toBe(0),
+    );
   });
 
   it('lists the PSUs and cases that fit a GPU, by slug or SKU', async () => {
@@ -103,8 +122,12 @@ describe('@lite recommendations module (graph, learner, REST)', () => {
     expect(expected.length).toBeGreaterThan(0);
     const bySlug = await recs.compatible(GPU);
     expect(new Set(bySlug.map((p) => p.slug))).toEqual(new Set(expected));
-    expect(new Set(bySlug.map((p) => p.categoryPath))).toEqual(new Set(['electronics.components.psus', 'electronics.components.cases']));
-    expect((await recs.compatible('ZENTRIX-ZX7070-12G')).map((p) => p.slug)).toEqual(bySlug.map((p) => p.slug));
+    expect(new Set(bySlug.map((p) => p.categoryPath))).toEqual(
+      new Set(['electronics.components.psus', 'electronics.components.cases']),
+    );
+    expect((await recs.compatible('ZENTRIX-ZX7070-12G')).map((p) => p.slug)).toEqual(
+      bySlug.map((p) => p.slug),
+    );
   });
 
   it('reads compatibility in both directions: a PSU lists the GPUs it can power', async () => {
@@ -119,7 +142,10 @@ describe('@lite recommendations module (graph, learner, REST)', () => {
   it('puts in-stock items first', async () => {
     const before = await recs.compatible(GPU);
     const target = before[0]!;
-    const variants = await rows<{ id: string }>(ctx.infra.db, sql`SELECT id FROM variants WHERE product_id = ${target.id}`);
+    const variants = await rows<{ id: string }>(
+      ctx.infra.db,
+      sql`SELECT id FROM variants WHERE product_id = ${target.id}`,
+    );
     const inventory = ctx.app.get(InventoryService);
     await inTransaction(ctx.infra.db, async (tx) => {
       for (const v of variants) await inventory.setStock(tx, v.id, 0);
@@ -171,7 +197,10 @@ describe('@lite recommendations module (graph, learner, REST)', () => {
       expect(res.statusCode).toBe(200);
       expect(z.array(ProductSummary).parse(res.json()).length).toBeGreaterThan(0);
     }
-    const missing = await ctx.app.inject({ method: 'GET', url: '/api/v1/products/no-such-product/compatible' });
+    const missing = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/v1/products/no-such-product/compatible',
+    });
     expect(missing.statusCode).toBe(404);
     expect(missing.json()).toMatchObject({ error: { code: 'not_found' } });
   });
